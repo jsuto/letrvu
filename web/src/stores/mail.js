@@ -7,6 +7,9 @@ export const useMailStore = defineStore('mail', () => {
   const currentMessage = ref(null)
   const currentFolder = ref('INBOX')
   const loading = ref(false)
+  const page = ref(1)
+  const pageSize = 50
+  const hasMore = ref(false)
 
   async function fetchFolders() {
     const res = await fetch('/api/folders')
@@ -14,11 +17,31 @@ export const useMailStore = defineStore('mail', () => {
     folders.value = await res.json()
   }
 
-  async function fetchMessages(folder) {
+  async function fetchMessages(folder, p = 1) {
+    currentFolder.value = folder
+    page.value = p
+    loading.value = true
+    try {
+      const res = await fetch(
+        `/api/folders/${encodeURIComponent(folder)}/messages?page=${p}&page_size=${pageSize}`,
+      )
+      if (!res.ok) return
+      const data = await res.json()
+      messages.value = data
+      // If we got a full page there may be more.
+      hasMore.value = data.length === pageSize
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function searchMessages(folder, query) {
     currentFolder.value = folder
     loading.value = true
     try {
-      const res = await fetch(`/api/folders/${encodeURIComponent(folder)}/messages`)
+      const res = await fetch(
+        `/api/folders/${encodeURIComponent(folder)}/messages?q=${encodeURIComponent(query)}`,
+      )
       if (!res.ok) return
       messages.value = await res.json()
     } finally {
@@ -65,8 +88,11 @@ export const useMailStore = defineStore('mail', () => {
     currentMessage,
     currentFolder,
     loading,
+    page,
+    hasMore,
     fetchFolders,
     fetchMessages,
+    searchMessages,
     fetchMessage,
     deleteMessage,
     markRead,

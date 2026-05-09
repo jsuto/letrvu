@@ -150,17 +150,25 @@ func (c *Client) ListMessages(folder string, page, pageSize int) ([]Message, err
 	return result, nil
 }
 
+// Attachment describes a message attachment.
+type Attachment struct {
+	Index       int    `json:"index"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Size        int    `json:"size"`
+}
+
 // MessageFull holds the complete content of a single message.
 type MessageFull struct {
-	UID         uint32    `json:"uid"`
-	Subject     string    `json:"subject"`
-	From        string    `json:"from"`
-	To          []string  `json:"to"`
-	CC          []string  `json:"cc"`
-	Date        time.Time `json:"date"`
-	TextBody    string    `json:"text_body"`
-	HTMLBody    string    `json:"html_body"`
-	Attachments []string  `json:"attachments"`
+	UID         uint32       `json:"uid"`
+	Subject     string       `json:"subject"`
+	From        string       `json:"from"`
+	To          []string     `json:"to"`
+	CC          []string     `json:"cc"`
+	Date        time.Time    `json:"date"`
+	TextBody    string       `json:"text_body"`
+	HTMLBody    string       `json:"html_body"`
+	Attachments []Attachment `json:"attachments"`
 }
 
 // GetMessage fetches the full content of a single message by UID.
@@ -247,23 +255,166 @@ func parseMIMEBody(raw []byte, full *MessageFull) error {
 				full.TextBody = string(body)
 			}
 		case *mail.AttachmentHeader:
+			body, _ := io.ReadAll(part.Body)
+			ct, _, _ := h.ContentType()
 			filename, _ := h.Filename()
-			full.Attachments = append(full.Attachments, filename)
+			full.Attachments = append(full.Attachments, Attachment{
+				Index:       len(full.Attachments),
+				Filename:    filename,
+				ContentType: ct,
+				Size:        len(body),
+			})
 		}
 	}
 	return nil
 }
 
-// DeleteMessage moves a message to Trash by UID.
+// DownloadAttachment fetches the raw bytes of the attachment at index i.
+func (c *Client) DownloadAttachment(folder string, uid uint32, index int) (*Attachment, []byte, error) {
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return nil, nil, fmt.Errorf("select %q: %w", folder, err)
+	}
+
+	uidSet := goimap.UIDSetNum(goimap.UID(uid))
+	fetchOpts := &goimap.FetchOptions{
+		BodySection: []*goimap.FetchItemBodySection{{Peek: true}},
+	}
+
+	msgs, err := c.c.Fetch(uidSet, fetchOpts).Collect()
+	if err != nil {
+		return nil, nil, fmt.Errorf("uid fetch: %w", err)
+	}
+	if len(msgs) == 0 {
+		return nil, nil, fmt.Errorf("message uid %d not found", uid)
+	}
+
+	for _, bodyBytes := range msgs[0].BodySection {
+		mr, err := mail.CreateReader(bytes.NewReader(bodyBytes))
+		if err != nil && !message.IsUnknownCharset(err) {
+			return nil, nil, err
+		}
+		i := 0
+		for {
+			part, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil && !message.IsUnknownCharset(err) {
+				break
+			}
+			ah, ok := part.Header.(*mail.AttachmentHeader)
+			if !ok {
+				continue
+			}
+			if i == index {
+				data, _ := io.ReadAll(part.Body)
+				ct, _, _ := ah.ContentType()
+				filename, _ := ah.Filename()
+				return &Attachment{
+					Index:       i,
+					Filename:    filename,
+					ContentType: ct,
+					Size:        len(data),
+				}, data, nil
+			}
+			io.Copy(io.Discard, part.Body) //nolint:errcheck
+			i++
+		}
+	}
+	return nil, nil, fmt.Errorf("attachment index %d not found", index)
+}
+
+// SearchMessages runs a server-side TEXT search in folder and returns matching
+// message summaries, newest first.
+func (c *Client) SearchMessages(folder, query string) ([]Message, error) {
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return nil, fmt.Errorf("select %q: %w", folder, err)
+	}
+
+	criteria := &goimap.SearchCriteria{
+		Text: []string{query},
+	}
+	searchData, err := c.c.UIDSearch(criteria, nil).Wait()
+	if err != nil {
+		return nil, fmt.Errorf("uid search: %w", err)
+	}
+
+	uids := searchData.AllUIDs()
+	if len(uids) == 0 {
+		return []Message{}, nil
+	}
+
+	var uidSet goimap.UIDSet
+	for _, uid := range uids {
+		uidSet.AddNum(uid)
+	}
+
+	fetchOpts := &goimap.FetchOptions{
+		UID:        true,
+		Envelope:   true,
+		Flags:      true,
+		RFC822Size: true,
+	}
+	msgs, err := c.c.Fetch(uidSet, fetchOpts).Collect()
+	if err != nil {
+		return nil, fmt.Errorf("fetch: %w", err)
+	}
+
+	result := make([]Message, 0, len(msgs))
+	for i := len(msgs) - 1; i >= 0; i-- {
+		buf := msgs[i]
+		msg := Message{
+			UID:  uint32(buf.UID),
+			Size: uint32(buf.RFC822Size),
+		}
+		if buf.Envelope != nil {
+			msg.Subject = buf.Envelope.Subject
+			msg.Date = buf.Envelope.Date
+			if len(buf.Envelope.From) > 0 {
+				msg.From = formatAddress(buf.Envelope.From[0])
+			}
+		}
+		for _, flag := range buf.Flags {
+			if flag == goimap.FlagSeen {
+				msg.Read = true
+				break
+			}
+		}
+		result = append(result, msg)
+	}
+	return result, nil
+}
+
+// DeleteMessage sets \Deleted on the message and expunges it.
 func (c *Client) DeleteMessage(folder string, uid uint32) error {
-	// TODO: add \Deleted flag + EXPUNGE, or MOVE to Trash
-	return fmt.Errorf("DeleteMessage: not implemented")
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return fmt.Errorf("select %q: %w", folder, err)
+	}
+	uidSet := goimap.UIDSetNum(goimap.UID(uid))
+	if err := c.c.Store(uidSet, &goimap.StoreFlags{
+		Op:     goimap.StoreFlagsAdd,
+		Silent: true,
+		Flags:  []goimap.Flag{goimap.FlagDeleted},
+	}, nil).Close(); err != nil {
+		return fmt.Errorf("mark deleted: %w", err)
+	}
+	return c.c.Expunge().Close()
 }
 
 // MarkRead sets or clears the \Seen flag on a message.
 func (c *Client) MarkRead(folder string, uid uint32, read bool) error {
-	// TODO: c.c.UIDStore() with +FLAGS or -FLAGS \Seen
-	return fmt.Errorf("MarkRead: not implemented")
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return fmt.Errorf("select %q: %w", folder, err)
+	}
+	op := goimap.StoreFlagsAdd
+	if !read {
+		op = goimap.StoreFlagsDel
+	}
+	return c.c.Store(goimap.UIDSetNum(goimap.UID(uid)), &goimap.StoreFlags{
+		Op:     op,
+		Silent: true,
+		Flags:  []goimap.Flag{goimap.FlagSeen},
+	}, nil).Close()
 }
 
 func formatAddress(addr goimap.Address) string {

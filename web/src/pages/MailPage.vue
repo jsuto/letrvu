@@ -9,20 +9,25 @@
     <main class="message-view-panel">
       <MessageView />
     </main>
+    <ComposeModal ref="composeModal" />
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { ref, provide, onMounted } from 'vue'
 import { useMailStore } from '../stores/mail'
 import { useMailEvents } from '../composables/useMailEvents'
 import FolderList from '../components/FolderList.vue'
 import MessageList from '../components/MessageList.vue'
 import MessageView from '../components/MessageView.vue'
+import ComposeModal from '../components/ComposeModal.vue'
 
 const mail = useMailStore()
+const composeModal = ref(null)
 
-// Wire up IMAP IDLE push notifications
+// Provide compose modal to all descendants so FolderList and MessageView can open it.
+provide('compose', composeModal)
+
 useMailEvents()
 
 onMounted(async () => {
@@ -36,6 +41,7 @@ onMounted(async () => {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  position: relative;
 }
 .sidebar {
   width: var(--sidebar-width);

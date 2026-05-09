@@ -4,6 +4,16 @@ import { ref } from 'vue'
 export const useAuthStore = defineStore('auth', () => {
   const loggedIn = ref(false)
 
+  async function checkSession() {
+    try {
+      const res = await fetch('/api/folders')
+      loggedIn.value = res.ok
+    } catch {
+      loggedIn.value = false
+    }
+    return loggedIn.value
+  }
+
   async function login({ imapHost, imapPort, smtpHost, smtpPort, username, password }) {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
@@ -26,5 +36,5 @@ export const useAuthStore = defineStore('auth', () => {
     loggedIn.value = false
   }
 
-  return { loggedIn, login, logout }
+  return { loggedIn, checkSession, login, logout }
 })

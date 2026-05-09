@@ -3,6 +3,8 @@
 </template>
 
 <script setup>
+import { useDarkMode } from './composables/useDarkMode'
+useDarkMode() // applies data-theme attribute on mount
 </script>
 
 <style>
@@ -12,11 +14,21 @@
   padding: 0;
 }
 
+input, textarea, button, select {
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+input, textarea, select {
+  background: var(--color-surface);
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   font-size: 14px;
-  color: #1a1a1a;
-  background: #f5f5f3;
+  color: var(--color-text);
+  background: var(--color-bg);
 }
 
 :root {
@@ -29,5 +41,14 @@ body {
   --color-bg: #f5f5f3;
   --sidebar-width: 220px;
   --list-width: 320px;
+}
+
+[data-theme="dark"] {
+  --color-teal-light: #1a3329;
+  --color-text: #e8e8e6;
+  --color-text-muted: #777;
+  --color-border: #2e2e2c;
+  --color-surface: #1e1e1c;
+  --color-bg: #141412;
 }
 </style>

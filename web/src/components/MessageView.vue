@@ -25,25 +25,63 @@
         title="Message body"
       />
       <pre v-else class="body-text">{{ mail.currentMessage.text_body }}</pre>
+      <div v-if="mail.currentMessage.attachments?.length" class="attachments">
+        <p class="attachments-label">Attachments</p>
+        <a
+          v-for="att in mail.currentMessage.attachments"
+          :key="att.index"
+          :href="attachmentUrl(att)"
+          download
+          class="attachment"
+        >
+          📎 {{ att.filename || 'attachment' }}
+          <span class="att-size">{{ formatSize(att.size) }}</span>
+        </a>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { inject } from 'vue'
 import { useMailStore } from '../stores/mail'
+
 const mail = useMailStore()
+const compose = inject('compose')
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleString()
 }
 
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function attachmentUrl(att) {
+  const folder = encodeURIComponent(mail.currentFolder)
+  const uid = mail.currentMessage.uid
+  return `/api/folders/${folder}/messages/${uid}/attachments/${att.index}`
+}
+
 function reply() {
-  // TODO: open ComposeModal pre-filled with reply headers
+  const msg = mail.currentMessage
+  if (!msg) return
+  compose?.value?.open({
+    to: msg.from,
+    subject: msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
+  })
 }
 
 function forward() {
-  // TODO: open ComposeModal pre-filled with forwarded body
+  const msg = mail.currentMessage
+  if (!msg) return
+  compose?.value?.open({
+    subject: `Fwd: ${msg.subject || ''}`,
+    body: `\n\n--- Forwarded message ---\nFrom: ${msg.from}\n\n${msg.text_body || ''}`,
+  })
 }
 
 async function remove() {
@@ -92,4 +130,29 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
   line-height: 1.7;
   color: var(--color-text);
 }
+.attachments {
+  margin-top: 1.5rem;
+  border-top: 0.5px solid var(--color-border);
+  padding-top: 1rem;
+}
+.attachments-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
+}
+.attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 12px;
+  text-decoration: none;
+  color: var(--color-text);
+  margin-right: 8px;
+  margin-bottom: 6px;
+}
+.attachment:hover { background: var(--color-bg); }
+.att-size { color: var(--color-text-muted); }
 </style>

@@ -24,6 +24,7 @@ func NewRouter(sessions *session.Store) http.Handler {
 	mux.HandleFunc("GET /api/folders/{folder}/messages/{uid}", h.requireAuth(h.getMessage))
 	mux.HandleFunc("DELETE /api/folders/{folder}/messages/{uid}", h.requireAuth(h.deleteMessage))
 	mux.HandleFunc("PATCH /api/folders/{folder}/messages/{uid}/read", h.requireAuth(h.markRead))
+	mux.HandleFunc("GET /api/folders/{folder}/messages/{uid}/attachments/{index}", h.requireAuth(h.downloadAttachment))
 
 	// Compose
 	mux.HandleFunc("POST /api/send", h.requireAuth(h.sendMessage))
@@ -32,7 +33,7 @@ func NewRouter(sessions *session.Store) http.Handler {
 	mux.HandleFunc("GET /api/events", h.requireAuth(h.events))
 
 	// Serve embedded Vue frontend for all non-API routes
-	mux.Handle("/", http.FileServer(http.Dir("internal/api/static")))
+	mux.Handle("/", spaHandler())
 
 	return mux
 }

@@ -30,7 +30,7 @@
 
 | Layer | Technology |
 |---|---|
-| Backend | Go 1.22 `net/http` |
+| Backend | Go 1.26 `net/http` |
 | IMAP | `emersion/go-imap/v2` |
 | SMTP | `emersion/go-smtp` |
 | Frontend | Vue 3 + Vite + Pinia |
@@ -51,7 +51,7 @@ web/
     components/         FolderList, MessageList, MessageView, ComposeModal
     stores/             auth.js, mail.js  (Pinia)
     composables/        useMailEvents.js  (SSE)
-assets/                 logo files (SVG)
+web/public/assets/      logo files (SVG)
 Dockerfile              multi-stage build
 ```
 
@@ -93,17 +93,17 @@ docker run -p 8080:8080 letrvu
 
 ## Roadmap
 
-- [ ] IMAP folder listing
-- [ ] Message list with pagination
-- [ ] Message view (HTML + plain text)
-- [ ] Compose / reply / forward
-- [ ] Delete + mark read/unread
-- [ ] IMAP IDLE → SSE push notifications
-- [ ] Attachments (view + download)
-- [ ] Search (server-side IMAP SEARCH)
-- [ ] Embed frontend via `go:embed`
+- [X] IMAP folder listing
+- [X] Message list with pagination
+- [X] Message view (HTML + plain text)
+- [X] Compose / reply / forward
+- [X] Delete + mark read/unread
+- [X] IMAP IDLE → SSE push notifications
+- [X] Attachments (view + download)
+- [X] Search (server-side IMAP SEARCH)
+- [X] Embed frontend via `go:embed`
+- [X] Dark mode
 - [ ] Multi-account support
-- [ ] Dark mode
 
 ## License
 

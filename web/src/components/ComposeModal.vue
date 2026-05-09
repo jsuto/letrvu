@@ -65,7 +65,7 @@ defineExpose({ open, close })
 
 <style scoped>
 .overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.2);
   display: flex;

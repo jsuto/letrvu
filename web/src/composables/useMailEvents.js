@@ -13,7 +13,7 @@ export function useMailEvents() {
   onMounted(() => {
     es = new EventSource('/api/events')
 
-    es.addEventListener('new_mail', (e) => {
+    es.addEventListener('mailbox', (e) => {
       const data = JSON.parse(e.data || '{}')
       const folder = data.folder || mail.currentFolder
       if (folder === mail.currentFolder) {
