@@ -5,6 +5,7 @@ package imap
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"strings"
@@ -16,15 +17,24 @@ import (
 	"github.com/emersion/go-message/mail"
 )
 
+// DefaultTLSConfig is used for every new IMAP connection. main() may replace
+// it before the server starts (e.g. to toggle InsecureSkipVerify).
+var DefaultTLSConfig = &tls.Config{
+	InsecureSkipVerify: true, //nolint:gosec
+}
+
 // Client wraps an authenticated IMAP connection.
 type Client struct {
 	c *imapclient.Client
 }
 
 // Connect dials the IMAP server over TLS and authenticates.
+// TLS behaviour is controlled by DefaultTLSConfig.
 func Connect(host string, port int, username, password string) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
-	c, err := imapclient.DialTLS(addr, nil)
+	tlsCfg := DefaultTLSConfig.Clone()
+	tlsCfg.ServerName = host
+	c, err := imapclient.DialTLS(addr, &imapclient.Options{TLSConfig: tlsCfg})
 	if err != nil {
 		return nil, fmt.Errorf("imap dial %s: %w", addr, err)
 	}
