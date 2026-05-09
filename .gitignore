@@ -1,0 +1,17 @@
+# Go binary
+/letrvu
+*.exe
+
+# Frontend build output (embedded into Go binary at build time)
+web/node_modules/
+internal/api/static/
+
+# Environment / secrets
+.env
+*.env
+.env.local
+
+# Editor
+.idea/
+.vscode/
+*.swp

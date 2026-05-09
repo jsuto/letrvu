@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="40" viewBox="0 0 180 40" role="img">
+  <title>letrvu</title>
+  <desc>letrvu open webmail — horizontal logo lockup with teal envelope icon and wordmark</desc>
+
+  <rect x="0" y="4" width="48" height="33" rx="5" fill="#1D9E75"/>
+  <polyline points="0,4 24,22 48,4" fill="none" stroke="#E1F5EE" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <text
+    x="60"
+    y="28"
+    font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="21"
+    font-weight="500"
+    letter-spacing="-0.8"
+    fill="#1a1a1a"
+  >letrvu</text>
+</svg>

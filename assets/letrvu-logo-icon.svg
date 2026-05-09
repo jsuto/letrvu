@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img">
+  <title>letrvu</title>
+  <desc>letrvu open webmail — icon only mark, teal envelope for favicon and avatar use</desc>
+
+  <rect x="0" y="10" width="64" height="44" rx="7" fill="#1D9E75"/>
+  <polyline points="0,10 32,34 64,10" fill="none" stroke="#E1F5EE" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
