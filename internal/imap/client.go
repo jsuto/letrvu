@@ -8,12 +8,14 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"mime"
 	"strings"
 	"time"
 
 	goimap "github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-message"
+	"github.com/emersion/go-message/charset"
 	"github.com/emersion/go-message/mail"
 )
 
@@ -28,13 +30,22 @@ type Client struct {
 	c *imapclient.Client
 }
 
+// dialOptions returns imapclient.Options with TLS and RFC 2047 word decoding
+// configured. Callers may extend the returned value before dialling.
+func dialOptions(host string) *imapclient.Options {
+	tlsCfg := DefaultTLSConfig.Clone()
+	tlsCfg.ServerName = host
+	return &imapclient.Options{
+		TLSConfig:   tlsCfg,
+		WordDecoder: &mime.WordDecoder{CharsetReader: charset.Reader},
+	}
+}
+
 // Connect dials the IMAP server over TLS and authenticates.
 // TLS behaviour is controlled by DefaultTLSConfig.
 func Connect(host string, port int, username, password string) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
-	tlsCfg := DefaultTLSConfig.Clone()
-	tlsCfg.ServerName = host
-	c, err := imapclient.DialTLS(addr, &imapclient.Options{TLSConfig: tlsCfg})
+	c, err := imapclient.DialTLS(addr, dialOptions(host))
 	if err != nil {
 		return nil, fmt.Errorf("imap dial %s: %w", addr, err)
 	}

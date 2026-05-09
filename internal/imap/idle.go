@@ -5,6 +5,7 @@ import (
 
 	goimap "github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
+	_ "github.com/emersion/go-message/charset" // register charset decoders
 )
 
 // MailboxEvent is emitted when the server reports a change to a watched folder.
@@ -19,20 +20,15 @@ type MailboxEvent struct {
 func WatchFolder(host string, port int, username, password, folder string) (<-chan MailboxEvent, func(), error) {
 	events := make(chan MailboxEvent, 16)
 
-	tlsCfg := DefaultTLSConfig.Clone()
-	tlsCfg.ServerName = host
-
-	opts := &imapclient.Options{
-		TLSConfig: tlsCfg,
-		UnilateralDataHandler: &imapclient.UnilateralDataHandler{
-			Mailbox: func(data *imapclient.UnilateralDataMailbox) {
-				if data.NumMessages != nil {
-					select {
-					case events <- MailboxEvent{Folder: folder, NumMessages: *data.NumMessages}:
-					default: // slow consumer — drop rather than block the decoder
-					}
+	opts := dialOptions(host)
+	opts.UnilateralDataHandler = &imapclient.UnilateralDataHandler{
+		Mailbox: func(data *imapclient.UnilateralDataMailbox) {
+			if data.NumMessages != nil {
+				select {
+				case events <- MailboxEvent{Folder: folder, NumMessages: *data.NumMessages}:
+				default: // slow consumer — drop rather than block the decoder
 				}
-			},
+			}
 		},
 	}
 
