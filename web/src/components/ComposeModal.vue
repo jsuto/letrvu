@@ -17,6 +17,13 @@
         <input v-model="form.subject" type="text" placeholder="Subject" class="subject-input" />
       </div>
       <textarea ref="textareaEl" v-model="form.body" placeholder="Write your message…" />
+      <div v-if="attachments.length" class="attachment-list">
+        <div v-for="(att, i) in attachments" :key="i" class="attachment-chip">
+          <span class="att-icon">📎</span>
+          <span class="att-name">{{ att.filename }}</span>
+          <button @click="removeAttachment(i)" class="att-remove" title="Remove">×</button>
+        </div>
+      </div>
       <div class="compose-footer">
         <button @click="send" :disabled="sending" class="send-btn">
           {{ sending ? 'Sending…' : 'Send' }}
@@ -42,6 +49,8 @@ const error = ref('')
 const textareaEl = ref(null)
 
 const form = reactive({ fromIndex: 0, to: '', cc: '', subject: '', body: '' })
+// Each entry: { filename, content_type, data } where data is base64.
+const attachments = ref([])
 
 const fromOptions = computed(() => settings.fromOptions)
 
@@ -66,8 +75,8 @@ async function open(prefill = {}) {
   }
 
   // Signature goes between the user's typing area and any quoted text
-  // (prefill.body carries forwarded content). Strip the internal hint key.
-  const { _originalRecipients: _, ...rest } = prefill
+  // (prefill.body carries forwarded content). Strip internal hint keys.
+  const { _originalRecipients: _r, _attachments: _a, ...rest } = prefill
   Object.assign(form, {
     fromIndex,
     to: '',
@@ -80,6 +89,8 @@ async function open(prefill = {}) {
     body: sigBlock + (rest.body ?? ''),
     fromIndex, // restore after spread in case prefill had a fromIndex key
   })
+
+  attachments.value = prefill._attachments ? [...prefill._attachments] : []
 
   visible.value = true
 
@@ -95,6 +106,11 @@ async function open(prefill = {}) {
 function close() {
   visible.value = false
   error.value = ''
+  attachments.value = []
+}
+
+function removeAttachment(i) {
+  attachments.value.splice(i, 1)
 }
 
 async function send() {
@@ -109,6 +125,7 @@ async function send() {
       cc: form.cc.split(',').map(s => s.trim()).filter(Boolean),
       subject: form.subject,
       text: form.body,
+      attachments: attachments.value.length ? attachments.value : undefined,
     })
     close()
   } catch {
@@ -138,7 +155,7 @@ defineExpose({ open, close })
   border-radius: 10px;
   display: flex;
   flex-direction: column;
-  max-height: 520px;
+  max-height: 560px;
 }
 .compose-header {
   display: flex;
@@ -193,6 +210,36 @@ textarea {
   outline: none;
   min-height: 200px;
 }
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px;
+  border-top: 0.5px solid var(--color-border);
+}
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-bg);
+  border: 0.5px solid var(--color-border);
+  border-radius: 20px;
+  padding: 3px 8px 3px 6px;
+  font-size: 12px;
+  color: var(--color-text);
+}
+.att-icon { font-size: 13px; }
+.att-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  padding: 0 0 0 2px;
+}
+.att-remove:hover { color: #c0392b; }
 .compose-footer {
   padding: 10px 16px;
   border-top: 0.5px solid var(--color-border);

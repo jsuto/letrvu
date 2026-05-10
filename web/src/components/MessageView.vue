@@ -13,7 +13,13 @@
         </div>
         <div class="actions">
           <button @click="reply">Reply</button>
-          <button @click="forward">Forward</button>
+          <div class="forward-wrap" ref="forwardWrapEl">
+            <button @click="forwardMenuOpen = !forwardMenuOpen">Forward ▾</button>
+            <ul v-if="forwardMenuOpen" class="forward-dropdown">
+              <li @click="forwardInline">Inline</li>
+              <li @click="forwardAsAttachment">As .eml attachment</li>
+            </ul>
+          </div>
           <button
             :class="{ active: mail.currentMessage.flagged }"
             :title="mail.currentMessage.flagged ? 'Unflag' : 'Flag as important'"
@@ -117,6 +123,8 @@ const inviteAdding = ref(false)
 const inviteAdded = ref(false)
 const moveOpen = ref(false)
 const moveWrapEl = ref(null)
+const forwardMenuOpen = ref(false)
+const forwardWrapEl = ref(null)
 const showRemoteImages = ref(false)
 const hasRemoteImages = ref(false)
 const phishingCount = ref(0)
@@ -288,6 +296,7 @@ const otherFolders = computed(() =>
 
 function onDocClick(e) {
   if (moveWrapEl.value && !moveWrapEl.value.contains(e.target)) moveOpen.value = false
+  if (forwardWrapEl.value && !forwardWrapEl.value.contains(e.target)) forwardMenuOpen.value = false
 }
 onMounted(() => document.addEventListener('click', onDocClick))
 onUnmounted(() => document.removeEventListener('click', onDocClick))
@@ -323,12 +332,57 @@ function reply() {
   })
 }
 
-function forward() {
+function forwardInline() {
+  forwardMenuOpen.value = false
   const msg = mail.currentMessage
   if (!msg) return
+
+  // Prefer plain text body; fall back to stripping HTML tags for HTML-only emails.
+  let bodyText = msg.text_body || ''
+  if (!bodyText && msg.html_body) {
+    const tmp = document.createElement('div')
+    tmp.innerHTML = msg.html_body
+    for (const el of tmp.querySelectorAll('style, script, head')) el.remove()
+    bodyText = tmp.innerText.replace(/\n{3,}/g, '\n\n').trim()
+  }
+
+  const date = msg.date ? new Date(msg.date).toLocaleString() : ''
+  const to = Array.isArray(msg.to) ? msg.to.join(', ') : (msg.to || '')
+
+  const header = [
+    '--- Forwarded message ---',
+    `From: ${msg.from}`,
+    date ? `Date: ${date}` : '',
+    `Subject: ${msg.subject || ''}`,
+    to ? `To: ${to}` : '',
+  ].filter(Boolean).join('\n')
+
   compose?.value?.open({
     subject: `Fwd: ${msg.subject || ''}`,
-    body: `\n\n--- Forwarded message ---\nFrom: ${msg.from}\n\n${msg.text_body || ''}`,
+    body: `\n\n${header}\n\n${bodyText}`,
+  })
+}
+
+async function forwardAsAttachment() {
+  forwardMenuOpen.value = false
+  const msg = mail.currentMessage
+  if (!msg) return
+
+  const folder = encodeURIComponent(mail.currentFolder)
+  const res = await fetch(`/api/folders/${folder}/messages/${msg.uid}/source`)
+  if (!res.ok) return
+
+  const buf = await res.arrayBuffer()
+  const uint8 = new Uint8Array(buf)
+  let binary = ''
+  for (const b of uint8) binary += String.fromCharCode(b)
+  const base64 = btoa(binary)
+
+  const filename = `${(msg.subject || 'message').replace(/[/\\?%*:|"<>]/g, '_')}.eml`
+
+  compose?.value?.open({
+    subject: `Fwd: ${msg.subject || ''}`,
+    _attachments: [{ filename, content_type: 'message/rfc822', data: base64 }],
   })
 }
 
@@ -441,8 +495,8 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 .actions button:hover { background: var(--color-bg); }
 .actions button.danger { color: #c0392b; border-color: #f5c6c6; }
 .actions button.active { color: #e67e22; border-color: #f5c6a0; background: #fef9ec; }
-.move-wrap { position: relative; }
-.move-dropdown {
+.move-wrap, .forward-wrap { position: relative; }
+.move-dropdown, .forward-dropdown {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
@@ -458,13 +512,13 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
   z-index: 50;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
-.move-dropdown li {
+.move-dropdown li, .forward-dropdown li {
   padding: 6px 14px;
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
 }
-.move-dropdown li:hover { background: var(--color-teal-light); }
+.move-dropdown li:hover, .forward-dropdown li:hover { background: var(--color-teal-light); }
 .invite-banner, .remote-images-banner, .phishing-banner {
   display: flex;
   align-items: center;

@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -448,6 +449,11 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		Subject   string   `json:"subject"`
 		Text      string   `json:"text"`
 		HTML      string   `json:"html"`
+		Attachments []struct {
+			Filename    string `json:"filename"`
+			ContentType string `json:"content_type"`
+			Data        string `json:"data"` // base64-encoded
+		} `json:"attachments,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResp("invalid request body"))
@@ -469,6 +475,20 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		fromHeader = fromEmail
 	}
 
+	var attachments []smtp.Attachment
+	for _, a := range body.Attachments {
+		data, err := base64.StdEncoding.DecodeString(a.Data)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResp("invalid attachment data"))
+			return
+		}
+		attachments = append(attachments, smtp.Attachment{
+			Filename:    a.Filename,
+			ContentType: a.ContentType,
+			Data:        data,
+		})
+	}
+
 	if err := smtp.Send(smtp.Config{
 		Host:     sess.SMTPHost,
 		Port:     sess.SMTPPort,
@@ -482,6 +502,7 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		Subject:      body.Subject,
 		Text:         body.Text,
 		HTML:         body.HTML,
+		Attachments:  attachments,
 	}); err != nil {
 		writeJSON(w, http.StatusBadGateway, errorResp(err.Error()))
 		return

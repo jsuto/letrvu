@@ -2,6 +2,7 @@
 package smtp
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/smtp"
 	"strings"
@@ -13,6 +14,13 @@ type Config struct {
 	Port     int
 	Username string
 	Password string
+}
+
+// Attachment is a file to be attached to an outbound message.
+type Attachment struct {
+	Filename    string
+	ContentType string // defaults to application/octet-stream if empty
+	Data        []byte
 }
 
 // Message is an outbound email.
@@ -27,8 +35,9 @@ type Message struct {
 	To           []string
 	CC           []string
 	Subject      string
-	Text         string // plain text body
-	HTML         string // optional HTML body; if set, sends multipart/alternative
+	Text         string       // plain text body
+	HTML         string       // optional HTML body; if set, sends multipart/alternative
+	Attachments  []Attachment // optional file attachments
 }
 
 // Send delivers msg via SMTP STARTTLS with PLAIN auth.
@@ -53,15 +62,55 @@ func Send(cfg Config, msg Message) error {
 func buildMIME(msg Message) string {
 	var sb strings.Builder
 
-	allTo := strings.Join(msg.To, ", ")
 	sb.WriteString(fmt.Sprintf("From: %s\r\n", msg.From))
-	sb.WriteString(fmt.Sprintf("To: %s\r\n", allTo))
+	sb.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(msg.To, ", ")))
 	if len(msg.CC) > 0 {
 		sb.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(msg.CC, ", ")))
 	}
 	sb.WriteString(fmt.Sprintf("Subject: %s\r\n", msg.Subject))
 	sb.WriteString("MIME-Version: 1.0\r\n")
 
+	if len(msg.Attachments) > 0 {
+		const mixedBoundary = "letrvu-mixed-001"
+		sb.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%q\r\n\r\n", mixedBoundary))
+
+		// Body part
+		sb.WriteString(fmt.Sprintf("--%s\r\n", mixedBoundary))
+		writeBodyPart(&sb, msg)
+		sb.WriteString("\r\n")
+
+		// Attachment parts
+		for _, att := range msg.Attachments {
+			ct := att.ContentType
+			if ct == "" {
+				ct = "application/octet-stream"
+			}
+			sb.WriteString(fmt.Sprintf("--%s\r\n", mixedBoundary))
+			sb.WriteString(fmt.Sprintf("Content-Type: %s\r\n", ct))
+			sb.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=%q\r\n", att.Filename))
+			sb.WriteString("Content-Transfer-Encoding: base64\r\n\r\n")
+			// RFC 2045: base64 lines must not exceed 76 characters.
+			encoded := base64.StdEncoding.EncodeToString(att.Data)
+			for i := 0; i < len(encoded); i += 76 {
+				end := i + 76
+				if end > len(encoded) {
+					end = len(encoded)
+				}
+				sb.WriteString(encoded[i:end])
+				sb.WriteString("\r\n")
+			}
+		}
+
+		sb.WriteString(fmt.Sprintf("--%s--\r\n", mixedBoundary))
+	} else {
+		writeBodyPart(&sb, msg)
+	}
+
+	return sb.String()
+}
+
+// writeBodyPart writes the text/plain or multipart/alternative body section.
+func writeBodyPart(sb *strings.Builder, msg Message) {
 	if msg.HTML != "" {
 		boundary := "letrvu-boundary-001"
 		sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q\r\n", boundary))
@@ -80,6 +129,4 @@ func buildMIME(msg Message) string {
 		sb.WriteString("\r\n")
 		sb.WriteString(msg.Text)
 	}
-
-	return sb.String()
 }
