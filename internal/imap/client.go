@@ -175,15 +175,16 @@ type Attachment struct {
 
 // MessageFull holds the complete content of a single message.
 type MessageFull struct {
-	UID         uint32       `json:"uid"`
-	Subject     string       `json:"subject"`
-	From        string       `json:"from"`
-	To          []string     `json:"to"`
-	CC          []string     `json:"cc"`
-	Date        time.Time    `json:"date"`
-	TextBody    string       `json:"text_body"`
-	HTMLBody    string       `json:"html_body"`
-	Attachments []Attachment `json:"attachments"`
+	UID          uint32       `json:"uid"`
+	Subject      string       `json:"subject"`
+	From         string       `json:"from"`
+	To           []string     `json:"to"`
+	CC           []string     `json:"cc"`
+	Date         time.Time    `json:"date"`
+	TextBody     string       `json:"text_body"`
+	HTMLBody     string       `json:"html_body"`
+	Attachments  []Attachment `json:"attachments"`
+	ICalInvite   string       `json:"ical_invite,omitempty"`
 }
 
 // GetMessage fetches the full content of a single message by UID.
@@ -268,6 +269,8 @@ func parseMIMEBody(raw []byte, full *MessageFull) error {
 				full.HTMLBody = string(body)
 			case strings.HasPrefix(ct, "text/plain"):
 				full.TextBody = string(body)
+			case strings.HasPrefix(ct, "text/calendar"):
+				full.ICalInvite = string(body)
 			}
 		case *mail.AttachmentHeader:
 			body, _ := io.ReadAll(part.Body)

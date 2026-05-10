@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yourusername/letrvu/internal/db"
+	"github.com/jsuto/letrvu/internal/db"
 )
 
 // Contact represents an address book entry.

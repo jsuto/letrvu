@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yourusername/letrvu/internal/db"
+	"github.com/jsuto/letrvu/internal/db"
 )
 
 const sessionExpiry = 7 * 24 * time.Hour

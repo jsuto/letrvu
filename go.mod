@@ -1,4 +1,4 @@
-module github.com/yourusername/letrvu
+module github.com/jsuto/letrvu
 
 go 1.26
 
@@ -13,6 +13,7 @@ require (
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/emersion/go-ical v0.0.0-20250609112844-439c63cef608 // indirect
 	github.com/emersion/go-sasl v0.0.0-20231106173351-e73c9f7bad43 // indirect
 	github.com/emersion/go-vcard v0.0.0-20241024213814-c9703dde27ff // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -22,6 +23,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/teambition/rrule-go v1.8.2 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/text v0.37.0 // indirect

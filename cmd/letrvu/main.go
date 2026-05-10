@@ -11,12 +11,13 @@ import (
 	"strconv"
 
 	"github.com/joho/godotenv"
-	"github.com/yourusername/letrvu/internal/api"
-	"github.com/yourusername/letrvu/internal/contacts"
-	"github.com/yourusername/letrvu/internal/db"
-	"github.com/yourusername/letrvu/internal/imap"
-	"github.com/yourusername/letrvu/internal/session"
-	"github.com/yourusername/letrvu/internal/settings"
+	"github.com/jsuto/letrvu/internal/api"
+	"github.com/jsuto/letrvu/internal/calendar"
+	"github.com/jsuto/letrvu/internal/contacts"
+	"github.com/jsuto/letrvu/internal/db"
+	"github.com/jsuto/letrvu/internal/imap"
+	"github.com/jsuto/letrvu/internal/session"
+	"github.com/jsuto/letrvu/internal/settings"
 )
 
 func main() {
@@ -50,6 +51,7 @@ func main() {
 
 	settingsStore := settings.NewStore(database)
 	contactsStore := contacts.NewStore(database)
+	calendarStore := calendar.NewStore(database)
 
 	// Server-level IMAP/SMTP defaults (pre-fill login form via /api/config).
 	cfg := api.ServerConfig{
@@ -59,7 +61,7 @@ func main() {
 		SMTPPort: envInt("SMTP_PORT", 587),
 	}
 
-	handler := api.NewRouter(sessions, settingsStore, contactsStore, cfg)
+	handler := api.NewRouter(sessions, settingsStore, contactsStore, calendarStore, cfg)
 
 	log.Printf("letrvu listening on %s", *addr)
 	if err := http.ListenAndServe(*addr, handler); err != nil {

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yourusername/letrvu/internal/contacts"
+	"github.com/jsuto/letrvu/internal/contacts"
 )
 
 func (h *handler) listContacts(w http.ResponseWriter, r *http.Request) {

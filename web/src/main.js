@@ -7,6 +7,7 @@ import { useAuthStore } from './stores/auth'
 import LoginPage from './pages/LoginPage.vue'
 import MailPage from './pages/MailPage.vue'
 import ContactsPage from './pages/ContactsPage.vue'
+import CalendarPage from './pages/CalendarPage.vue'
 
 const pinia = createPinia()
 
@@ -18,6 +19,7 @@ const router = createRouter({
     { path: '/mail', component: MailPage, meta: { requiresAuth: true } },
     { path: '/mail/:folder', component: MailPage, props: true, meta: { requiresAuth: true } },
     { path: '/contacts', component: ContactsPage, meta: { requiresAuth: true } },
+    { path: '/calendar', component: CalendarPage, meta: { requiresAuth: true } },
   ],
 })
 

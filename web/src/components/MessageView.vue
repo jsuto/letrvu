@@ -17,6 +17,14 @@
           <button @click="remove" class="danger">Delete</button>
         </div>
       </div>
+      <!-- Calendar invite banner -->
+      <div v-if="mail.currentMessage.ical_invite" class="invite-banner">
+        <span>📅 This message contains a calendar invite.</span>
+        <button @click="addToCalendar" :disabled="inviteAdding" class="invite-btn">
+          {{ inviteAdded ? 'Added ✓' : inviteAdding ? 'Adding…' : 'Add to calendar' }}
+        </button>
+      </div>
+
       <!-- HTML email rendered in a sandboxed iframe to prevent XSS -->
       <iframe
         v-if="mail.currentMessage.html_body"
@@ -44,13 +52,21 @@
 </template>
 
 <script setup>
-import { inject } from 'vue'
+import { inject, ref, watch } from 'vue'
 import { useMailStore } from '../stores/mail'
 import { useContactsStore } from '../stores/contacts'
+import { useCalendarStore } from '../stores/calendar'
 
 const mail = useMailStore()
 const contacts = useContactsStore()
+const calendar = useCalendarStore()
 const compose = inject('compose')
+
+const inviteAdding = ref(false)
+const inviteAdded = ref(false)
+
+// Reset invite state when message changes
+watch(() => mail.currentMessage?.uid, () => { inviteAdded.value = false })
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
@@ -91,6 +107,18 @@ async function remove() {
   const msg = mail.currentMessage
   if (!msg) return
   await mail.deleteMessage(mail.currentFolder, msg.uid)
+}
+
+async function addToCalendar() {
+  inviteAdding.value = true
+  try {
+    await calendar.importFromInvite(mail.currentMessage.ical_invite)
+    inviteAdded.value = true
+  } catch {
+    alert('Could not add event to calendar.')
+  } finally {
+    inviteAdding.value = false
+  }
 }
 
 async function saveContact() {
@@ -147,6 +175,28 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 }
 .actions button:hover { background: var(--color-bg); }
 .actions button.danger { color: #c0392b; border-color: #f5c6c6; }
+.invite-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--color-teal-light);
+  border: 0.5px solid var(--color-teal);
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 1rem;
+}
+.invite-btn {
+  padding: 5px 14px;
+  background: var(--color-teal);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.invite-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .body-frame {
   width: 100%;
   min-height: 400px;

@@ -114,6 +114,18 @@ func Migrate(db *DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_contacts_owner ON contacts (owner, imap_host)`,
 		`CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails (email)`,
+		`CREATE TABLE IF NOT EXISTS calendar_events (
+			id          ` + db.PK() + `,
+			owner       TEXT NOT NULL,
+			imap_host   TEXT NOT NULL,
+			title       TEXT NOT NULL DEFAULT '',
+			description TEXT NOT NULL DEFAULT '',
+			location    TEXT NOT NULL DEFAULT '',
+			all_day     INTEGER NOT NULL DEFAULT 0,
+			starts_at   TEXT NOT NULL,
+			ends_at     TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_calendar_events_owner ON calendar_events (owner, imap_host, starts_at)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := db.Exec(stmt); err != nil {

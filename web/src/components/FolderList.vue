@@ -5,6 +5,7 @@
     </div>
     <button class="compose-btn" @click="compose?.open()">Compose</button>
     <RouterLink to="/contacts" class="nav-link">Contacts</RouterLink>
+    <RouterLink to="/calendar" class="nav-link">Calendar</RouterLink>
     <ul v-if="mail.folders.length">
       <li
         v-for="folder in mail.folders"

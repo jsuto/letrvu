@@ -3,15 +3,16 @@ package api
 import (
 	"net/http"
 
-	"github.com/yourusername/letrvu/internal/contacts"
-	"github.com/yourusername/letrvu/internal/session"
-	"github.com/yourusername/letrvu/internal/settings"
+	"github.com/jsuto/letrvu/internal/calendar"
+	"github.com/jsuto/letrvu/internal/contacts"
+	"github.com/jsuto/letrvu/internal/session"
+	"github.com/jsuto/letrvu/internal/settings"
 )
 
 // NewRouter wires all HTTP routes and returns the root handler.
-func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsStore *contacts.Store, cfg ServerConfig) http.Handler {
+func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsStore *contacts.Store, calendarStore *calendar.Store, cfg ServerConfig) http.Handler {
 	mux := http.NewServeMux()
-	h := &handler{sessions: sessions, settings: settingsStore, contacts: contactsStore, config: cfg}
+	h := &handler{sessions: sessions, settings: settingsStore, contacts: contactsStore, calendar: calendarStore, config: cfg}
 
 	// Public
 	mux.HandleFunc("GET /api/config", h.getConfig)
@@ -47,6 +48,16 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("GET /api/contacts/{id}", h.requireAuth(h.getContact))
 	mux.HandleFunc("PUT /api/contacts/{id}", h.requireAuth(h.updateContact))
 	mux.HandleFunc("DELETE /api/contacts/{id}", h.requireAuth(h.deleteContact))
+
+	// Calendar — specific paths before wildcard {id}
+	mux.HandleFunc("GET /api/calendar/events/export", h.requireAuth(h.exportCalendar))
+	mux.HandleFunc("POST /api/calendar/events/import", h.requireAuth(h.importCalendar))
+	mux.HandleFunc("POST /api/calendar/events/import-invite", h.requireAuth(h.importCalendarFromInvite))
+	mux.HandleFunc("GET /api/calendar/events", h.requireAuth(h.listCalendarEvents))
+	mux.HandleFunc("POST /api/calendar/events", h.requireAuth(h.createCalendarEvent))
+	mux.HandleFunc("GET /api/calendar/events/{id}", h.requireAuth(h.getCalendarEvent))
+	mux.HandleFunc("PUT /api/calendar/events/{id}", h.requireAuth(h.updateCalendarEvent))
+	mux.HandleFunc("DELETE /api/calendar/events/{id}", h.requireAuth(h.deleteCalendarEvent))
 
 	// SSE — real-time new mail notifications via IMAP IDLE
 	mux.HandleFunc("GET /api/events", h.requireAuth(h.events))

@@ -4,7 +4,7 @@ package settings
 import (
 	"fmt"
 
-	"github.com/yourusername/letrvu/internal/db"
+	"github.com/jsuto/letrvu/internal/db"
 )
 
 // allowed is the set of setting keys users may read and write.
