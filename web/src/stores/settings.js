@@ -26,6 +26,10 @@ export const useSettingsStore = defineStore('settings', () => {
   // The authenticated login address, injected by the server into /api/settings.
   const username = computed(() => settings.value.username ?? '')
 
+  // Domains that belong to this organisation, injected by the server.
+  // Empty array means the feature is not configured.
+  const internalDomains = computed(() => settings.value.internal_domains ?? [])
+
   // Identities are stored as a JSON array of { name, email } objects.
   const identities = computed(() => {
     try {
@@ -50,5 +54,5 @@ export const useSettingsStore = defineStore('settings', () => {
     return opts
   })
 
-  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions }
+  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains }
 })

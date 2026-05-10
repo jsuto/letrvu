@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"flag"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -55,13 +57,20 @@ func main() {
 	calendarStore := calendar.NewStore(database)
 
 	// Server-level IMAP/SMTP defaults (pre-fill login form via /api/config).
+	if strings.EqualFold(os.Getenv("LOG_LEVEL"), "debug") {
+		imap.Debug = true
+		log.Println("debug logging enabled")
+	}
+
 	cfg := api.ServerConfig{
-		IMAPHost:       envOr("IMAP_HOST", ""),
-		IMAPPort:       envInt("IMAP_PORT", 993),
-		SMTPHost:       envOr("SMTP_HOST", ""),
-		SMTPPort:       envInt("SMTP_PORT", 587),
-		SecureCookies:  envBool("SECURE_COOKIES", false),
-		FolderCacheTTL: envDuration("FOLDER_CACHE_TTL", 2*time.Minute),
+		IMAPHost:        envOr("IMAP_HOST", ""),
+		IMAPPort:        envInt("IMAP_PORT", 993),
+		SMTPHost:        envOr("SMTP_HOST", ""),
+		SMTPPort:        envInt("SMTP_PORT", 587),
+		SecureCookies:   envBool("SECURE_COOKIES", false),
+		TrustedProxy:    envCIDR("TRUSTED_PROXY"),
+		FolderCacheTTL:  envDuration("FOLDER_CACHE_TTL", 2*time.Minute),
+		InternalDomains: envDomains("INTERNAL_DOMAINS"),
 	}
 
 	handler := api.NewRouter(sessions, settingsStore, contactsStore, calendarStore, cfg)
@@ -94,6 +103,45 @@ func loadOrGenerateSecret() []byte {
 	log.Printf("WARNING: SESSION_SECRET not set — sessions will not survive restart.")
 	log.Printf("Add to .env:  SESSION_SECRET=%s", hex.EncodeToString(b))
 	return b
+}
+
+// envDomains parses a comma-separated list of domain names from an env var.
+// e.g. INTERNAL_DOMAINS=example.com,example.org
+func envDomains(key string) []string {
+	v := os.Getenv(key)
+	if v == "" {
+		return nil
+	}
+	var out []string
+	for _, d := range strings.Split(v, ",") {
+		if d = strings.TrimSpace(strings.ToLower(d)); d != "" {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// envCIDR parses an IP address or CIDR range from an env var.
+// A plain IP (e.g. "127.0.0.1") is treated as a /32 (or /128 for IPv6).
+// Returns nil if the variable is unset or empty.
+func envCIDR(key string) *net.IPNet {
+	v := os.Getenv(key)
+	if v == "" {
+		return nil
+	}
+	if !strings.Contains(v, "/") {
+		// Plain IP — append host mask so ParseCIDR accepts it.
+		if strings.Contains(v, ":") {
+			v += "/128" // IPv6
+		} else {
+			v += "/32" // IPv4
+		}
+	}
+	_, cidr, err := net.ParseCIDR(v)
+	if err != nil {
+		log.Fatalf("TRUSTED_PROXY: invalid IP/CIDR %q: %v", os.Getenv(key), err)
+	}
+	return cidr
 }
 
 func envOr(key, fallback string) string {

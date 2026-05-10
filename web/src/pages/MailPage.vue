@@ -16,6 +16,7 @@
 <script setup>
 import { ref, provide, onMounted } from 'vue'
 import { useMailStore } from '../stores/mail'
+import { useSettingsStore } from '../stores/settings'
 import { useMailEvents } from '../composables/useMailEvents'
 import FolderList from '../components/FolderList.vue'
 import MessageList from '../components/MessageList.vue'
@@ -23,6 +24,7 @@ import MessageView from '../components/MessageView.vue'
 import ComposeModal from '../components/ComposeModal.vue'
 
 const mail = useMailStore()
+const settings = useSettingsStore()
 const composeModal = ref(null)
 
 // Provide compose modal to all descendants so FolderList and MessageView can open it.
@@ -31,7 +33,7 @@ provide('compose', composeModal)
 useMailEvents()
 
 onMounted(async () => {
-  await mail.fetchFolders()
+  await Promise.all([mail.fetchFolders(), settings.fetchSettings()])
   if (!mail.messages.length) {
     await mail.fetchMessages(mail.currentFolder)
   }

@@ -9,7 +9,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log"
 	"mime"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -20,6 +22,15 @@ import (
 	"github.com/emersion/go-message/charset"
 	"github.com/emersion/go-message/mail"
 )
+
+// Debug enables verbose logging for development. Set via LOG_LEVEL=debug.
+var Debug bool
+
+func debugf(format string, args ...any) {
+	if Debug {
+		log.Printf("[imap debug] "+format, args...)
+	}
+}
 
 // DefaultTLSConfig is used for every new IMAP connection. main() may replace
 // it before the server starts (e.g. to toggle InsecureSkipVerify).
@@ -230,6 +241,12 @@ type MessageFull struct {
 	// InlineImages maps Content-ID (without angle brackets) to a base64 data
 	// URL so the frontend can resolve cid: references inside HTML bodies.
 	InlineImages   map[string]string `json:"inline_images,omitempty"`
+	// SPF/DKIM/DMARC results parsed from the Authentication-Results header
+	// added by the receiving MTA. Values are lowercase result tokens such as
+	// "pass", "fail", "softfail", "neutral", "none". Empty when absent.
+	SPF   string `json:"spf,omitempty"`
+	DKIM  string `json:"dkim,omitempty"`
+	DMARC string `json:"dmarc,omitempty"`
 }
 
 // GetMessage fetches the full content of a single message by UID.
@@ -306,13 +323,129 @@ func (c *Client) GetMessage(folder string, uid uint32) (*MessageFull, error) {
 	return full, nil
 }
 
+// authMethodRe matches "method=result" tokens in an Authentication-Results
+// header value, e.g. "spf=pass", "dkim=fail", "dmarc=none".
+var authMethodRe = regexp.MustCompile(`(?i)\b(spf|dkim|dmarc)\s*=\s*(\w+)`)
+
+// parseAuthResults extracts the first SPF, DKIM, and DMARC result tokens from
+// an Authentication-Results header value. Results are lower-cased.
+func parseAuthResults(v string) (spf, dkim, dmarc string) {
+	for _, m := range authMethodRe.FindAllStringSubmatch(v, -1) {
+		switch strings.ToLower(m[1]) {
+		case "spf":
+			if spf == "" {
+				spf = strings.ToLower(m[2])
+			}
+		case "dkim":
+			if dkim == "" {
+				dkim = strings.ToLower(m[2])
+			}
+		case "dmarc":
+			if dmarc == "" {
+				dmarc = strings.ToLower(m[2])
+			}
+		}
+	}
+	return
+}
+
+// headerKeys returns the sorted keys of a raw-headers map for debug logging.
+func headerKeys(h map[string][]string) []string {
+	keys := make([]string, 0, len(h))
+	for k := range h {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// rawHeaders parses the header section of a raw RFC 2822 message (everything
+// before the first blank line) into a map of lowercased field names to their
+// unfolded values. Multi-line (folded) header values are joined with a space.
+// Multiple fields with the same name are appended in order.
+func rawHeaders(msg []byte) map[string][]string {
+	out := make(map[string][]string)
+	var key string
+	var val strings.Builder
+
+	flush := func() {
+		if key != "" {
+			out[key] = append(out[key], strings.TrimSpace(val.String()))
+		}
+	}
+
+	for len(msg) > 0 {
+		nl := bytes.IndexByte(msg, '\n')
+		var line []byte
+		if nl < 0 {
+			line = msg
+			msg = nil
+		} else {
+			line = msg[:nl]
+			msg = msg[nl+1:]
+		}
+		line = bytes.TrimRight(line, "\r") // strip CRLF → LF
+
+		if len(line) == 0 {
+			break // blank line = end of headers
+		}
+		if line[0] == ' ' || line[0] == '\t' {
+			// Continuation of previous field value.
+			val.WriteByte(' ')
+			val.Write(bytes.TrimLeft(line, " \t"))
+			continue
+		}
+		flush()
+		key = ""
+		val.Reset()
+		if colon := bytes.IndexByte(line, ':'); colon > 0 {
+			key = strings.ToLower(string(line[:colon]))
+			val.Write(bytes.TrimLeft(line[colon+1:], " \t"))
+		}
+	}
+	flush()
+	return out
+}
+
 // parseMIMEBody walks the MIME tree and populates text/HTML bodies and
 // attachment filenames on full.
 func parseMIMEBody(raw []byte, full *MessageFull) error {
+	// Extract email authentication results directly from the raw header bytes.
+	// We do this before calling mail.CreateReader to avoid any ambiguity in
+	// how go-message handles folded header values. The headers are written by
+	// the receiving MTA and cannot be spoofed by the sender.
+	rh := rawHeaders(raw)
+	debugf("uid=%d raw header keys: %v", full.UID, headerKeys(rh))
+	for _, v := range rh["authentication-results"] {
+		debugf("uid=%d Authentication-Results value: %q", full.UID, v)
+		spf, dkim, dmarc := parseAuthResults(v)
+		debugf("uid=%d parsed → spf=%q dkim=%q dmarc=%q", full.UID, spf, dkim, dmarc)
+		if full.SPF == "" && spf != "" {
+			full.SPF = spf
+		}
+		if full.DKIM == "" && dkim != "" {
+			full.DKIM = dkim
+		}
+		if full.DMARC == "" && dmarc != "" {
+			full.DMARC = dmarc
+		}
+	}
+	// Received-SPF fallback (used by some MTAs). Format: "Pass (...)" / "Fail ..."
+	if full.SPF == "" {
+		for _, v := range rh["received-spf"] {
+			debugf("uid=%d Received-SPF value: %q", full.UID, v)
+			if parts := strings.Fields(strings.ToLower(v)); len(parts) > 0 {
+				full.SPF = strings.TrimRight(parts[0], ":")
+				break
+			}
+		}
+	}
+	debugf("uid=%d final auth: spf=%q dkim=%q dmarc=%q", full.UID, full.SPF, full.DKIM, full.DMARC)
+
 	mr, err := mail.CreateReader(bytes.NewReader(raw))
 	if err != nil && !message.IsUnknownCharset(err) {
 		return err
 	}
+
 	for {
 		part, err := mr.NextPart()
 		if err == io.EOF {

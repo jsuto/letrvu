@@ -6,9 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jsuto/letrvu/internal/calendar"
@@ -36,6 +39,15 @@ type ServerConfig struct {
 	SMTPPort        int           `json:"smtp_port"`
 	SecureCookies   bool          `json:"-"`
 	FolderCacheTTL  time.Duration `json:"-"`
+	// TrustedProxy is the IP or CIDR of the reverse proxy. When non-nil,
+	// X-Forwarded-For / X-Real-IP are trusted only if the TCP connection comes
+	// from within that range. Nil disables proxy header reading entirely.
+	TrustedProxy    *net.IPNet    `json:"-"`
+	// InternalDomains is the set of domains that belong to this organisation.
+	// Messages whose From domain is not in this list are flagged as external
+	// in the UI — but only when Authentication-Results headers are present so
+	// we are not making judgements based on spoofable data.
+	InternalDomains []string `json:"-"`
 }
 
 
@@ -46,6 +58,32 @@ type handler struct {
 	calendar     *calendar.Store
 	config       ServerConfig
 	folderCache  *folderCache
+}
+
+// clientIP returns the real client IP address. If TrustedProxy is configured
+// and the TCP connection originates from within that CIDR, X-Forwarded-For
+// (leftmost entry) or X-Real-IP is used. The CIDR check prevents a client
+// that bypasses the proxy from forging its own IP in the audit log.
+func (h *handler) clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if h.config.TrustedProxy != nil {
+		if ip := net.ParseIP(host); ip != nil && h.config.TrustedProxy.Contains(ip) {
+			if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+				// X-Forwarded-For may be "client, proxy1, proxy2" — leftmost is original client.
+				if i := strings.IndexByte(xff, ','); i > 0 {
+					return strings.TrimSpace(xff[:i])
+				}
+				return strings.TrimSpace(xff)
+			}
+			if xri := r.Header.Get("X-Real-IP"); xri != "" {
+				return strings.TrimSpace(xri)
+			}
+		}
+	}
+	return host
 }
 
 // requireAuth is middleware that checks for a valid session cookie and, for
@@ -117,6 +155,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	// Verify credentials by dialing IMAP before creating session.
 	c, err := imap.Connect(body.IMAPHost, body.IMAPPort, body.Username, body.Password)
 	if err != nil {
+		log.Printf("audit: login_failed user=%s ip=%s imap=%s", body.Username, h.clientIP(r), body.IMAPHost)
 		writeJSON(w, http.StatusUnauthorized, errorResp("imap authentication failed"))
 		return
 	}
@@ -133,6 +172,8 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp("could not create session"))
 		return
 	}
+
+	log.Printf("audit: login user=%s ip=%s imap=%s", body.Username, h.clientIP(r), body.IMAPHost)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "letrvu_session",
@@ -156,6 +197,9 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("letrvu_session")
 	if err == nil {
+		if sess, ok := h.sessions.Get(cookie.Value); ok {
+			log.Printf("audit: logout user=%s ip=%s", sess.Username, h.clientIP(r))
+		}
 		h.sessions.Delete(cookie.Value)
 	}
 	http.SetCookie(w, &http.Cookie{Name: "letrvu_session", MaxAge: -1, Path: "/"})
@@ -534,9 +578,13 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		HTML:         body.HTML,
 		Attachments:  attachments,
 	}); err != nil {
+		log.Printf("audit: send_failed user=%s ip=%s to=%d cc=%d attachments=%d err=%v",
+			sess.Username, h.clientIP(r), len(body.To), len(body.CC), len(attachments), err)
 		writeJSON(w, http.StatusBadGateway, errorResp(err.Error()))
 		return
 	}
+	log.Printf("audit: send user=%s ip=%s to=%d cc=%d attachments=%d",
+		sess.Username, h.clientIP(r), len(body.To), len(body.CC), len(attachments))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -596,10 +644,19 @@ func (h *handler) getSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	// Build response as map[string]any so we can mix string user-settings with
+	// server-injected values of other types (e.g. the domains slice).
+	out := make(map[string]any, len(s)+2)
+	for k, v := range s {
+		out[k] = v
+	}
 	// Inject the authenticated username so the client can show it as the
 	// default From address when no identities are configured.
-	s["username"] = sess.Username
-	writeJSON(w, http.StatusOK, s)
+	out["username"] = sess.Username
+	// Inject the server-configured internal domains so the client can flag
+	// messages from outside the organisation.
+	out["internal_domains"] = h.config.InternalDomains
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {

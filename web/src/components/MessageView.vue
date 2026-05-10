@@ -8,6 +8,8 @@
         <h2>{{ mail.currentMessage.subject || '(no subject)' }}</h2>
         <div class="meta">
           <span class="from">{{ mail.currentMessage.from }}</span>
+          <span v-if="isExternal" class="external-badge" title="Sender is outside your organisation — authentication passed">External</span>
+          <span v-else-if="isUnverified" class="unverified-badge" title="Sender appears to be outside your organisation — no authentication results available">Unverified</span>
           <button class="save-contact-btn" title="Save to address book" @click="saveContact">+</button>
           <span class="date">{{ formatDate(mail.currentMessage.date) }}</span>
         </div>
@@ -70,6 +72,11 @@
         <button @click="showRemoteImages = true" class="show-images-btn">Show images</button>
       </div>
 
+      <!-- Email authentication failure banner (SPF/DKIM/DMARC) -->
+      <div v-if="authFailed" class="auth-banner">
+        <span>⚠ Authentication failed — this message did not pass {{ authFailedMethods }} checks and may be spoofed or forged.</span>
+      </div>
+
       <!-- Phishing link warning banner -->
       <div v-if="phishingCount > 0" class="phishing-banner">
         <span>⚠ {{ phishingCount }} misleading {{ phishingCount === 1 ? 'link' : 'links' }} detected — the visible text shows a different domain than the actual destination.</span>
@@ -113,10 +120,12 @@ import DOMPurify from 'dompurify'
 import { useMailStore } from '../stores/mail'
 import { useContactsStore } from '../stores/contacts'
 import { useCalendarStore } from '../stores/calendar'
+import { useSettingsStore } from '../stores/settings'
 
 const mail = useMailStore()
 const contacts = useContactsStore()
 const calendar = useCalendarStore()
+const settings = useSettingsStore()
 const compose = inject('compose')
 
 const inviteAdding = ref(false)
@@ -293,6 +302,73 @@ watch(displayHtml, () => {
 const otherFolders = computed(() =>
   mail.folders.filter(f => f.name !== mail.currentFolder)
 )
+
+const debugMode = import.meta.env.VITE_LOG_LEVEL === 'debug'
+function debugLog(...args) {
+  if (debugMode) console.debug('[letrvu]', ...args)
+}
+
+// Authentication failure: only warn on explicit hard fails recorded by the
+// receiving MTA in Authentication-Results. Softfail/neutral/none are omitted
+// intentionally — they cause too many false positives (e.g. forwarded mail).
+const authFailed = computed(() => {
+  const msg = mail.currentMessage
+  if (!msg) return false
+  return msg.dmarc === 'fail' || msg.spf === 'fail'
+})
+
+const authFailedMethods = computed(() => {
+  const msg = mail.currentMessage
+  if (!msg) return ''
+  const failed = []
+  if (msg.spf === 'fail') failed.push('SPF')
+  if (msg.dmarc === 'fail') failed.push('DMARC')
+  return failed.join(' and ')
+})
+
+// Extract the domain from a "Name <user@domain>" or "user@domain" From field.
+function senderDomain(msg) {
+  const from = msg.from ?? ''
+  const match = from.match(/^.*?<(.+?)>\s*$/)
+  const email = match ? match[1] : from.trim()
+  return email.split('@')[1]?.toLowerCase() ?? ''
+}
+
+// isExternal: INTERNAL_DOMAINS configured + auth results present + From domain
+// is not internal. We require auth results so the From domain is verified, not
+// just claimed.
+const isExternal = computed(() => {
+  const domains = settings.internalDomains
+  debugLog('isExternal: internalDomains =', domains)
+  if (!domains.length) {
+    debugLog('isExternal: no internal domains configured → skip')
+    return false
+  }
+  const msg = mail.currentMessage
+  if (!msg) return false
+  debugLog('isExternal: msg.spf =', msg.spf, 'msg.dkim =', msg.dkim, 'msg.dmarc =', msg.dmarc)
+  if (!msg.spf && !msg.dkim && !msg.dmarc) {
+    debugLog('isExternal: no auth results → defer to isUnverified')
+    return false
+  }
+  const domain = senderDomain(msg)
+  debugLog('isExternal: from domain =', domain, '| external =', !domains.includes(domain))
+  return domain !== '' && !domains.includes(domain)
+})
+
+// isUnverified: INTERNAL_DOMAINS configured + NO auth results + From domain is
+// not internal. We can't confirm the sender but the claimed domain is outside
+// the organisation. Shown as a neutral grey badge rather than amber.
+const isUnverified = computed(() => {
+  const domains = settings.internalDomains
+  if (!domains.length) return false
+  const msg = mail.currentMessage
+  if (!msg) return false
+  if (msg.spf || msg.dkim || msg.dmarc) return false // auth present → handled by isExternal
+  const domain = senderDomain(msg)
+  debugLog('isUnverified: from domain =', domain, '| unverified =', !domains.includes(domain))
+  return domain !== '' && !domains.includes(domain)
+})
 
 function onDocClick(e) {
   if (moveWrapEl.value && !moveWrapEl.value.contains(e.target)) moveOpen.value = false
@@ -491,6 +567,26 @@ async function saveContact() {
 .header { margin-bottom: 1.5rem; }
 h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 .meta { font-size: 13px; color: var(--color-text-muted); margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; }
+.external-badge,
+.unverified-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.external-badge {
+  background: #fff4e5;
+  border: 0.5px solid #e09030;
+  color: #7a4000;
+}
+.unverified-badge {
+  background: #f2f2f2;
+  border: 0.5px solid #b0b0b0;
+  color: #555;
+}
 .save-contact-btn {
   background: none;
   border: 0.5px solid var(--color-border);
@@ -539,7 +635,7 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
   white-space: nowrap;
 }
 .move-dropdown li:hover, .forward-dropdown li:hover { background: var(--color-teal-light); }
-.invite-banner, .remote-images-banner, .phishing-banner {
+.invite-banner, .remote-images-banner, .phishing-banner, .auth-banner {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -561,6 +657,11 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
   background: #fdf0f0;
   border: 0.5px solid #e07070;
   color: #7a1a1a;
+}
+.auth-banner {
+  background: #fff4e5;
+  border: 0.5px solid #e09030;
+  color: #7a4000;
 }
 .show-images-btn {
   padding: 5px 14px;
