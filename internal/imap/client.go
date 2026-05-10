@@ -67,26 +67,55 @@ func (c *Client) Close() error {
 type Folder struct {
 	Name      string `json:"name"`
 	Delimiter string `json:"delimiter"`
+	Unseen    uint32 `json:"unseen"`
 }
 
-// ListFolders returns all subscribed mailbox folders.
+// folderPriority returns a sort key so well-known folders appear first.
+// INBOX=0, Drafts=1, Sent=2, Junk/Spam=3, Trash=4, everything else=5.
+func folderPriority(name string) int {
+	switch strings.ToLower(name) {
+	case "inbox":
+		return 0
+	case "drafts", "draft":
+		return 1
+	case "sent", "sent items", "sent mail":
+		return 2
+	case "junk", "junk email", "spam":
+		return 3
+	case "trash", "deleted", "deleted items":
+		return 4
+	}
+	return 5
+}
+
+// ListFolders returns all subscribed mailbox folders with unseen counts,
+// sorted by well-known order then alphabetically.
 func (c *Client) ListFolders() ([]Folder, error) {
 	mailboxes, err := c.c.List("", "*", nil).Collect()
 	if err != nil {
 		return nil, fmt.Errorf("list folders: %w", err)
 	}
-	folders := make([]Folder, len(mailboxes))
-	for i, data := range mailboxes {
+	folders := make([]Folder, 0, len(mailboxes))
+	for _, data := range mailboxes {
 		delim := ""
 		if data.Delim != 0 {
 			delim = string(data.Delim)
 		}
-		folders[i] = Folder{
+		f := Folder{
 			Name:      data.Mailbox,
 			Delimiter: delim,
 		}
+		// Fetch unseen count via STATUS; ignore errors (best-effort).
+		if status, err := c.c.Status(data.Mailbox, &goimap.StatusOptions{NumUnseen: true}).Wait(); err == nil && status.NumUnseen != nil {
+			f.Unseen = *status.NumUnseen
+		}
+		folders = append(folders, f)
 	}
 	slices.SortFunc(folders, func(a, b Folder) int {
+		pa, pb := folderPriority(a.Name), folderPriority(b.Name)
+		if pa != pb {
+			return pa - pb
+		}
 		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 	})
 	return folders, nil

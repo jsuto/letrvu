@@ -13,6 +13,7 @@
         :class="{
           active: mail.currentFolder === folder.name,
           'drop-target': dragOver === folder.name,
+          'has-unseen': folder.unseen > 0,
         }"
         @click="openFolder(folder.name)"
         @dragover.prevent="dragOver = folder.name"
@@ -129,6 +130,7 @@ li {
 }
 li:hover { background: var(--color-teal-light); }
 li.active { background: var(--color-teal-light); font-weight: 500; }
+li.has-unseen { font-weight: 600; }
 li.drop-target {
   background: var(--color-teal);
   color: white;
