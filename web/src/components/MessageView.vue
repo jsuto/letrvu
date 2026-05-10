@@ -68,7 +68,7 @@
       <iframe
         v-if="mail.currentMessage.html_body"
         class="body-frame"
-        sandbox="allow-same-origin"
+        sandbox
         :srcdoc="displayHtml"
         title="Message body"
       />
@@ -92,6 +92,7 @@
 
 <script setup>
 import { inject, ref, watch, computed, onMounted, onUnmounted } from 'vue'
+import DOMPurify from 'dompurify'
 import { useMailStore } from '../stores/mail'
 import { useContactsStore } from '../stores/contacts'
 import { useCalendarStore } from '../stores/calendar'
@@ -179,7 +180,8 @@ watch(
     const html = msg?.html_body
     if (!html) { processedHtml.value = null; hasRemoteImages.value = false; return }
     const resolved = resolveCIDs(html, msg.inline_images)
-    const result = blockRemoteImages(resolved)
+    const sanitized = DOMPurify.sanitize(resolved, { WHOLE_DOCUMENT: true })
+    const result = blockRemoteImages(sanitized)
     processedHtml.value = result.html
     hasRemoteImages.value = result.found
   },
@@ -189,7 +191,8 @@ watch(
 const displayHtml = computed(() => {
   if (!showRemoteImages.value) return processedHtml.value
   const msg = mail.currentMessage
-  return resolveCIDs(msg?.html_body ?? '', msg?.inline_images)
+  const resolved = resolveCIDs(msg?.html_body ?? '', msg?.inline_images)
+  return DOMPurify.sanitize(resolved, { WHOLE_DOCUMENT: true })
 })
 
 const otherFolders = computed(() =>

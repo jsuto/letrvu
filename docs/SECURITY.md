@@ -12,11 +12,9 @@ This document describes the security threats relevant to a webmail client and th
 
 **Threat:** Malicious HTML in an email body (`<script>`, inline event handlers like `onerror=`, `javascript:` hrefs, CSS `expression()`) executes code in the reader's browser session.
 
-**Mitigation (partial):** HTML email is rendered inside a sandboxed `<iframe srcdoc="...">`. The current sandbox value is `allow-same-origin`, which is too permissive — it allows same-origin scripts to run. The safest value is a bare `sandbox` attribute (no tokens), which blocks all script execution inside the frame. `allow-scripts` must never be added.
+**Mitigation (implemented):** HTML email is rendered inside a sandboxed `<iframe srcdoc="...">` with a bare `sandbox` attribute (no tokens), which blocks all script execution inside the frame. `allow-scripts` must never be added.
 
-As defense-in-depth, a server-side HTML sanitizer (e.g., [bluemonday](https://github.com/microcosm-cc/bluemonday)) should be run on the HTML body before it is sent to the client, stripping any dangerous tags and attributes before they even reach the iframe.
-
-**Recommended fix:** Change `sandbox="allow-same-origin"` to `sandbox` in `MessageView.vue`.
+As defense-in-depth, [DOMPurify](https://github.com/cure53/DOMPurify) sanitizes the HTML in the frontend before it is set as `srcdoc`. DOMPurify runs in the browser using the same HTML parser that will render the output, which eliminates mutation XSS (mXSS) attacks where a server-side sanitizer and the browser would parse the same markup differently. It strips script tags, `javascript:` URLs, inline event handlers, and other dangerous constructs.
 
 ## 3. Phishing via link spoofing
 
@@ -66,9 +64,9 @@ The `srcdoc` iframe is governed by its own sandbox attribute, not the parent pag
 
 | Priority | Item |
 |---|---|
-| High | Change `sandbox="allow-same-origin"` to `sandbox` in `MessageView.vue` |
+| ~~High~~ Done | ~~Change `sandbox="allow-same-origin"` to `sandbox` in `MessageView.vue`~~ |
+| ~~Medium~~ Done | ~~HTML sanitization — DOMPurify in the frontend before setting `srcdoc`~~ |
 | High | Audit session cookie flags (`HttpOnly`, `Secure`, `SameSite=Strict`) |
 | Medium | Add `Content-Security-Policy` header in the Go HTTP server |
-| Medium | Server-side HTML sanitization (bluemonday) before serving message bodies |
 | Low | Link destination warning for mismatched href text and href URL |
 | Low | Per-sender "always show images" preference persisted in settings |
