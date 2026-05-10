@@ -324,9 +324,29 @@ function attachmentUrl(att) {
 function reply() {
   const msg = mail.currentMessage
   if (!msg) return
+
+  // Build quoted body from plain text, or fall back to stripping HTML.
+  let bodyText = msg.text_body || ''
+  if (!bodyText && msg.html_body) {
+    const tmp = document.createElement('div')
+    tmp.innerHTML = msg.html_body
+    for (const el of tmp.querySelectorAll('style, script, head')) el.remove()
+    bodyText = tmp.innerText.replace(/\n{3,}/g, '\n\n').trim()
+  }
+
+  const date = msg.date ? new Date(msg.date).toLocaleString() : ''
+  const quoted = bodyText
+    .split('\n')
+    .map(line => `> ${line}`)
+    .join('\n')
+
+  // Reply-To takes precedence over From when present.
+  const replyTo = msg.reply_to || msg.from
+
   compose?.value?.open({
-    to: msg.from,
+    to: replyTo,
     subject: msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
+    body: `\n\nOn ${date}, ${msg.from} wrote:\n${quoted}`,
     // Pass original recipients so ComposeModal can pick the matching identity.
     _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
   })

@@ -216,6 +216,7 @@ type MessageFull struct {
 	UID            uint32            `json:"uid"`
 	Subject        string            `json:"subject"`
 	From           string            `json:"from"`
+	ReplyTo        string            `json:"reply_to,omitempty"`
 	To             []string          `json:"to"`
 	CC             []string          `json:"cc"`
 	Date           time.Time         `json:"date"`
@@ -268,6 +269,9 @@ func (c *Client) GetMessage(folder string, uid uint32) (*MessageFull, error) {
 		full.Date = buf.Envelope.Date
 		if len(buf.Envelope.From) > 0 {
 			full.From = formatAddress(buf.Envelope.From[0])
+		}
+		if len(buf.Envelope.ReplyTo) > 0 {
+			full.ReplyTo = formatAddress(buf.Envelope.ReplyTo[0])
 		}
 		for _, addr := range buf.Envelope.To {
 			if a := addr.Addr(); a != "" {
