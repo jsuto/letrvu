@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { apiFetch } from '../api'
 
 export const useAuthStore = defineStore('auth', () => {
   const loggedIn = ref(false)
@@ -15,7 +16,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function login({ imapHost, imapPort, smtpHost, smtpPort, username, password }) {
-    const res = await fetch('/api/auth/login', {
+    const res = await apiFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -32,7 +33,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-    await fetch('/api/auth/logout', { method: 'POST' })
+    await apiFetch('/api/auth/logout', { method: 'POST' })
     loggedIn.value = false
   }
 

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,6 +16,14 @@ import (
 	"github.com/jsuto/letrvu/internal/settings"
 	"github.com/jsuto/letrvu/internal/smtp"
 )
+
+func randomHex(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
 
 // ServerConfig holds server-level IMAP/SMTP defaults exposed via /api/config
 // to pre-fill the login form.
@@ -32,7 +42,8 @@ type handler struct {
 	config   ServerConfig
 }
 
-// requireAuth is middleware that checks for a valid session cookie.
+// requireAuth is middleware that checks for a valid session cookie and, for
+// mutating requests, validates the CSRF token.
 func (h *handler) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("letrvu_session")
@@ -42,6 +53,9 @@ func (h *handler) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		if _, ok := h.sessions.Get(cookie.Value); !ok {
 			writeJSON(w, http.StatusUnauthorized, errorResp("session expired"))
+			return
+		}
+		if !checkCSRF(w, r) {
 			return
 		}
 		next(w, r)
@@ -108,11 +122,24 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	csrfToken, err := randomHex(32)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("could not create session"))
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "letrvu_session",
 		Value:    cookieVal,
 		Path:     "/",
 		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "letrvu_csrf",
+		Value:    csrfToken,
+		Path:     "/",
+		HttpOnly: false, // must be readable by JS
 		SameSite: http.SameSiteStrictMode,
 	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -124,6 +151,7 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 		h.sessions.Delete(cookie.Value)
 	}
 	http.SetCookie(w, &http.Cookie{Name: "letrvu_session", MaxAge: -1, Path: "/"})
+	http.SetCookie(w, &http.Cookie{Name: "letrvu_csrf", MaxAge: -1, Path: "/"})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

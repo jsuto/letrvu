@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { apiFetch } from '../api'
 
 export const useCalendarStore = defineStore('calendar', () => {
   const events = ref([])
@@ -21,7 +22,7 @@ export const useCalendarStore = defineStore('calendar', () => {
   }
 
   async function createEvent(data) {
-    const res = await fetch('/api/calendar/events', {
+    const res = await apiFetch('/api/calendar/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -33,7 +34,7 @@ export const useCalendarStore = defineStore('calendar', () => {
   }
 
   async function updateEvent(id, data) {
-    const res = await fetch(`/api/calendar/events/${id}`, {
+    const res = await apiFetch(`/api/calendar/events/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -46,13 +47,13 @@ export const useCalendarStore = defineStore('calendar', () => {
   }
 
   async function deleteEvent(id) {
-    const res = await fetch(`/api/calendar/events/${id}`, { method: 'DELETE' })
+    const res = await apiFetch(`/api/calendar/events/${id}`, { method: 'DELETE' })
     if (!res.ok) throw new Error('Failed to delete event')
     events.value = events.value.filter(e => e.id !== id)
   }
 
   async function importFromInvite(ical) {
-    const res = await fetch('/api/calendar/events/import-invite', {
+    const res = await apiFetch('/api/calendar/events/import-invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ical }),

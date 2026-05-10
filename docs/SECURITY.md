@@ -66,7 +66,8 @@ The `srcdoc` iframe is governed by its own sandbox attribute, not the parent pag
 |---|---|
 | ~~High~~ Done | ~~Change `sandbox="allow-same-origin"` to `sandbox` in `MessageView.vue`~~ |
 | ~~Medium~~ Done | ~~HTML sanitization — DOMPurify in the frontend before setting `srcdoc`~~ |
+| ~~Medium~~ Done | ~~Add `Content-Security-Policy` header in the Go HTTP server~~ |
+| ~~Low~~ Done | ~~CSRF double-submit cookie protection on all mutating API endpoints~~ |
 | High | Audit session cookie flags (`HttpOnly`, `Secure`, `SameSite=Strict`) |
-| Medium | Add `Content-Security-Policy` header in the Go HTTP server |
 | Low | Link destination warning for mismatched href text and href URL |
 | Low | Per-sender "always show images" preference persisted in settings |

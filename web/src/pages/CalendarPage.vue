@@ -58,6 +58,7 @@ import CalendarWeek from '../components/CalendarWeek.vue'
 import EventModal from '../components/EventModal.vue'
 import ComposeModal from '../components/ComposeModal.vue'
 import { useCalendarStore } from '../stores/calendar'
+import { apiFetch } from '../api'
 
 const cal = useCalendarStore()
 const eventModal = ref(null)
@@ -137,7 +138,7 @@ async function importIcs(e) {
   if (!file) return
   const fd = new FormData()
   fd.append('file', file)
-  const res = await fetch('/api/calendar/events/import', { method: 'POST', body: fd })
+  const res = await apiFetch('/api/calendar/events/import', { method: 'POST', body: fd })
   if (res.ok) {
     const { imported } = await res.json()
     alert(`Imported ${imported} event(s).`)

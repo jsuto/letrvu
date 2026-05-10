@@ -69,5 +69,5 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	// Serve embedded Vue frontend for all non-API routes
 	mux.Handle("/", spaHandler())
 
-	return mux
+	return securityHeaders(mux)
 }

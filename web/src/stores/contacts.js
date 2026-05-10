@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { apiFetch } from '../api'
 
 export const useContactsStore = defineStore('contacts', () => {
   const contacts = ref([])
@@ -17,7 +18,7 @@ export const useContactsStore = defineStore('contacts', () => {
   }
 
   async function createContact(data) {
-    const res = await fetch('/api/contacts', {
+    const res = await apiFetch('/api/contacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -30,7 +31,7 @@ export const useContactsStore = defineStore('contacts', () => {
   }
 
   async function updateContact(id, data) {
-    const res = await fetch(`/api/contacts/${id}`, {
+    const res = await apiFetch(`/api/contacts/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -44,7 +45,7 @@ export const useContactsStore = defineStore('contacts', () => {
   }
 
   async function deleteContact(id) {
-    const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' })
+    const res = await apiFetch(`/api/contacts/${id}`, { method: 'DELETE' })
     if (!res.ok) throw new Error('Failed to delete contact')
     contacts.value = contacts.value.filter(c => c.id !== id)
   }
@@ -57,7 +58,7 @@ export const useContactsStore = defineStore('contacts', () => {
   }
 
   async function saveFromMessage(name, email) {
-    const res = await fetch('/api/contacts/save-from-message', {
+    const res = await apiFetch('/api/contacts/save-from-message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email }),

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { apiFetch } from '../api'
 
 export const useMailStore = defineStore('mail', () => {
   const folders = ref([])
@@ -69,7 +70,7 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function deleteMessage(folder, uid) {
-    await fetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}`, {
+    await apiFetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}`, {
       method: 'DELETE',
     })
     messages.value = messages.value.filter(m => m.uid !== uid)
@@ -77,7 +78,7 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function markRead(folder, uid, read = true) {
-    await fetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}/read`, {
+    await apiFetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}/read`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ read }),
@@ -88,7 +89,7 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function markFlagged(folder, uid, flagged) {
-    await fetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}/flagged`, {
+    await apiFetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}/flagged`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ flagged }),
@@ -103,7 +104,7 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function moveMessagesTo(folder, uids, dest) {
-    const res = await fetch(`/api/folders/${encodeURIComponent(folder)}/messages/move`, {
+    const res = await apiFetch(`/api/folders/${encodeURIComponent(folder)}/messages/move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uids, dest }),
@@ -116,7 +117,7 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function sendMessage(payload) {
-    const res = await fetch('/api/send', {
+    const res = await apiFetch('/api/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

@@ -69,6 +69,7 @@ import FolderList from '../components/FolderList.vue'
 import ContactModal from '../components/ContactModal.vue'
 import ComposeModal from '../components/ComposeModal.vue'
 import { useContactsStore } from '../stores/contacts'
+import { apiFetch } from '../api'
 
 const contacts = useContactsStore()
 const contactModal = ref(null)
@@ -102,7 +103,7 @@ async function importVCard(e) {
   if (!file) return
   const fd = new FormData()
   fd.append('file', file)
-  const res = await fetch('/api/contacts/import', { method: 'POST', body: fd })
+  const res = await apiFetch('/api/contacts/import', { method: 'POST', body: fd })
   if (res.ok) {
     const { imported } = await res.json()
     alert(`Imported ${imported} contact(s).`)
