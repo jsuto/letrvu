@@ -219,6 +219,36 @@ func (h *handler) getMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, msg)
 }
 
+func (h *handler) getMessageSource(w http.ResponseWriter, r *http.Request) {
+	folder, err := url.PathUnescape(r.PathValue("folder"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid folder name"))
+		return
+	}
+	uidVal, err := strconv.ParseUint(r.PathValue("uid"), 10, 32)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid uid"))
+		return
+	}
+
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+
+	raw, err := c.GetRawMessage(folder, uint32(uidVal))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(raw) //nolint:errcheck
+}
+
 func (h *handler) deleteMessage(w http.ResponseWriter, r *http.Request) {
 	folder, err := url.PathUnescape(r.PathValue("folder"))
 	if err != nil {

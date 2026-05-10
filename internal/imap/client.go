@@ -311,6 +311,29 @@ func parseMIMEBody(raw []byte, full *MessageFull) error {
 	return nil
 }
 
+// GetRawMessage returns the complete RFC 2822 source of a message (headers +
+// body) without marking it as Seen.
+func (c *Client) GetRawMessage(folder string, uid uint32) ([]byte, error) {
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return nil, fmt.Errorf("select %q: %w", folder, err)
+	}
+	uidSet := goimap.UIDSetNum(goimap.UID(uid))
+	fetchOpts := &goimap.FetchOptions{
+		BodySection: []*goimap.FetchItemBodySection{{Peek: true}},
+	}
+	msgs, err := c.c.Fetch(uidSet, fetchOpts).Collect()
+	if err != nil {
+		return nil, fmt.Errorf("uid fetch: %w", err)
+	}
+	if len(msgs) == 0 {
+		return nil, fmt.Errorf("message uid %d not found in %q", uid, folder)
+	}
+	for _, b := range msgs[0].BodySection {
+		return b, nil
+	}
+	return nil, fmt.Errorf("no body section returned for uid %d", uid)
+}
+
 // DownloadAttachment fetches the raw bytes of the attachment at index i.
 func (c *Client) DownloadAttachment(folder string, uid uint32, index int) (*Attachment, []byte, error) {
 	if _, err := c.c.Select(folder, nil).Wait(); err != nil {

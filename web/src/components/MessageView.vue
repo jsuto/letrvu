@@ -34,8 +34,22 @@
             </ul>
           </div>
           <button @click="remove" class="danger">Delete</button>
+          <button @click="viewSource" title="View message source" class="source-btn">&lt;/&gt;</button>
         </div>
       </div>
+
+      <!-- Message source modal -->
+      <div v-if="sourceOpen" class="source-overlay" @click.self="sourceOpen = false">
+        <div class="source-modal">
+          <div class="source-toolbar">
+            <span class="source-title">Message source</span>
+            <button @click="copySource" class="source-copy">{{ sourceCopied ? 'Copied!' : 'Copy' }}</button>
+            <button @click="sourceOpen = false" class="source-close">✕</button>
+          </div>
+          <pre class="source-body">{{ sourceText }}</pre>
+        </div>
+      </div>
+
       <!-- Calendar invite banner -->
       <div v-if="mail.currentMessage.ical_invite" class="invite-banner">
         <span>📅 This message contains a calendar invite.</span>
@@ -94,6 +108,9 @@ const moveWrapEl = ref(null)
 const showRemoteImages = ref(false)
 const hasRemoteImages = ref(false)
 const processedHtml = ref(null)
+const sourceOpen = ref(false)
+const sourceText = ref('')
+const sourceCopied = ref(false)
 
 // Placeholder: grey box with image icon, sized to replace the original image
 const PLACEHOLDER_SRC =
@@ -245,6 +262,23 @@ async function moveTo(dest) {
   const msg = mail.currentMessage
   if (!msg) return
   await mail.moveMessage(mail.currentFolder, msg.uid, dest)
+}
+
+async function viewSource() {
+  const msg = mail.currentMessage
+  if (!msg) return
+  const folder = encodeURIComponent(mail.currentFolder)
+  const res = await fetch(`/api/folders/${folder}/messages/${msg.uid}/source`)
+  if (!res.ok) { alert('Could not fetch message source.'); return }
+  sourceText.value = await res.text()
+  sourceCopied.value = false
+  sourceOpen.value = true
+}
+
+async function copySource() {
+  await navigator.clipboard.writeText(sourceText.value)
+  sourceCopied.value = true
+  setTimeout(() => { sourceCopied.value = false }, 2000)
 }
 
 async function saveContact() {
@@ -406,4 +440,65 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 }
 .attachment:hover { background: var(--color-bg); }
 .att-size { color: var(--color-text-muted); }
+.source-btn {
+  padding: 6px 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  font-size: 12px;
+  font-family: monospace;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  margin-left: auto;
+}
+.source-btn:hover { background: var(--color-bg); color: var(--color-text); }
+.source-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.source-modal {
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: 10px;
+  width: min(860px, 92vw);
+  height: min(640px, 85vh);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.source-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--color-border);
+  flex-shrink: 0;
+}
+.source-title { font-size: 13px; font-weight: 500; flex: 1; }
+.source-copy, .source-close {
+  padding: 4px 12px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  font-size: 12px;
+  cursor: pointer;
+}
+.source-copy:hover, .source-close:hover { background: var(--color-bg); }
+.source-body {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  padding: 14px 16px;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--color-text);
+}
 </style>
