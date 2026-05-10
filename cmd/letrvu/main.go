@@ -55,10 +55,11 @@ func main() {
 
 	// Server-level IMAP/SMTP defaults (pre-fill login form via /api/config).
 	cfg := api.ServerConfig{
-		IMAPHost: envOr("IMAP_HOST", ""),
-		IMAPPort: envInt("IMAP_PORT", 993),
-		SMTPHost: envOr("SMTP_HOST", ""),
-		SMTPPort: envInt("SMTP_PORT", 587),
+		IMAPHost:      envOr("IMAP_HOST", ""),
+		IMAPPort:      envInt("IMAP_PORT", 993),
+		SMTPHost:      envOr("SMTP_HOST", ""),
+		SMTPPort:      envInt("SMTP_PORT", 587),
+		SecureCookies: envBool("SECURE_COOKIES", false),
 	}
 
 	handler := api.NewRouter(sessions, settingsStore, contactsStore, calendarStore, cfg)

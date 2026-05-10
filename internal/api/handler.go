@@ -28,11 +28,13 @@ func randomHex(n int) (string, error) {
 // ServerConfig holds server-level IMAP/SMTP defaults exposed via /api/config
 // to pre-fill the login form.
 type ServerConfig struct {
-	IMAPHost string `json:"imap_host"`
-	IMAPPort int    `json:"imap_port"`
-	SMTPHost string `json:"smtp_host"`
-	SMTPPort int    `json:"smtp_port"`
+	IMAPHost      string `json:"imap_host"`
+	IMAPPort      int    `json:"imap_port"`
+	SMTPHost      string `json:"smtp_host"`
+	SMTPPort      int    `json:"smtp_port"`
+	SecureCookies bool   `json:"-"`
 }
+
 
 type handler struct {
 	sessions *session.Store
@@ -133,6 +135,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		Value:    cookieVal,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   h.config.SecureCookies,
 		SameSite: http.SameSiteStrictMode,
 	})
 	http.SetCookie(w, &http.Cookie{
@@ -140,6 +143,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		Value:    csrfToken,
 		Path:     "/",
 		HttpOnly: false, // must be readable by JS
+		Secure:   h.config.SecureCookies,
 		SameSite: http.SameSiteStrictMode,
 	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

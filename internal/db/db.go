@@ -132,5 +132,6 @@ func Migrate(db *DB) error {
 			return fmt.Errorf("migrate: %w", err)
 		}
 	}
+
 	return nil
 }

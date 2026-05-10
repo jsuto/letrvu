@@ -32,7 +32,12 @@ As defense-in-depth, [DOMPurify](https://github.com/cure53/DOMPurify) sanitizes 
 
 **Threat:** A stolen session cookie grants full account access, including the ability to read, send, and delete mail.
 
-**Mitigation:** Session cookies must be set with `HttpOnly`, `Secure`, and `SameSite=Strict`. Audit `internal/session/` to confirm all three flags are applied.
+**Mitigation (implemented):**
+- `letrvu_session`: `HttpOnly`, `SameSite=Strict`, and `Secure` (when `SECURE_COOKIES=true`) are set.
+- `letrvu_csrf`: `SameSite=Strict` and `Secure` (when `SECURE_COOKIES=true`) are set. `HttpOnly` is intentionally omitted so JavaScript can read the token.
+- Set `SECURE_COOKIES=true` in production whenever the app is served over HTTPS.
+
+Note: User-Agent binding was considered and rejected. The UA is present in the same HTTP request as the cookie, so any realistic theft scenario (network sniffing, XSS, devtools) gives the attacker both simultaneously. It adds schema complexity and spontaneous logouts on browser updates for no meaningful security gain.
 
 ## 6. CSRF
 
@@ -68,6 +73,6 @@ The `srcdoc` iframe is governed by its own sandbox attribute, not the parent pag
 | ~~Medium~~ Done | ~~HTML sanitization — DOMPurify in the frontend before setting `srcdoc`~~ |
 | ~~Medium~~ Done | ~~Add `Content-Security-Policy` header in the Go HTTP server~~ |
 | ~~Low~~ Done | ~~CSRF double-submit cookie protection on all mutating API endpoints~~ |
-| High | Audit session cookie flags (`HttpOnly`, `Secure`, `SameSite=Strict`) |
+| ~~High~~ Done | ~~Audit session cookie flags (`HttpOnly`, `Secure`, `SameSite=Strict`)~~ |
 | Low | Link destination warning for mismatched href text and href URL |
 | Low | Per-sender "always show images" preference persisted in settings |
