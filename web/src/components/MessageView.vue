@@ -44,12 +44,18 @@
         </button>
       </div>
 
+      <!-- Remote image blocking banner -->
+      <div v-if="hasRemoteImages && !showRemoteImages" class="remote-images-banner">
+        <span>🛡 Remote images blocked to protect your privacy.</span>
+        <button @click="showRemoteImages = true" class="show-images-btn">Show images</button>
+      </div>
+
       <!-- HTML email rendered in a sandboxed iframe to prevent XSS -->
       <iframe
         v-if="mail.currentMessage.html_body"
         class="body-frame"
         sandbox="allow-same-origin"
-        :srcdoc="mail.currentMessage.html_body"
+        :srcdoc="displayHtml"
         title="Message body"
       />
       <pre v-else class="body-text">{{ mail.currentMessage.text_body }}</pre>
@@ -85,6 +91,76 @@ const inviteAdding = ref(false)
 const inviteAdded = ref(false)
 const moveOpen = ref(false)
 const moveWrapEl = ref(null)
+const showRemoteImages = ref(false)
+const hasRemoteImages = ref(false)
+const processedHtml = ref(null)
+
+// Placeholder: grey box with image icon, sized to replace the original image
+const PLACEHOLDER_SRC =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='4' fill='%23e8e8e8'/%3E%3Cpath d='M14 34l8-10 6 7 4-5 8 8H14z' fill='%23bbb'/%3E%3Ccircle cx='32' cy='18' r='4' fill='%23bbb'/%3E%3C/svg%3E"
+
+function isRemoteUrl(url) {
+  return url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//'))
+}
+
+function blockRemoteImages(html) {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  let found = false
+
+  // Block <img src="..."> remote URLs
+  for (const img of doc.querySelectorAll('img[src]')) {
+    const src = img.getAttribute('src')
+    if (isRemoteUrl(src)) {
+      img.setAttribute('data-original-src', src)
+      img.setAttribute('src', PLACEHOLDER_SRC)
+      img.setAttribute('title', src)
+      found = true
+    }
+  }
+
+  // Block inline style background-image: url(http...) / url(//)
+  const remoteUrlPattern = /url\(\s*['"]?(?:https?:|\/\/)([^)'"\s]+)['"]?\s*\)/gi
+  for (const el of doc.querySelectorAll('[style]')) {
+    const style = el.getAttribute('style')
+    if (remoteUrlPattern.test(style)) {
+      remoteUrlPattern.lastIndex = 0
+      el.setAttribute('data-original-style', style)
+      el.setAttribute('style', style.replace(remoteUrlPattern, 'none'))
+      found = true
+    }
+    remoteUrlPattern.lastIndex = 0
+  }
+
+  // Block <style> blocks with remote url() references
+  for (const styleEl of doc.querySelectorAll('style')) {
+    if (remoteUrlPattern.test(styleEl.textContent)) {
+      remoteUrlPattern.lastIndex = 0
+      styleEl.textContent = styleEl.textContent.replace(remoteUrlPattern, 'none')
+      found = true
+    }
+    remoteUrlPattern.lastIndex = 0
+  }
+
+  return { html: doc.documentElement.outerHTML, found }
+}
+
+watch(
+  () => mail.currentMessage?.uid,
+  () => {
+    showRemoteImages.value = false
+    const html = mail.currentMessage?.html_body
+    if (!html) { processedHtml.value = null; hasRemoteImages.value = false; return }
+    const result = blockRemoteImages(html)
+    processedHtml.value = result.html
+    hasRemoteImages.value = result.found
+  },
+  { immediate: true }
+)
+
+const displayHtml = computed(() =>
+  showRemoteImages.value ? mail.currentMessage?.html_body : processedHtml.value
+)
 
 const otherFolders = computed(() =>
   mail.folders.filter(f => f.name !== mail.currentFolder)
@@ -250,17 +326,36 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
   white-space: nowrap;
 }
 .move-dropdown li:hover { background: var(--color-teal-light); }
-.invite-banner {
+.invite-banner, .remote-images-banner {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  background: var(--color-teal-light);
-  border: 0.5px solid var(--color-teal);
   border-radius: 8px;
   font-size: 13px;
   margin-bottom: 1rem;
 }
+.invite-banner {
+  background: var(--color-teal-light);
+  border: 0.5px solid var(--color-teal);
+}
+.remote-images-banner {
+  background: #fef9ec;
+  border: 0.5px solid #e6b84a;
+  color: #7a5800;
+}
+.show-images-btn {
+  padding: 5px 14px;
+  background: #e6b84a;
+  color: #3a2800;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-left: auto;
+}
+.show-images-btn:hover { background: #d4a830; }
 .invite-btn {
   padding: 5px 14px;
   background: var(--color-teal);
