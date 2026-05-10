@@ -20,7 +20,7 @@ As defense-in-depth, [DOMPurify](https://github.com/cure53/DOMPurify) sanitizes 
 
 **Threat:** An email displays a trusted domain as the link text while the `href` points to a different, malicious destination. Users click without inspecting the URL.
 
-**Mitigation (not yet implemented):** The browser shows the real `href` in the status bar on hover. A stronger mitigation is a link-interception layer in the message view that compares the visible link text to the `href` domain and surfaces a warning when they differ.
+**Mitigation (implemented):** All `http(s)` links in HTML email are given `target="_blank" rel="noopener noreferrer"` so they open safely in a new tab. For links where the visible text looks like a URL (starts with `http(s)://` or `www.`) but the registrable domain of the text differs from the registrable domain of the `href`, the link is highlighted in red with a wavy underline and a `⚠` suffix, and a descriptive `title` is added. A warning banner is shown above the email body with the count of suspicious links detected. The detection and styling happen client-side in the HTML processing pipeline, before the HTML is set as `srcdoc`.
 
 ## 4. Session credential storage
 
@@ -74,5 +74,5 @@ The `srcdoc` iframe is governed by its own sandbox attribute, not the parent pag
 | ~~Medium~~ Done | ~~Add `Content-Security-Policy` header in the Go HTTP server~~ |
 | ~~Low~~ Done | ~~CSRF double-submit cookie protection on all mutating API endpoints~~ |
 | ~~High~~ Done | ~~Audit session cookie flags (`HttpOnly`, `Secure`, `SameSite=Strict`)~~ |
-| Low | Link destination warning for mismatched href text and href URL |
+| ~~Low~~ Done | ~~Link destination warning for mismatched href text and href URL~~ |
 | Low | Per-sender "always show images" preference persisted in settings |

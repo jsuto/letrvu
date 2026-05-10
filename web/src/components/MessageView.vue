@@ -64,11 +64,17 @@
         <button @click="showRemoteImages = true" class="show-images-btn">Show images</button>
       </div>
 
-      <!-- HTML email rendered in a sandboxed iframe to prevent XSS -->
+      <!-- Phishing link warning banner -->
+      <div v-if="phishingCount > 0" class="phishing-banner">
+        <span>⚠ {{ phishingCount }} misleading {{ phishingCount === 1 ? 'link' : 'links' }} detected — the visible text shows a different domain than the actual destination.</span>
+      </div>
+
+      <!-- HTML email rendered in a sandboxed iframe to prevent XSS.
+           allow-popups is required so target="_blank" links can open in a new tab. -->
       <iframe
         v-if="mail.currentMessage.html_body"
         class="body-frame"
-        sandbox
+        sandbox="allow-popups"
         :srcdoc="displayHtml"
         title="Message body"
       />
@@ -108,6 +114,7 @@ const moveOpen = ref(false)
 const moveWrapEl = ref(null)
 const showRemoteImages = ref(false)
 const hasRemoteImages = ref(false)
+const phishingCount = ref(0)
 const processedHtml = ref(null)
 const sourceOpen = ref(false)
 const sourceText = ref('')
@@ -121,9 +128,14 @@ function isRemoteUrl(url) {
   return url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//'))
 }
 
-function blockRemoteImages(html) {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(html, 'text/html')
+// Returns the registrable domain (last two labels) of a hostname.
+// e.g. "mail.google.com" → "google.com"
+function registrableDomain(hostname) {
+  const parts = hostname.split('.')
+  return parts.length >= 2 ? parts.slice(-2).join('.') : hostname
+}
+
+function blockRemoteImages(doc) {
   let found = false
 
   // Block <img src="..."> remote URLs
@@ -160,7 +172,48 @@ function blockRemoteImages(html) {
     remoteUrlPattern.lastIndex = 0
   }
 
-  return { html: doc.documentElement.outerHTML, found }
+  return found
+}
+
+function flagPhishingLinks(doc) {
+  let count = 0
+
+  for (const a of doc.querySelectorAll('a[href]')) {
+    const href = a.getAttribute('href') ?? ''
+
+    // Open all absolute links safely in a new tab
+    if (/^https?:\/\//i.test(href)) {
+      a.setAttribute('target', '_blank')
+      a.setAttribute('rel', 'noopener noreferrer')
+    }
+
+    // Phishing check: only applies to http(s) links whose visible text also
+    // looks like a URL (starts with http(s):// or www.)
+    if (!/^https?:\/\//i.test(href)) continue
+    const text = a.textContent.trim()
+    if (!text || (!/^https?:\/\//i.test(text) && !/^www\./i.test(text))) continue
+
+    let hrefHost, textHost
+    try { hrefHost = new URL(href).hostname.toLowerCase() } catch { continue }
+    try { textHost = new URL(/^https?:\/\//i.test(text) ? text : 'https://' + text).hostname.toLowerCase() } catch { continue }
+
+    if (registrableDomain(hrefHost) === registrableDomain(textHost)) continue
+
+    a.classList.add('letrvu-phishing-warn')
+    a.setAttribute('title',
+      `⚠ Misleading link: displayed as "${registrableDomain(textHost)}" but goes to "${registrableDomain(hrefHost)}"`)
+    count++
+  }
+
+  if (count > 0) {
+    const style = doc.createElement('style')
+    style.textContent =
+      'a.letrvu-phishing-warn { color: #c0392b !important; text-decoration: underline wavy #c0392b !important; }' +
+      "a.letrvu-phishing-warn::after { content: ' ⚠'; }"
+    doc.head.appendChild(style)
+  }
+
+  return count
 }
 
 // Replace cid: references with base64 data URLs supplied by the backend.
@@ -172,18 +225,32 @@ function resolveCIDs(html, inlineImages) {
   })
 }
 
+// Full processing pipeline: CID resolution → DOMPurify → image blocking → phishing detection.
+// blockImages controls whether remote images are replaced with placeholders.
+function processHtml(html, inlineImages, blockImages) {
+  const resolved = resolveCIDs(html, inlineImages)
+  const sanitized = DOMPurify.sanitize(resolved, { WHOLE_DOCUMENT: true })
+  const doc = new DOMParser().parseFromString(sanitized, 'text/html')
+  const foundImages = blockImages ? blockRemoteImages(doc) : false
+  const foundPhishing = flagPhishingLinks(doc)
+  return { html: doc.documentElement.outerHTML, hasRemoteImages: foundImages, phishingCount: foundPhishing }
+}
+
 watch(
   () => mail.currentMessage?.uid,
   () => {
     showRemoteImages.value = false
     const msg = mail.currentMessage
-    const html = msg?.html_body
-    if (!html) { processedHtml.value = null; hasRemoteImages.value = false; return }
-    const resolved = resolveCIDs(html, msg.inline_images)
-    const sanitized = DOMPurify.sanitize(resolved, { WHOLE_DOCUMENT: true })
-    const result = blockRemoteImages(sanitized)
+    if (!msg?.html_body) {
+      processedHtml.value = null
+      hasRemoteImages.value = false
+      phishingCount.value = 0
+      return
+    }
+    const result = processHtml(msg.html_body, msg.inline_images, true)
     processedHtml.value = result.html
-    hasRemoteImages.value = result.found
+    hasRemoteImages.value = result.hasRemoteImages
+    phishingCount.value = result.phishingCount
   },
   { immediate: true }
 )
@@ -191,8 +258,7 @@ watch(
 const displayHtml = computed(() => {
   if (!showRemoteImages.value) return processedHtml.value
   const msg = mail.currentMessage
-  const resolved = resolveCIDs(msg?.html_body ?? '', msg?.inline_images)
-  return DOMPurify.sanitize(resolved, { WHOLE_DOCUMENT: true })
+  return processHtml(msg?.html_body ?? '', msg?.inline_images, false).html
 })
 
 const otherFolders = computed(() =>
@@ -376,7 +442,7 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
   white-space: nowrap;
 }
 .move-dropdown li:hover { background: var(--color-teal-light); }
-.invite-banner, .remote-images-banner {
+.invite-banner, .remote-images-banner, .phishing-banner {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -393,6 +459,11 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
   background: #fef9ec;
   border: 0.5px solid #e6b84a;
   color: #7a5800;
+}
+.phishing-banner {
+  background: #fdf0f0;
+  border: 0.5px solid #e07070;
+  color: #7a1a1a;
 }
 .show-images-btn {
   padding: 5px 14px;
