@@ -85,6 +85,18 @@ npm run dev
 
 The Vite dev server proxies `/api/*` to `localhost:8080`, so you only visit `http://localhost:5173`.
 
+### Running tests
+
+```bash
+# Go backend tests
+go test ./...
+
+# Frontend tests (Vitest)
+cd web
+npm test          # run once
+npm run test:watch  # watch mode
+```
+
 ### Build for production
 
 ```bash
