@@ -10,8 +10,14 @@
       <li
         v-for="folder in mail.folders"
         :key="folder.name"
-        :class="{ active: mail.currentFolder === folder.name }"
+        :class="{
+          active: mail.currentFolder === folder.name,
+          'drop-target': dragOver === folder.name,
+        }"
         @click="openFolder(folder.name)"
+        @dragover.prevent="dragOver = folder.name"
+        @dragleave="dragOver = null"
+        @drop.prevent="onDrop($event, folder.name)"
       >
         {{ folder.name }}
         <span v-if="folder.unseen" class="badge">{{ folder.unseen }}</span>
@@ -28,7 +34,7 @@
 </template>
 
 <script setup>
-import { inject, onMounted } from 'vue'
+import { inject, onMounted, ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useMailStore } from '../stores/mail'
 import { useAuthStore } from '../stores/auth'
@@ -39,12 +45,21 @@ const auth = useAuthStore()
 const router = useRouter()
 const compose = inject('compose', null)
 const { dark, toggle: toggleDark } = useDarkMode()
+const dragOver = ref(null)
 
 onMounted(async () => {
   if (!mail.folders.length) {
     await mail.fetchFolders()
   }
 })
+
+async function onDrop(e, destFolder) {
+  dragOver.value = null
+  const uids = JSON.parse(e.dataTransfer.getData('application/x-letrvu-uids') || '[]')
+  const srcFolder = e.dataTransfer.getData('application/x-letrvu-folder')
+  if (!uids.length || !srcFolder || srcFolder === destFolder) return
+  await mail.moveMessagesTo(srcFolder, uids, destFolder)
+}
 
 async function openFolder(name) {
   await mail.fetchMessages(name)
@@ -110,6 +125,11 @@ li {
 }
 li:hover { background: var(--color-teal-light); }
 li.active { background: var(--color-teal-light); font-weight: 500; }
+li.drop-target {
+  background: var(--color-teal);
+  color: white;
+}
+li.drop-target .badge { background: white; color: var(--color-teal); }
 .badge {
   font-size: 11px;
   background: var(--color-teal);

@@ -14,6 +14,15 @@
         <div class="actions">
           <button @click="reply">Reply</button>
           <button @click="forward">Forward</button>
+          <button
+            :class="{ active: mail.currentMessage.flagged }"
+            :title="mail.currentMessage.flagged ? 'Unflag' : 'Flag as important'"
+            @click="toggleFlagged"
+          >{{ mail.currentMessage.flagged ? '★' : '☆' }} Flag</button>
+          <button
+            :title="mail.currentMessage.read ? 'Mark as unread' : 'Mark as read'"
+            @click="toggleRead"
+          >{{ mail.currentMessage.read ? 'Mark unread' : 'Mark read' }}</button>
           <div class="move-wrap" ref="moveWrapEl">
             <button @click="moveOpen = !moveOpen">Move to…</button>
             <ul v-if="moveOpen" class="move-dropdown">
@@ -143,6 +152,18 @@ async function addToCalendar() {
   }
 }
 
+function toggleFlagged() {
+  const msg = mail.currentMessage
+  if (!msg) return
+  mail.markFlagged(mail.currentFolder, msg.uid, !msg.flagged)
+}
+
+function toggleRead() {
+  const msg = mail.currentMessage
+  if (!msg) return
+  mail.markRead(mail.currentFolder, msg.uid, !msg.read)
+}
+
 async function moveTo(dest) {
   moveOpen.value = false
   const msg = mail.currentMessage
@@ -204,6 +225,7 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 }
 .actions button:hover { background: var(--color-bg); }
 .actions button.danger { color: #c0392b; border-color: #f5c6c6; }
+.actions button.active { color: #e67e22; border-color: #f5c6a0; background: #fef9ec; }
 .move-wrap { position: relative; }
 .move-dropdown {
   position: absolute;

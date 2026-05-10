@@ -10,6 +10,7 @@ export const useMailStore = defineStore('mail', () => {
   const page = ref(1)
   const pageSize = 50
   const hasMore = ref(false)
+  const selectedUids = ref(new Set())
 
   async function fetchFolders() {
     const res = await fetch('/api/folders')
@@ -17,9 +18,21 @@ export const useMailStore = defineStore('mail', () => {
     folders.value = await res.json()
   }
 
+  function toggleSelect(uid) {
+    const s = new Set(selectedUids.value)
+    if (s.has(uid)) s.delete(uid)
+    else s.add(uid)
+    selectedUids.value = s
+  }
+
+  function clearSelection() {
+    selectedUids.value = new Set()
+  }
+
   async function fetchMessages(folder, p = 1) {
     currentFolder.value = folder
     page.value = p
+    selectedUids.value = new Set()
     loading.value = true
     try {
       const res = await fetch(
@@ -71,17 +84,35 @@ export const useMailStore = defineStore('mail', () => {
     })
     const msg = messages.value.find(m => m.uid === uid)
     if (msg) msg.read = read
+    if (currentMessage.value?.uid === uid) currentMessage.value = { ...currentMessage.value, read }
+  }
+
+  async function markFlagged(folder, uid, flagged) {
+    await fetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}/flagged`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ flagged }),
+    })
+    const msg = messages.value.find(m => m.uid === uid)
+    if (msg) msg.flagged = flagged
+    if (currentMessage.value?.uid === uid) currentMessage.value = { ...currentMessage.value, flagged }
   }
 
   async function moveMessage(folder, uid, dest) {
-    const res = await fetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}/move`, {
+    return moveMessagesTo(folder, [uid], dest)
+  }
+
+  async function moveMessagesTo(folder, uids, dest) {
+    const res = await fetch(`/api/folders/${encodeURIComponent(folder)}/messages/move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dest }),
+      body: JSON.stringify({ uids, dest }),
     })
     if (!res.ok) throw new Error('Move failed')
-    messages.value = messages.value.filter(m => m.uid !== uid)
-    if (currentMessage.value?.uid === uid) currentMessage.value = null
+    const uidSet = new Set(uids)
+    messages.value = messages.value.filter(m => !uidSet.has(m.uid))
+    if (currentMessage.value && uidSet.has(currentMessage.value.uid)) currentMessage.value = null
+    selectedUids.value = new Set([...selectedUids.value].filter(u => !uidSet.has(u)))
   }
 
   async function sendMessage(payload) {
@@ -105,9 +136,14 @@ export const useMailStore = defineStore('mail', () => {
     fetchMessages,
     searchMessages,
     fetchMessage,
+    selectedUids,
+    toggleSelect,
+    clearSelection,
     deleteMessage,
     moveMessage,
+    moveMessagesTo,
     markRead,
+    markFlagged,
     sendMessage,
   }
 })

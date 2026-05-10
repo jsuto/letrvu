@@ -281,6 +281,38 @@ func (h *handler) markRead(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (h *handler) markFlagged(w http.ResponseWriter, r *http.Request) {
+	folder, err := url.PathUnescape(r.PathValue("folder"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid folder name"))
+		return
+	}
+	uidVal, err := strconv.ParseUint(r.PathValue("uid"), 10, 32)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid uid"))
+		return
+	}
+	var body struct {
+		Flagged bool `json:"flagged"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid request body"))
+		return
+	}
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+	if err := c.MarkFlagged(folder, uint32(uidVal), body.Flagged); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (h *handler) moveMessage(w http.ResponseWriter, r *http.Request) {
 	folder, err := url.PathUnescape(r.PathValue("folder"))
 	if err != nil {
@@ -309,6 +341,36 @@ func (h *handler) moveMessage(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 
 	if err := c.MoveMessage(folder, uint32(uidVal), body.Dest); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *handler) moveMessages(w http.ResponseWriter, r *http.Request) {
+	folder, err := url.PathUnescape(r.PathValue("folder"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid folder name"))
+		return
+	}
+	var body struct {
+		UIDs []uint32 `json:"uids"`
+		Dest string   `json:"dest"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.UIDs) == 0 || body.Dest == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("uids and dest required"))
+		return
+	}
+
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+
+	if err := c.MoveMessages(folder, body.UIDs, body.Dest); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}

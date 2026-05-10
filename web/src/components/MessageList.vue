@@ -12,18 +12,46 @@
         />
       </form>
     </div>
+
+    <!-- Selection bar -->
+    <div v-if="mail.selectedUids.size > 0" class="selection-bar">
+      <span>{{ mail.selectedUids.size }} selected</span>
+      <button @click="mail.clearSelection()">Clear</button>
+    </div>
+
     <div v-if="mail.loading" class="state">Loading…</div>
     <div v-else-if="!mail.messages.length" class="state">No messages</div>
     <ul v-else>
       <li
-        v-for="msg in mail.messages"
+        v-for="(msg, i) in mail.messages"
         :key="msg.uid"
-        :class="{ unread: !msg.read, active: mail.currentMessage?.uid === msg.uid }"
-        @click="selectMessage(msg)"
+        :class="{
+          unread: !msg.read,
+          active: mail.currentMessage?.uid === msg.uid,
+          selected: mail.selectedUids.has(msg.uid),
+        }"
+        draggable="true"
+        @click="onRowClick($event, msg, i)"
+        @dragstart="onDragStart($event, msg)"
+        @dragend="onDragEnd"
       >
-        <div class="from">{{ msg.from }}</div>
-        <div class="subject">{{ msg.subject || '(no subject)' }}</div>
-        <div class="date">{{ formatDate(msg.date) }}</div>
+        <input
+          type="checkbox"
+          class="row-check"
+          :checked="mail.selectedUids.has(msg.uid)"
+          @click.stop="mail.toggleSelect(msg.uid)"
+        />
+        <div class="row-content">
+          <div class="row-top">
+            <span class="from">{{ msg.from }}</span>
+            <span class="row-icons">
+              <span v-if="msg.flagged" class="icon-flag" title="Flagged">★</span>
+              <span v-if="msg.has_attachments" class="icon-attach" title="Has attachments">📎</span>
+              <span class="date">{{ formatDate(msg.date) }}</span>
+            </span>
+          </div>
+          <div class="subject">{{ msg.subject || '(no subject)' }}</div>
+        </div>
       </li>
     </ul>
     <div v-if="!searching && (mail.page > 1 || mail.hasMore)" class="pagination">
@@ -35,17 +63,65 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useMailStore } from '../stores/mail'
 
 const mail = useMailStore()
 const query = ref('')
 const searching = ref(false)
+const anchorIndex = ref(null)
+watch(() => mail.currentFolder, () => { anchorIndex.value = null })
 
-function selectMessage(msg) {
+function onRowClick(e, msg, i) {
+  if (e.shiftKey && anchorIndex.value !== null) {
+    // Range-select from anchor to current row.
+    const lo = Math.min(anchorIndex.value, i)
+    const hi = Math.max(anchorIndex.value, i)
+    const uids = mail.messages.slice(lo, hi + 1).map(m => m.uid)
+    mail.selectedUids = new Set(uids)
+    return
+  }
+
+  if (e.metaKey || e.ctrlKey) {
+    // Toggle this message without affecting others; update anchor.
+    anchorIndex.value = i
+    mail.toggleSelect(msg.uid)
+    return
+  }
+
+  // Plain click — open message and update anchor.
+  anchorIndex.value = i
+  mail.clearSelection()
   mail.fetchMessage(mail.currentFolder, msg.uid)
   if (!msg.read) mail.markRead(mail.currentFolder, msg.uid, true)
 }
+
+// --- Drag and drop ---
+
+function onDragStart(e, msg) {
+  // Determine which UIDs are being dragged.
+  const uids = mail.selectedUids.has(msg.uid)
+    ? [...mail.selectedUids]
+    : [msg.uid]
+
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('application/x-letrvu-uids', JSON.stringify(uids))
+  e.dataTransfer.setData('application/x-letrvu-folder', mail.currentFolder)
+
+  // Custom drag image showing count.
+  const ghost = document.createElement('div')
+  ghost.className = 'drag-ghost'
+  ghost.textContent = uids.length === 1 ? '1 message' : `${uids.length} messages`
+  document.body.appendChild(ghost)
+  e.dataTransfer.setDragImage(ghost, 0, 0)
+  setTimeout(() => ghost.remove(), 0)
+}
+
+function onDragEnd() {
+  // Nothing to clean up — ghost was removed immediately.
+}
+
+// --- Search / pagination ---
 
 function onSearch() {
   if (query.value.trim()) {
@@ -57,7 +133,6 @@ function onSearch() {
   }
 }
 
-// Clear search and reload when the field is cleared.
 function onSearchInput() {
   if (query.value === '') {
     searching.value = false
@@ -89,11 +164,7 @@ function formatDate(dateStr) {
   align-items: center;
   gap: 8px;
 }
-.folder-name {
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-}
+.folder-name { font-size: 13px; font-weight: 500; white-space: nowrap; }
 .search-form { flex: 1; }
 .search-input {
   width: 100%;
@@ -105,6 +176,24 @@ function formatDate(dateStr) {
   background: var(--color-bg);
 }
 .search-input:focus { border-color: var(--color-teal); }
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 14px;
+  background: var(--color-teal-light);
+  border-bottom: 0.5px solid var(--color-teal);
+  font-size: 12px;
+}
+.selection-bar button {
+  background: none;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--color-teal);
+}
+
 .state {
   padding: 2rem 1rem;
   color: var(--color-text-muted);
@@ -113,16 +202,42 @@ function formatDate(dateStr) {
 }
 ul { list-style: none; flex: 1; overflow-y: auto; }
 li {
-  padding: 12px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
   border-bottom: 0.5px solid var(--color-border);
   cursor: pointer;
+  user-select: none;
 }
 li:hover { background: var(--color-bg); }
 li.active { background: var(--color-teal-light); }
-li.unread .from, li.unread .subject { font-weight: 500; }
-.from { font-size: 13px; color: var(--color-text); margin-bottom: 2px; }
-.subject { font-size: 13px; color: var(--color-text-muted); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+li.selected { background: color-mix(in srgb, var(--color-teal) 12%, transparent); }
+li.unread .from { font-weight: 700; color: var(--color-text); }
+li.unread .subject { font-weight: 600; color: var(--color-text); }
+
+.row-check {
+  margin-top: 3px;
+  flex-shrink: 0;
+  accent-color: var(--color-teal);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+li:hover .row-check,
+li.selected .row-check { opacity: 1; }
+
+.row-content { flex: 1; min-width: 0; }
+.row-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 2px; }
+.from { font-size: 13px; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.row-icons { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.icon-flag { color: #e67e22; font-size: 12px; }
+.icon-attach { font-size: 12px; }
 .date { font-size: 11px; color: var(--color-text-muted); }
+.subject { font-size: 13px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 .pagination {
   display: flex;
   align-items: center;
@@ -143,4 +258,21 @@ li.unread .from, li.unread .subject { font-weight: 500; }
 }
 .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
 .pagination button:not(:disabled):hover { background: var(--color-bg); }
+</style>
+
+<!-- Global drag ghost style (not scoped) -->
+<style>
+.drag-ghost {
+  position: fixed;
+  top: -100px;
+  left: 0;
+  background: var(--color-teal);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  pointer-events: none;
+  white-space: nowrap;
+}
 </style>

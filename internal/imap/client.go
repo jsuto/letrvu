@@ -93,12 +93,14 @@ func (c *Client) ListFolders() ([]Folder, error) {
 
 // Message is a lightweight summary used in folder listings.
 type Message struct {
-	UID     uint32    `json:"uid"`
-	Subject string    `json:"subject"`
-	From    string    `json:"from"`
-	Date    time.Time `json:"date"`
-	Read    bool      `json:"read"`
-	Size    uint32    `json:"size"`
+	UID            uint32    `json:"uid"`
+	Subject        string    `json:"subject"`
+	From           string    `json:"from"`
+	Date           time.Time `json:"date"`
+	Read           bool      `json:"read"`
+	Flagged        bool      `json:"flagged"`
+	HasAttachments bool      `json:"has_attachments"`
+	Size           uint32    `json:"size"`
 }
 
 // ListMessages returns message summaries for a folder, newest first.
@@ -128,10 +130,11 @@ func (c *Client) ListMessages(folder string, page, pageSize int) ([]Message, err
 	seqSet.AddRange(uint32(start), uint32(end))
 
 	fetchOpts := &goimap.FetchOptions{
-		UID:        true,
-		Envelope:   true,
-		Flags:      true,
-		RFC822Size: true,
+		UID:           true,
+		Envelope:      true,
+		Flags:         true,
+		RFC822Size:    true,
+		BodyStructure: &goimap.FetchItemBodyStructure{Extended: true},
 	}
 
 	msgs, err := c.c.Fetch(seqSet, fetchOpts).Collect()
@@ -155,10 +158,15 @@ func (c *Client) ListMessages(folder string, page, pageSize int) ([]Message, err
 			}
 		}
 		for _, flag := range buf.Flags {
-			if flag == goimap.FlagSeen {
+			switch flag {
+			case goimap.FlagSeen:
 				msg.Read = true
-				break
+			case goimap.FlagFlagged:
+				msg.Flagged = true
 			}
+		}
+		if buf.BodyStructure != nil {
+			msg.HasAttachments = bodyHasAttachments(buf.BodyStructure)
 		}
 		result = append(result, msg)
 	}
@@ -175,16 +183,19 @@ type Attachment struct {
 
 // MessageFull holds the complete content of a single message.
 type MessageFull struct {
-	UID          uint32       `json:"uid"`
-	Subject      string       `json:"subject"`
-	From         string       `json:"from"`
-	To           []string     `json:"to"`
-	CC           []string     `json:"cc"`
-	Date         time.Time    `json:"date"`
-	TextBody     string       `json:"text_body"`
-	HTMLBody     string       `json:"html_body"`
-	Attachments  []Attachment `json:"attachments"`
-	ICalInvite   string       `json:"ical_invite,omitempty"`
+	UID            uint32       `json:"uid"`
+	Subject        string       `json:"subject"`
+	From           string       `json:"from"`
+	To             []string     `json:"to"`
+	CC             []string     `json:"cc"`
+	Date           time.Time    `json:"date"`
+	Read           bool         `json:"read"`
+	Flagged        bool         `json:"flagged"`
+	HasAttachments bool         `json:"has_attachments"`
+	TextBody       string       `json:"text_body"`
+	HTMLBody       string       `json:"html_body"`
+	Attachments    []Attachment `json:"attachments"`
+	ICalInvite     string       `json:"ical_invite,omitempty"`
 }
 
 // GetMessage fetches the full content of a single message by UID.
@@ -195,8 +206,10 @@ func (c *Client) GetMessage(folder string, uid uint32) (*MessageFull, error) {
 
 	uidSet := goimap.UIDSetNum(goimap.UID(uid))
 	fetchOpts := &goimap.FetchOptions{
-		UID:      true,
-		Envelope: true,
+		UID:           true,
+		Envelope:      true,
+		Flags:         true,
+		BodyStructure: &goimap.FetchItemBodyStructure{Extended: true},
 		BodySection: []*goimap.FetchItemBodySection{
 			{Peek: true}, // BODY.PEEK[] — fetch entire message without marking Seen
 		},
@@ -233,6 +246,17 @@ func (c *Client) GetMessage(folder string, uid uint32) (*MessageFull, error) {
 				full.CC = append(full.CC, a)
 			}
 		}
+	}
+	for _, flag := range buf.Flags {
+		switch flag {
+		case goimap.FlagSeen:
+			full.Read = true
+		case goimap.FlagFlagged:
+			full.Flagged = true
+		}
+	}
+	if buf.BodyStructure != nil {
+		full.HasAttachments = bodyHasAttachments(buf.BodyStructure)
 	}
 
 	// Parse MIME body from the fetched literal.
@@ -368,10 +392,11 @@ func (c *Client) SearchMessages(folder, query string) ([]Message, error) {
 	}
 
 	fetchOpts := &goimap.FetchOptions{
-		UID:        true,
-		Envelope:   true,
-		Flags:      true,
-		RFC822Size: true,
+		UID:           true,
+		Envelope:      true,
+		Flags:         true,
+		RFC822Size:    true,
+		BodyStructure: &goimap.FetchItemBodyStructure{Extended: true},
 	}
 	msgs, err := c.c.Fetch(uidSet, fetchOpts).Collect()
 	if err != nil {
@@ -393,10 +418,15 @@ func (c *Client) SearchMessages(folder, query string) ([]Message, error) {
 			}
 		}
 		for _, flag := range buf.Flags {
-			if flag == goimap.FlagSeen {
+			switch flag {
+			case goimap.FlagSeen:
 				msg.Read = true
-				break
+			case goimap.FlagFlagged:
+				msg.Flagged = true
 			}
+		}
+		if buf.BodyStructure != nil {
+			msg.HasAttachments = bodyHasAttachments(buf.BodyStructure)
 		}
 		result = append(result, msg)
 	}
@@ -419,13 +449,38 @@ func (c *Client) DeleteMessage(folder string, uid uint32) error {
 	return c.c.Expunge().Close()
 }
 
-// MoveMessage moves a message to another folder using IMAP MOVE (RFC 6851).
+// MoveMessage moves a single message to another folder using IMAP MOVE (RFC 6851).
 func (c *Client) MoveMessage(folder string, uid uint32, destFolder string) error {
+	return c.MoveMessages(folder, []uint32{uid}, destFolder)
+}
+
+// MoveMessages moves multiple messages to another folder in one IMAP MOVE command.
+func (c *Client) MoveMessages(folder string, uids []uint32, destFolder string) error {
 	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
 		return fmt.Errorf("select %q: %w", folder, err)
 	}
-	_, err := c.c.Move(goimap.UIDSetNum(goimap.UID(uid)), destFolder).Wait()
+	var uidSet goimap.UIDSet
+	for _, uid := range uids {
+		uidSet.AddNum(goimap.UID(uid))
+	}
+	_, err := c.c.Move(uidSet, destFolder).Wait()
 	return err
+}
+
+// MarkFlagged sets or clears the \Flagged flag on a message.
+func (c *Client) MarkFlagged(folder string, uid uint32, flagged bool) error {
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return fmt.Errorf("select %q: %w", folder, err)
+	}
+	op := goimap.StoreFlagsAdd
+	if !flagged {
+		op = goimap.StoreFlagsDel
+	}
+	return c.c.Store(goimap.UIDSetNum(goimap.UID(uid)), &goimap.StoreFlags{
+		Op:     op,
+		Silent: true,
+		Flags:  []goimap.Flag{goimap.FlagFlagged},
+	}, nil).Close()
 }
 
 // MarkRead sets or clears the \Seen flag on a message.
@@ -442,6 +497,23 @@ func (c *Client) MarkRead(folder string, uid uint32, read bool) error {
 		Silent: true,
 		Flags:  []goimap.Flag{goimap.FlagSeen},
 	}, nil).Close()
+}
+
+// bodyHasAttachments walks the body structure and returns true if any part
+// has a Content-Disposition of "attachment".
+func bodyHasAttachments(bs goimap.BodyStructure) bool {
+	found := false
+	bs.Walk(func(path []int, part goimap.BodyStructure) bool {
+		if found {
+			return false
+		}
+		d := part.Disposition()
+		if d != nil && strings.EqualFold(d.Value, "attachment") {
+			found = true
+		}
+		return true
+	})
+	return found
 }
 
 func formatAddress(addr goimap.Address) string {
