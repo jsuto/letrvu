@@ -162,22 +162,35 @@ function blockRemoteImages(html) {
   return { html: doc.documentElement.outerHTML, found }
 }
 
+// Replace cid: references with base64 data URLs supplied by the backend.
+function resolveCIDs(html, inlineImages) {
+  if (!inlineImages) return html
+  return html.replace(/src="cid:([^"]+)"/gi, (match, cid) => {
+    const dataUrl = inlineImages[cid]
+    return dataUrl ? `src="${dataUrl}"` : match
+  })
+}
+
 watch(
   () => mail.currentMessage?.uid,
   () => {
     showRemoteImages.value = false
-    const html = mail.currentMessage?.html_body
+    const msg = mail.currentMessage
+    const html = msg?.html_body
     if (!html) { processedHtml.value = null; hasRemoteImages.value = false; return }
-    const result = blockRemoteImages(html)
+    const resolved = resolveCIDs(html, msg.inline_images)
+    const result = blockRemoteImages(resolved)
     processedHtml.value = result.html
     hasRemoteImages.value = result.found
   },
   { immediate: true }
 )
 
-const displayHtml = computed(() =>
-  showRemoteImages.value ? mail.currentMessage?.html_body : processedHtml.value
-)
+const displayHtml = computed(() => {
+  if (!showRemoteImages.value) return processedHtml.value
+  const msg = mail.currentMessage
+  return resolveCIDs(msg?.html_body ?? '', msg?.inline_images)
+})
 
 const otherFolders = computed(() =>
   mail.folders.filter(f => f.name !== mail.currentFolder)
