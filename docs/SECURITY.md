@@ -12,7 +12,7 @@ This document describes the security threats relevant to a webmail client and th
 
 **Threat:** Malicious HTML in an email body (`<script>`, inline event handlers like `onerror=`, `javascript:` hrefs, CSS `expression()`) executes code in the reader's browser session.
 
-**Mitigation (implemented):** HTML email is rendered inside a sandboxed `<iframe srcdoc="...">` with a bare `sandbox` attribute (no tokens), which blocks all script execution inside the frame. `allow-scripts` must never be added.
+**Mitigation (implemented):** HTML email is rendered inside a sandboxed `<iframe srcdoc="...">` with `sandbox="allow-popups"`. This blocks script execution, same-origin access, and form submission while allowing user-initiated links to open in new tabs. `allow-scripts` must never be added.
 
 As defense-in-depth, [DOMPurify](https://github.com/cure53/DOMPurify) sanitizes the HTML in the frontend before it is set as `srcdoc`. DOMPurify runs in the browser using the same HTML parser that will render the output, which eliminates mutation XSS (mXSS) attacks where a server-side sanitizer and the browser would parse the same markup differently. It strips script tags, `javascript:` URLs, inline event handlers, and other dangerous constructs.
 
@@ -26,7 +26,7 @@ As defense-in-depth, [DOMPurify](https://github.com/cure53/DOMPurify) sanitizes 
 
 **Threat:** IMAP/SMTP credentials stored server-side can be exfiltrated if the database is compromised.
 
-**Mitigation (in place):** Credentials are encrypted with AES-256-GCM. The encryption key is derived from a session secret that lives only in the user's browser cookie — a database dump alone is insufficient to recover credentials.
+**Mitigation (implemented):** Credentials are encrypted with AES-256-GCM. The encryption key is derived via HKDF-SHA256 from two independent secrets: the server-side `SESSION_SECRET` (never leaves the server) and a per-session 16-byte random nonce stored in the browser cookie. Neither alone is sufficient — recovering the plaintext password requires both the database row (for the ciphertext) and either the server secret or the individual session cookie.
 
 ## 5. Cookie / session hijacking
 
@@ -43,25 +43,27 @@ Note: User-Agent binding was considered and rejected. The UA is present in the s
 
 **Threat:** A malicious third-party site triggers a state-changing API call (send message, delete message) on behalf of a logged-in user whose cookie is sent automatically by the browser.
 
-**Mitigation:** `SameSite=Strict` on session cookies prevents the cookie from being sent on cross-site requests, which covers most CSRF scenarios. A CSRF token on mutating endpoints provides belt-and-suspenders protection.
+**Mitigation (implemented):** `SameSite=Strict` on session cookies prevents the cookie from being sent on cross-site requests, which covers most CSRF scenarios. As belt-and-suspenders, a double-submit CSRF token is required on all mutating API endpoints: the server sets a non-HttpOnly `letrvu_csrf` cookie on login, and the frontend reads it and sends it as an `X-CSRF-Token` header. The server validates that both values match using constant-time comparison.
 
 ## 7. IMAP/SMTP TLS verification
 
 **Threat:** The `IMAP_INSECURE_TLS=true` environment variable disables TLS certificate validation. On a real mail server this exposes credentials and message content to network interception.
 
-**Mitigation:** This flag must never be set in production. The UI should display a visible warning when the server connection was established without certificate verification.
+**Mitigation (partial):** This flag must never be set in production. The UI should display a visible warning when the server connection was established without certificate verification.
 
 ## 8. Content-Security-Policy for the app shell
 
 **Threat:** Even with email-body isolation, reflected or stored XSS in the Vue application itself (e.g., via subject lines, sender names, or folder names rendered without sanitization) can execute code.
 
-**Mitigation (not yet implemented):** Add a strict `Content-Security-Policy` response header in the Go server:
+**Mitigation (implemented):** The Go server sets the following headers on every response:
 
 ```
-Content-Security-Policy: default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; frame-ancestors 'none'; connect-src 'self'
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
 ```
 
-The `srcdoc` iframe is governed by its own sandbox attribute, not the parent page's CSP, so this header does not conflict with HTML email rendering.
+The `srcdoc` iframe is governed by its own `sandbox` attribute, not the parent page's CSP, so this header does not conflict with HTML email rendering.
 
 ---
 
@@ -76,3 +78,4 @@ The `srcdoc` iframe is governed by its own sandbox attribute, not the parent pag
 | ~~High~~ Done | ~~Audit session cookie flags (`HttpOnly`, `Secure`, `SameSite=Strict`)~~ |
 | ~~Low~~ Done | ~~Link destination warning for mismatched href text and href URL~~ |
 | Low | Per-sender "always show images" preference persisted in settings |
+| Low | UI warning when `IMAP_INSECURE_TLS=true` is active |
