@@ -28,8 +28,11 @@
           :class="{ active: selected?.id === c.id }"
           @click="selected = c"
         >
-          <span class="c-name">{{ c.name || c.emails[0]?.email || '—' }}</span>
-          <span class="c-email">{{ c.emails[0]?.email }}</span>
+          <div class="c-info">
+            <span class="c-name">{{ c.name || c.emails?.[0]?.email || '—' }}</span>
+            <span class="c-email">{{ c.emails?.[0]?.email }}</span>
+          </div>
+          <button class="c-delete" title="Delete" @click.stop="confirmDelete(c)">✕</button>
         </li>
       </ul>
     </div>
@@ -39,7 +42,7 @@
       <div v-if="!selected" class="empty-state">Select a contact</div>
       <div v-else class="contact-detail">
         <div class="detail-header">
-          <h2>{{ selected.name || selected.emails[0]?.email || '—' }}</h2>
+          <h2>{{ selected.name || selected.emails?.[0]?.email || '—' }}</h2>
           <div class="detail-actions">
             <button @click="contactModal?.open(selected)">Edit</button>
             <button class="danger" @click="confirmDelete(selected)">Delete</button>
@@ -57,18 +60,23 @@
   </div>
 
   <ContactModal ref="contactModal" @close="onModalClose" />
+  <ComposeModal ref="composeModal" />
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, provide } from 'vue'
 import FolderList from '../components/FolderList.vue'
 import ContactModal from '../components/ContactModal.vue'
+import ComposeModal from '../components/ComposeModal.vue'
 import { useContactsStore } from '../stores/contacts'
 
 const contacts = useContactsStore()
 const contactModal = ref(null)
+const composeModal = ref(null)
 const selected = ref(null)
 const exportUrl = '/api/contacts/export'
+
+provide('compose', composeModal)
 
 onMounted(() => contacts.fetchContacts())
 
@@ -84,7 +92,7 @@ function onModalClose() {
 }
 
 async function confirmDelete(c) {
-  if (!confirm(`Delete "${c.name || c.emails[0]?.email}"?`)) return
+  if (!confirm(`Delete "${c.name || c.emails?.[0]?.email}"?`)) return
   await contacts.deleteContact(c.id)
   selected.value = null
 }
@@ -152,14 +160,33 @@ async function importVCard(e) {
 }
 .contact-list li {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   padding: 8px 14px;
   cursor: pointer;
   border-bottom: 0.5px solid var(--color-border);
 }
 .contact-list li:hover, .contact-list li.active { background: var(--color-teal-light); }
+.c-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
 .c-name { font-size: 13px; font-weight: 500; }
 .c-email { font-size: 11px; color: var(--color-text-muted); }
+.c-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  flex-shrink: 0;
+}
+.contact-list li:hover .c-delete { opacity: 1; }
+.c-delete:hover { background: #fde8e8; color: #c0392b; }
 .contact-detail-panel { overflow-y: auto; padding: 2rem; }
 .empty-state {
   display: flex;

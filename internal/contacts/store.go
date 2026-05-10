@@ -234,7 +234,7 @@ func (s *Store) listEmails(contactID int64) ([]ContactEmail, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var emails []ContactEmail
+	emails := []ContactEmail{}
 	for rows.Next() {
 		var e ContactEmail
 		if err := rows.Scan(&e.ID, &e.Email, &e.Label); err != nil {

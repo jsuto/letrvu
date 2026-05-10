@@ -144,6 +144,7 @@ input[type="text"], input[type="email"], textarea {
   border-radius: 6px;
   font-size: 13px;
   outline: none;
+  box-sizing: border-box;
 }
 input:focus, textarea:focus { border-color: var(--color-teal); }
 textarea { resize: vertical; }
@@ -151,9 +152,17 @@ textarea { resize: vertical; }
   display: flex;
   gap: 6px;
   margin-bottom: 6px;
+  align-items: center;
 }
-.email-row input[type="email"] { flex: 1; }
-.label-input { width: 110px; flex-shrink: 0; }
+.email-row input[type="email"] {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.label-input {
+  flex: 0 0 110px;
+  width: auto;
+}
 .remove-btn {
   background: none;
   border: 0.5px solid var(--color-border);

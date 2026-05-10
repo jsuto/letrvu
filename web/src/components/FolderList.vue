@@ -10,7 +10,7 @@
         v-for="folder in mail.folders"
         :key="folder.name"
         :class="{ active: mail.currentFolder === folder.name }"
-        @click="mail.fetchMessages(folder.name)"
+        @click="openFolder(folder.name)"
       >
         {{ folder.name }}
         <span v-if="folder.unseen" class="badge">{{ folder.unseen }}</span>
@@ -27,7 +27,7 @@
 </template>
 
 <script setup>
-import { inject } from 'vue'
+import { inject, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useMailStore } from '../stores/mail'
 import { useAuthStore } from '../stores/auth'
@@ -36,8 +36,19 @@ import { useDarkMode } from '../composables/useDarkMode'
 const mail = useMailStore()
 const auth = useAuthStore()
 const router = useRouter()
-const compose = inject('compose')
+const compose = inject('compose', null)
 const { dark, toggle: toggleDark } = useDarkMode()
+
+onMounted(async () => {
+  if (!mail.folders.length) {
+    await mail.fetchFolders()
+  }
+})
+
+async function openFolder(name) {
+  await mail.fetchMessages(name)
+  router.push('/mail')
+}
 
 async function handleLogout() {
   await auth.logout()

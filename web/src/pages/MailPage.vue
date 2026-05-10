@@ -32,7 +32,9 @@ useMailEvents()
 
 onMounted(async () => {
   await mail.fetchFolders()
-  await mail.fetchMessages('INBOX')
+  if (!mail.messages.length) {
+    await mail.fetchMessages(mail.currentFolder)
+  }
 })
 </script>
 
