@@ -1,0 +1,196 @@
+package smtp
+
+import (
+	"encoding/base64"
+	"strings"
+	"testing"
+)
+
+// --- helpers -----------------------------------------------------------------
+
+func mustContain(t *testing.T, haystack, needle, label string) {
+	t.Helper()
+	if !strings.Contains(haystack, needle) {
+		t.Errorf("%s: want %q in MIME output\ngot:\n%s", label, needle, haystack)
+	}
+}
+
+func mustNotContain(t *testing.T, haystack, needle, label string) {
+	t.Helper()
+	if strings.Contains(haystack, needle) {
+		t.Errorf("%s: did not want %q in MIME output", label, needle)
+	}
+}
+
+// --- From / To / CC headers --------------------------------------------------
+
+func TestBuildMIME_Headers(t *testing.T) {
+	m := buildMIME(Message{
+		From:    "Alice <alice@example.com>",
+		To:      []string{"bob@example.com"},
+		Subject: "Hello",
+		Text:    "Hi Bob",
+	})
+	mustContain(t, m, "From: Alice <alice@example.com>", "From")
+	mustContain(t, m, "To: bob@example.com", "To")
+	mustContain(t, m, "Subject: Hello", "Subject")
+	mustContain(t, m, "MIME-Version: 1.0", "MIME-Version")
+}
+
+func TestBuildMIME_MultipleRecipients(t *testing.T) {
+	m := buildMIME(Message{
+		From:    "alice@example.com",
+		To:      []string{"bob@example.com", "carol@example.com"},
+		Subject: "Hey",
+		Text:    "body",
+	})
+	mustContain(t, m, "bob@example.com, carol@example.com", "To multi")
+}
+
+func TestBuildMIME_CC(t *testing.T) {
+	m := buildMIME(Message{
+		From:    "alice@example.com",
+		To:      []string{"bob@example.com"},
+		CC:      []string{"dave@example.com"},
+		Subject: "CC test",
+		Text:    "body",
+	})
+	mustContain(t, m, "Cc: dave@example.com", "CC header")
+}
+
+func TestBuildMIME_NoCC(t *testing.T) {
+	m := buildMIME(Message{
+		From:    "alice@example.com",
+		To:      []string{"bob@example.com"},
+		Subject: "no cc",
+		Text:    "body",
+	})
+	mustNotContain(t, m, "Cc:", "no CC header")
+}
+
+// --- plain text body ---------------------------------------------------------
+
+func TestBuildMIME_PlainText(t *testing.T) {
+	m := buildMIME(Message{
+		From:    "a@example.com",
+		To:      []string{"b@example.com"},
+		Subject: "plain",
+		Text:    "Hello, world!",
+	})
+	mustContain(t, m, "Content-Type: text/plain; charset=UTF-8", "plain content-type")
+	mustContain(t, m, "Hello, world!", "plain body")
+	mustNotContain(t, m, "multipart/alternative", "no multipart for plain")
+}
+
+// --- HTML body (multipart/alternative) ---------------------------------------
+
+func TestBuildMIME_HTMLAlternative(t *testing.T) {
+	m := buildMIME(Message{
+		From:    "a@example.com",
+		To:      []string{"b@example.com"},
+		Subject: "html",
+		Text:    "plain part",
+		HTML:    "<p>html part</p>",
+	})
+	mustContain(t, m, "multipart/alternative", "alternative content-type")
+	mustContain(t, m, "Content-Type: text/plain; charset=UTF-8", "plain part")
+	mustContain(t, m, "Content-Type: text/html; charset=UTF-8", "html part")
+	mustContain(t, m, "plain part", "plain body text")
+	mustContain(t, m, "<p>html part</p>", "html body text")
+}
+
+func TestBuildMIME_HTMLBoundaryPresent(t *testing.T) {
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "t", HTML: "<b>h</b>",
+	})
+	mustContain(t, m, "--letrvu-boundary-001", "boundary marker")
+	mustContain(t, m, "--letrvu-boundary-001--", "closing boundary")
+}
+
+// --- attachments (multipart/mixed) ------------------------------------------
+
+func TestBuildMIME_WithAttachment(t *testing.T) {
+	data := []byte("hello attachment")
+	m := buildMIME(Message{
+		From:    "a@example.com",
+		To:      []string{"b@example.com"},
+		Subject: "with att",
+		Text:    "see attachment",
+		Attachments: []Attachment{
+			{Filename: "test.txt", ContentType: "text/plain", Data: data},
+		},
+	})
+	mustContain(t, m, "multipart/mixed", "mixed content-type")
+	mustContain(t, m, "--letrvu-mixed-001", "mixed boundary")
+	mustContain(t, m, "--letrvu-mixed-001--", "closing mixed boundary")
+	mustContain(t, m, `filename="test.txt"`, "attachment filename")
+	mustContain(t, m, "Content-Transfer-Encoding: base64", "base64 encoding")
+	mustContain(t, m, base64.StdEncoding.EncodeToString(data)[:10], "base64 data prefix")
+}
+
+func TestBuildMIME_AttachmentDefaultContentType(t *testing.T) {
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "t",
+		Attachments: []Attachment{{Filename: "f.bin", Data: []byte{0x00}}},
+	})
+	mustContain(t, m, "application/octet-stream", "default content-type")
+}
+
+func TestBuildMIME_AttachmentBase64LineLength(t *testing.T) {
+	// RFC 2045: base64 lines must not exceed 76 characters.
+	data := make([]byte, 1000)
+	for i := range data {
+		data[i] = byte(i % 256)
+	}
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "t",
+		Attachments: []Attachment{{Filename: "big.bin", Data: data}},
+	})
+	inAttachment := false
+	for _, line := range strings.Split(m, "\r\n") {
+		if strings.Contains(line, "Content-Transfer-Encoding: base64") {
+			inAttachment = true
+			continue
+		}
+		if inAttachment && strings.HasPrefix(line, "--") {
+			break
+		}
+		if inAttachment && line != "" && len(line) > 76 {
+			t.Errorf("base64 line exceeds 76 chars: len=%d", len(line))
+		}
+	}
+}
+
+func TestBuildMIME_MultipleAttachments(t *testing.T) {
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "t",
+		Attachments: []Attachment{
+			{Filename: "a.txt", ContentType: "text/plain", Data: []byte("aaa")},
+			{Filename: "b.txt", ContentType: "text/plain", Data: []byte("bbb")},
+		},
+	})
+	mustContain(t, m, `"a.txt"`, "first attachment")
+	mustContain(t, m, `"b.txt"`, "second attachment")
+}
+
+// --- EnvelopeFrom -----------------------------------------------------------
+
+func TestSend_EnvelopeFromFallback(t *testing.T) {
+	// When EnvelopeFrom is empty, Send uses From for the envelope.
+	// We can't call Send without an SMTP server, but we can verify the MIME
+	// builder doesn't include EnvelopeFrom in the message body (it's SMTP-only).
+	m := buildMIME(Message{
+		From:         "alias@example.com",
+		EnvelopeFrom: "auth@example.com",
+		To:           []string{"bob@example.com"},
+		Subject:      "s",
+		Text:         "body",
+	})
+	// The MIME From: header should be the alias, not the envelope sender.
+	mustContain(t, m, "From: alias@example.com", "From header is alias")
+	mustNotContain(t, m, "auth@example.com", "envelope address not in MIME body")
+}

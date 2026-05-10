@@ -111,9 +111,9 @@ func eventToComponent(ev Event) *ical.Component {
 	}
 
 	if ev.AllDay {
-		start := ical.Prop{Name: ical.PropDateTimeStart, Value: ev.StartsAt.Format("20060102")}
+		start := ical.Prop{Name: ical.PropDateTimeStart, Value: ev.StartsAt.Format("20060102"), Params: make(ical.Params)}
 		start.Params.Set(ical.ParamValue, "DATE")
-		end := ical.Prop{Name: ical.PropDateTimeEnd, Value: ev.EndsAt.Add(24 * time.Hour).Format("20060102")}
+		end := ical.Prop{Name: ical.PropDateTimeEnd, Value: ev.EndsAt.Add(24 * time.Hour).Format("20060102"), Params: make(ical.Params)}
 		end.Params.Set(ical.ParamValue, "DATE")
 		comp.Props[ical.PropDateTimeStart] = []ical.Prop{start}
 		comp.Props[ical.PropDateTimeEnd] = []ical.Prop{end}
