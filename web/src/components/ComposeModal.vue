@@ -10,7 +10,7 @@
         <AddressInput v-model="form.cc" placeholder="CC" />
         <input v-model="form.subject" type="text" placeholder="Subject" class="subject-input" />
       </div>
-      <textarea v-model="form.body" placeholder="Write your message…" />
+      <textarea ref="textareaEl" v-model="form.body" placeholder="Write your message…" />
       <div class="compose-footer">
         <button @click="send" :disabled="sending" class="send-btn">
           {{ sending ? 'Sending…' : 'Send' }}
@@ -22,20 +22,51 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, nextTick } from 'vue'
 import { useMailStore } from '../stores/mail'
+import { useSettingsStore } from '../stores/settings'
 import AddressInput from './AddressInput.vue'
 
 const mail = useMailStore()
+const settings = useSettingsStore()
+
 const visible = ref(false)
 const sending = ref(false)
 const error = ref('')
+const textareaEl = ref(null)
 
 const form = reactive({ to: '', cc: '', subject: '', body: '' })
 
-function open(prefill = {}) {
-  Object.assign(form, { to: '', cc: '', subject: '', body: '', ...prefill })
+async function open(prefill = {}) {
+  if (!settings.loaded) await settings.fetchSettings()
+
+  // Strip a leading "-- " or "--" line the user may have typed themselves,
+  // since we always prepend the standard separator.
+  const sig = (settings.settings.signature ?? '').replace(/^--\s*\n/, '').trim()
+  const sigBlock = sig ? `\n\n-- \n${sig}` : ''
+
+  // Signature goes between the user's typing area and any quoted text
+  // (prefill.body carries forwarded content).
+  Object.assign(form, {
+    to: '',
+    cc: '',
+    subject: '',
+    body: sigBlock + (prefill.body ?? ''),
+    ...prefill,
+    // body from prefill is already incorporated above; don't let the spread
+    // overwrite our assembled value when body is the only prefilled key.
+    body: sigBlock + (prefill.body ?? ''),
+  })
+
   visible.value = true
+
+  // Place cursor at the very top so the user types above the signature.
+  await nextTick()
+  if (textareaEl.value) {
+    textareaEl.value.focus()
+    textareaEl.value.setSelectionRange(0, 0)
+    textareaEl.value.scrollTop = 0
+  }
 }
 
 function close() {

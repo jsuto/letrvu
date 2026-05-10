@@ -133,12 +133,12 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Calendar (month + week view, add/edit/delete events)
 - [x] iCal import/export
 - [x] Email invite detection ("Add to calendar" button)
-- [ ] Signature insertion in compose
+- [X] Signature insertion in compose
 - [ ] Calendar recurring events (RRULE)
 - [ ] Calendar outgoing invites (attach iCal to composed email)
 - [ ] Multi-account support
 - [X] Move messages between folders
-- [ ] Show message source
+- [X] Show message source
 - [X] Flag messages
 
 ## License

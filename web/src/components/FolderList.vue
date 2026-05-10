@@ -28,9 +28,11 @@
       <button class="icon-btn" :title="dark ? 'Switch to light mode' : 'Switch to dark mode'" @click="toggleDark">
         {{ dark ? '☀️' : '🌙' }}
       </button>
+      <button class="icon-btn" title="Settings" @click="settingsModal?.open()">⚙</button>
       <button class="icon-btn logout" title="Sign out" @click="handleLogout">Sign out</button>
     </div>
   </nav>
+  <SettingsModal ref="settingsModal" />
 </template>
 
 <script setup>
@@ -39,6 +41,7 @@ import { useRouter, RouterLink } from 'vue-router'
 import { useMailStore } from '../stores/mail'
 import { useAuthStore } from '../stores/auth'
 import { useDarkMode } from '../composables/useDarkMode'
+import SettingsModal from './SettingsModal.vue'
 
 const mail = useMailStore()
 const auth = useAuthStore()
@@ -46,6 +49,7 @@ const router = useRouter()
 const compose = inject('compose', null)
 const { dark, toggle: toggleDark } = useDarkMode()
 const dragOver = ref(null)
+const settingsModal = ref(null)
 
 onMounted(async () => {
   if (!mail.folders.length) {
