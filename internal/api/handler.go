@@ -9,11 +9,23 @@ import (
 
 	"github.com/yourusername/letrvu/internal/imap"
 	"github.com/yourusername/letrvu/internal/session"
+	"github.com/yourusername/letrvu/internal/settings"
 	"github.com/yourusername/letrvu/internal/smtp"
 )
 
+// ServerConfig holds server-level IMAP/SMTP defaults exposed via /api/config
+// to pre-fill the login form.
+type ServerConfig struct {
+	IMAPHost string `json:"imap_host"`
+	IMAPPort int    `json:"imap_port"`
+	SMTPHost string `json:"smtp_host"`
+	SMTPPort int    `json:"smtp_port"`
+}
+
 type handler struct {
 	sessions *session.Store
+	settings *settings.Store
+	config   ServerConfig
 }
 
 // requireAuth is middleware that checks for a valid session cookie.
@@ -86,7 +98,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	c.Close()
 
-	sess, err := h.sessions.Create(body.IMAPHost, body.IMAPPort, body.SMTPHost, body.SMTPPort, body.Username, body.Password)
+	cookieVal, err := h.sessions.Create(body.IMAPHost, body.IMAPPort, body.SMTPHost, body.SMTPPort, body.Username, body.Password)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("could not create session"))
 		return
@@ -94,7 +106,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "letrvu_session",
-		Value:    sess.ID,
+		Value:    cookieVal,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
@@ -339,6 +351,36 @@ func (h *handler) downloadAttachment(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, att.Filename))
 	}
 	w.Write(data) //nolint:errcheck
+}
+
+// getConfig returns server-configured IMAP/SMTP defaults for the login form.
+// This endpoint is public (no auth required).
+func (h *handler) getConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.config)
+}
+
+func (h *handler) getSettings(w http.ResponseWriter, r *http.Request) {
+	sess := h.sessionFrom(r)
+	s, err := h.settings.Get(sess.Username, sess.IMAPHost)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, s)
+}
+
+func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
+	sess := h.sessionFrom(r)
+	var values map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&values); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid request body"))
+		return
+	}
+	if err := h.settings.Set(sess.Username, sess.IMAPHost, values); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // events streams server-sent events for real-time new mail notifications via

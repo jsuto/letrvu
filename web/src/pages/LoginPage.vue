@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
@@ -52,6 +52,19 @@ const form = reactive({
 })
 const loading = ref(false)
 const error = ref('')
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/config')
+    if (res.ok) {
+      const cfg = await res.json()
+      if (cfg.imap_host) form.imapHost = cfg.imap_host
+      if (cfg.imap_port) form.imapPort = cfg.imap_port
+      if (cfg.smtp_host) form.smtpHost = cfg.smtp_host
+      if (cfg.smtp_port) form.smtpPort = cfg.smtp_port
+    }
+  } catch {}
+})
 
 async function handleLogin() {
   loading.value = true

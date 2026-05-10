@@ -4,13 +4,16 @@ import (
 	"net/http"
 
 	"github.com/yourusername/letrvu/internal/session"
+	"github.com/yourusername/letrvu/internal/settings"
 )
 
 // NewRouter wires all HTTP routes and returns the root handler.
-// Route patterns use Go 1.22 enhanced ServeMux syntax (method + path).
-func NewRouter(sessions *session.Store) http.Handler {
+func NewRouter(sessions *session.Store, settingsStore *settings.Store, cfg ServerConfig) http.Handler {
 	mux := http.NewServeMux()
-	h := &handler{sessions: sessions}
+	h := &handler{sessions: sessions, settings: settingsStore, config: cfg}
+
+	// Public
+	mux.HandleFunc("GET /api/config", h.getConfig)
 
 	// Auth
 	mux.HandleFunc("POST /api/auth/login", h.login)
@@ -28,6 +31,10 @@ func NewRouter(sessions *session.Store) http.Handler {
 
 	// Compose
 	mux.HandleFunc("POST /api/send", h.requireAuth(h.sendMessage))
+
+	// User settings
+	mux.HandleFunc("GET /api/settings", h.requireAuth(h.getSettings))
+	mux.HandleFunc("PATCH /api/settings", h.requireAuth(h.updateSettings))
 
 	// SSE — real-time new mail notifications via IMAP IDLE
 	mux.HandleFunc("GET /api/events", h.requireAuth(h.events))

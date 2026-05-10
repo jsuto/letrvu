@@ -11,6 +11,8 @@ internal/api/static/
 *.env
 .env.local
 
+letrvu.db
+
 # Editor
 .idea/
 .vscode/

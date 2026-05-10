@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"slices"
 	"strings"
 	"time"
 
@@ -84,6 +85,9 @@ func (c *Client) ListFolders() ([]Folder, error) {
 			Delimiter: delim,
 		}
 	}
+	slices.SortFunc(folders, func(a, b Folder) int {
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
 	return folders, nil
 }
 
