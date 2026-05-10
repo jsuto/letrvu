@@ -54,6 +54,29 @@ func (db *DB) Q(query string) string {
 	return b.String()
 }
 
+// PK returns a cross-driver auto-increment primary key column definition.
+func (db *DB) PK() string {
+	if db.Driver == "postgres" {
+		return "BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY"
+	}
+	return "INTEGER PRIMARY KEY"
+}
+
+// InsertReturningID executes an INSERT and returns the new row's ID.
+// query must end with RETURNING id for Postgres, or be a plain INSERT for SQLite.
+func (db *DB) InsertReturningID(query string, args ...any) (int64, error) {
+	if db.Driver == "postgres" {
+		var id int64
+		err := db.QueryRow(db.Q(query+" RETURNING id"), args...).Scan(&id)
+		return id, err
+	}
+	res, err := db.Exec(db.Q(query), args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
 // Migrate creates all required tables if they do not already exist.
 func Migrate(db *DB) error {
 	stmts := []string{
@@ -75,6 +98,22 @@ func Migrate(db *DB) error {
 			value     TEXT NOT NULL,
 			PRIMARY KEY (username, imap_host, key)
 		)`,
+		`CREATE TABLE IF NOT EXISTS contacts (
+			id         ` + db.PK() + `,
+			owner      TEXT NOT NULL,
+			imap_host  TEXT NOT NULL,
+			name       TEXT NOT NULL DEFAULT '',
+			notes      TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE TABLE IF NOT EXISTS contact_emails (
+			id         ` + db.PK() + `,
+			contact_id INTEGER NOT NULL,
+			email      TEXT    NOT NULL,
+			label      TEXT    NOT NULL DEFAULT '',
+			UNIQUE (contact_id, email)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_contacts_owner ON contacts (owner, imap_host)`,
+		`CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails (email)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := db.Exec(stmt); err != nil {

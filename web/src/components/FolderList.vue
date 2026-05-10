@@ -4,6 +4,7 @@
       <img src="/assets/letrvu-logo-horizontal.svg" alt="letrvu" class="logo" />
     </div>
     <button class="compose-btn" @click="compose?.open()">Compose</button>
+    <RouterLink to="/contacts" class="nav-link">Contacts</RouterLink>
     <ul v-if="mail.folders.length">
       <li
         v-for="folder in mail.folders"
@@ -27,7 +28,7 @@
 
 <script setup>
 import { inject } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 import { useMailStore } from '../stores/mail'
 import { useAuthStore } from '../stores/auth'
 import { useDarkMode } from '../composables/useDarkMode'
@@ -57,6 +58,17 @@ async function handleLogout() {
 .logo {
   height: 28px;
 }
+.nav-link {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--color-text);
+  text-decoration: none;
+  margin-bottom: 0.5rem;
+}
+.nav-link:hover { background: var(--color-teal-light); }
+.nav-link.router-link-active { background: var(--color-teal-light); font-weight: 500; }
 .compose-btn {
   width: 100%;
   padding: 8px;

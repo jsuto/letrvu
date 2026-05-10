@@ -15,7 +15,7 @@
 
 ---
 
-**letrvu** ("letter view") is a lightweight, modern webmail client that connects to any standard IMAP/SMTP server. No bundled mail server, no PHP, no database required.
+**letrvu** ("letter view") is a lightweight, modern webmail client that connects to any standard IMAP/SMTP server. No bundled mail server, no PHP.
 
 ## Features
 
@@ -23,7 +23,11 @@
 - Three-panel layout: folders → message list → message view
 - HTML email rendered in a sandboxed iframe
 - Real-time new mail via IMAP IDLE + Server-Sent Events
-- Compose, reply, forward, delete
+- Compose, reply, forward, delete, search
+- Attachment download
+- Address book with vCard import/export and compose autocomplete
+- SQLite (default) or PostgreSQL session/settings/contacts storage
+- Dark mode
 - Ships as a single Go binary
 
 ## Stack
@@ -34,6 +38,7 @@
 | IMAP | `emersion/go-imap/v2` |
 | SMTP | `emersion/go-smtp` |
 | Frontend | Vue 3 + Vite + Pinia |
+| Database | SQLite (`modernc.org/sqlite`) or PostgreSQL (`pgx`) |
 | Deploy | Single binary or Docker |
 
 ## Project structure
@@ -42,15 +47,19 @@
 cmd/letrvu/             main entrypoint
 internal/
   api/                  HTTP router + handlers
-  imap/                 IMAP client wrapper
+  imap/                 IMAP client wrapper + IDLE
   smtp/                 outbound mail
-  session/              in-memory session store
+  session/              DB-backed session store (AES-256-GCM)
+  contacts/             address book store + vCard codec
+  settings/             per-user key/value settings
+  db/                   database wrapper (SQLite / PostgreSQL)
 web/
   src/
-    pages/              LoginPage.vue, MailPage.vue
-    components/         FolderList, MessageList, MessageView, ComposeModal
-    stores/             auth.js, mail.js  (Pinia)
-    composables/        useMailEvents.js  (SSE)
+    pages/              LoginPage.vue, MailPage.vue, ContactsPage.vue
+    components/         FolderList, MessageList, MessageView,
+                        ComposeModal, AddressInput, ContactModal
+    stores/             auth.js, mail.js, contacts.js  (Pinia)
+    composables/        useMailEvents.js (SSE), useDarkMode.js
 web/public/assets/      logo files (SVG)
 Dockerfile              multi-stage build
 ```
@@ -91,19 +100,39 @@ docker build -t letrvu .
 docker run -p 8080:8080 letrvu
 ```
 
+## Configuration
+
+Copy `.env.example` to `.env` and adjust as needed:
+
+| Variable | Default | Description |
+|---|---|---|
+| `LISTEN_ADDR` | `:8080` | HTTP listen address |
+| `DB_DRIVER` | `sqlite` | `sqlite` or `postgres` |
+| `DATABASE_URL` | `./letrvu.db` | SQLite path or Postgres DSN |
+| `SESSION_SECRET` | *(ephemeral)* | 32-byte hex secret — set this in production |
+| `IMAP_HOST` / `IMAP_PORT` | — / `993` | Pre-fill login form |
+| `SMTP_HOST` / `SMTP_PORT` | — / `587` | Pre-fill login form |
+| `IMAP_INSECURE_TLS` | `true` | Skip TLS cert verification (self-signed certs) |
+
 ## Roadmap
 
-- [X] IMAP folder listing
-- [X] Message list with pagination
-- [X] Message view (HTML + plain text)
-- [X] Compose / reply / forward
-- [X] Delete + mark read/unread
-- [X] IMAP IDLE → SSE push notifications
-- [X] Attachments (view + download)
-- [X] Search (server-side IMAP SEARCH)
-- [X] Embed frontend via `go:embed`
-- [X] Dark mode
+- [x] IMAP folder listing (alphabetical)
+- [x] Message list with pagination
+- [x] Message view (HTML + plain text, RFC 2047 encoded headers)
+- [x] Compose / reply / forward
+- [x] Delete + mark read/unread
+- [x] IMAP IDLE → SSE push notifications
+- [x] Attachments (view + download)
+- [x] Search (server-side IMAP SEARCH)
+- [x] Embed frontend via `go:embed`
+- [x] Dark mode
+- [x] DB-backed sessions (SQLite / PostgreSQL)
+- [x] Per-user settings (display name, signature)
+- [x] Address book with vCard import/export
+- [x] Compose autocomplete from address book
+- [ ] Signature insertion in compose
 - [ ] Multi-account support
+- [ ] Move messages between folders
 
 ## License
 

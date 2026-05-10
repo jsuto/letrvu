@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/yourusername/letrvu/internal/contacts"
 	"github.com/yourusername/letrvu/internal/imap"
 	"github.com/yourusername/letrvu/internal/session"
 	"github.com/yourusername/letrvu/internal/settings"
@@ -25,6 +26,7 @@ type ServerConfig struct {
 type handler struct {
 	sessions *session.Store
 	settings *settings.Store
+	contacts *contacts.Store
 	config   ServerConfig
 }
 

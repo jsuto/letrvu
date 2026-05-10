@@ -6,9 +6,9 @@
         <button @click="close" class="close">×</button>
       </div>
       <div class="fields">
-        <input v-model="form.to" type="text" placeholder="To" />
-        <input v-model="form.cc" type="text" placeholder="CC" />
-        <input v-model="form.subject" type="text" placeholder="Subject" />
+        <AddressInput v-model="form.to" placeholder="To" />
+        <AddressInput v-model="form.cc" placeholder="CC" />
+        <input v-model="form.subject" type="text" placeholder="Subject" class="subject-input" />
       </div>
       <textarea v-model="form.body" placeholder="Write your message…" />
       <div class="compose-footer">
@@ -24,6 +24,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useMailStore } from '../stores/mail'
+import AddressInput from './AddressInput.vue'
 
 const mail = useMailStore()
 const visible = ref(false)
@@ -92,7 +93,7 @@ defineExpose({ open, close })
   font-weight: 500;
 }
 .close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--color-text-muted); }
-.fields input {
+.fields input, .subject-input {
   display: block;
   width: 100%;
   padding: 8px 16px;
@@ -100,6 +101,7 @@ defineExpose({ open, close })
   border-bottom: 0.5px solid var(--color-border);
   font-size: 13px;
   outline: none;
+  box-sizing: border-box;
 }
 textarea {
   flex: 1;

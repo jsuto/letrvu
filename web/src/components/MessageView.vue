@@ -8,6 +8,7 @@
         <h2>{{ mail.currentMessage.subject || '(no subject)' }}</h2>
         <div class="meta">
           <span class="from">{{ mail.currentMessage.from }}</span>
+          <button class="save-contact-btn" title="Save to address book" @click="saveContact">+</button>
           <span class="date">{{ formatDate(mail.currentMessage.date) }}</span>
         </div>
         <div class="actions">
@@ -45,8 +46,10 @@
 <script setup>
 import { inject } from 'vue'
 import { useMailStore } from '../stores/mail'
+import { useContactsStore } from '../stores/contacts'
 
 const mail = useMailStore()
+const contacts = useContactsStore()
 const compose = inject('compose')
 
 function formatDate(dateStr) {
@@ -89,6 +92,22 @@ async function remove() {
   if (!msg) return
   await mail.deleteMessage(mail.currentFolder, msg.uid)
 }
+
+async function saveContact() {
+  const msg = mail.currentMessage
+  if (!msg) return
+  // Parse "Name <email>" or plain email from the from field
+  const from = msg.from || ''
+  const match = from.match(/^(.*?)\s*<(.+?)>$/)
+  const name = match ? match[1].trim() : ''
+  const email = match ? match[2].trim() : from.trim()
+  try {
+    await contacts.saveFromMessage(name, email)
+    alert(`Saved ${email} to address book.`)
+  } catch {
+    alert('Could not save contact.')
+  }
+}
 </script>
 
 <style scoped>
@@ -104,7 +123,19 @@ async function remove() {
 .message { padding: 2rem; max-width: 780px; margin: 0 auto; }
 .header { margin-bottom: 1.5rem; }
 h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
-.meta { font-size: 13px; color: var(--color-text-muted); margin-bottom: 1rem; display: flex; gap: 1rem; }
+.meta { font-size: 13px; color: var(--color-text-muted); margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; }
+.save-contact-btn {
+  background: none;
+  border: 0.5px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 1px 6px;
+  color: var(--color-teal);
+}
+.save-contact-btn:hover { background: var(--color-teal-light); }
 .actions { display: flex; gap: 8px; }
 .actions button {
   padding: 6px 14px;
