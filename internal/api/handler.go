@@ -441,11 +441,13 @@ func (h *handler) moveMessages(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		To      []string `json:"to"`
-		CC      []string `json:"cc"`
-		Subject string   `json:"subject"`
-		Text    string   `json:"text"`
-		HTML    string   `json:"html"`
+		FromName  string   `json:"from_name"`
+		FromEmail string   `json:"from_email"`
+		To        []string `json:"to"`
+		CC        []string `json:"cc"`
+		Subject   string   `json:"subject"`
+		Text      string   `json:"text"`
+		HTML      string   `json:"html"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResp("invalid request body"))
@@ -453,18 +455,33 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := h.sessionFrom(r)
+
+	// Build the RFC 5322 From: header from the selected identity.
+	// Fall back to the authenticated username if no identity was chosen.
+	fromEmail := body.FromEmail
+	if fromEmail == "" {
+		fromEmail = sess.Username
+	}
+	var fromHeader string
+	if body.FromName != "" {
+		fromHeader = fmt.Sprintf("%s <%s>", body.FromName, fromEmail)
+	} else {
+		fromHeader = fromEmail
+	}
+
 	if err := smtp.Send(smtp.Config{
 		Host:     sess.SMTPHost,
 		Port:     sess.SMTPPort,
 		Username: sess.Username,
 		Password: sess.Password,
 	}, smtp.Message{
-		From:    sess.Username,
-		To:      body.To,
-		CC:      body.CC,
-		Subject: body.Subject,
-		Text:    body.Text,
-		HTML:    body.HTML,
+		From:         fromHeader,
+		EnvelopeFrom: sess.Username, // authenticated address for bounce routing
+		To:           body.To,
+		CC:           body.CC,
+		Subject:      body.Subject,
+		Text:         body.Text,
+		HTML:         body.HTML,
 	}); err != nil {
 		writeJSON(w, http.StatusBadGateway, errorResp(err.Error()))
 		return
@@ -528,6 +545,9 @@ func (h *handler) getSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	// Inject the authenticated username so the client can show it as the
+	// default From address when no identities are configured.
+	s["username"] = sess.Username
 	writeJSON(w, http.StatusOK, s)
 }
 

@@ -11,6 +11,7 @@ import (
 var allowed = map[string]bool{
 	"display_name": true,
 	"signature":    true,
+	"identities":   true,
 }
 
 // Store persists per-user settings keyed by (username, imap_host).

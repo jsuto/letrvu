@@ -17,12 +17,18 @@ type Config struct {
 
 // Message is an outbound email.
 type Message struct {
-	From    string
-	To      []string
-	CC      []string
-	Subject string
-	Text    string // plain text body
-	HTML    string // optional HTML body; if set, sends multipart/alternative
+	// From is the RFC 5322 From: header value (what recipients see).
+	// Format: "Name <email>" or plain "email".
+	From string
+	// EnvelopeFrom is the SMTP MAIL FROM: address used for bounce routing.
+	// If empty, From is used. Set this to the authenticated SMTP username
+	// when sending from an alias so the server does not reject the command.
+	EnvelopeFrom string
+	To           []string
+	CC           []string
+	Subject      string
+	Text         string // plain text body
+	HTML         string // optional HTML body; if set, sends multipart/alternative
 }
 
 // Send delivers msg via SMTP STARTTLS with PLAIN auth.
@@ -30,10 +36,15 @@ func Send(cfg Config, msg Message) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
 
+	envelopeFrom := msg.EnvelopeFrom
+	if envelopeFrom == "" {
+		envelopeFrom = msg.From
+	}
+
 	recipients := append(msg.To, msg.CC...)
 	body := buildMIME(msg)
 
-	if err := smtp.SendMail(addr, auth, msg.From, recipients, []byte(body)); err != nil {
+	if err := smtp.SendMail(addr, auth, envelopeFrom, recipients, []byte(body)); err != nil {
 		return fmt.Errorf("smtp send: %w", err)
 	}
 	return nil

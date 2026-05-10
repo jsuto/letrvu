@@ -140,6 +140,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [X] Move messages between folders
 - [X] Show message source
 - [X] Flag messages
+- [X] Multiple identities
 
 ## License
 

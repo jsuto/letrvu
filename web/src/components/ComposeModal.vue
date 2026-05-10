@@ -6,6 +6,12 @@
         <button @click="close" class="close">×</button>
       </div>
       <div class="fields">
+        <div class="from-row">
+          <span class="from-label">From</span>
+          <select v-model="form.fromIndex" class="from-select">
+            <option v-for="(opt, i) in fromOptions" :key="i" :value="i">{{ opt.label }}</option>
+          </select>
+        </div>
         <AddressInput v-model="form.to" placeholder="To" />
         <AddressInput v-model="form.cc" placeholder="CC" />
         <input v-model="form.subject" type="text" placeholder="Subject" class="subject-input" />
@@ -22,7 +28,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick } from 'vue'
+import { ref, reactive, nextTick, computed } from 'vue'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import AddressInput from './AddressInput.vue'
@@ -35,7 +41,9 @@ const sending = ref(false)
 const error = ref('')
 const textareaEl = ref(null)
 
-const form = reactive({ to: '', cc: '', subject: '', body: '' })
+const form = reactive({ fromIndex: 0, to: '', cc: '', subject: '', body: '' })
+
+const fromOptions = computed(() => settings.fromOptions)
 
 async function open(prefill = {}) {
   if (!settings.loaded) await settings.fetchSettings()
@@ -45,17 +53,32 @@ async function open(prefill = {}) {
   const sig = (settings.settings.signature ?? '').replace(/^--\s*\n/, '').trim()
   const sigBlock = sig ? `\n\n-- \n${sig}` : ''
 
+  // When replying, pick the identity whose email matches one of the original
+  // To/CC addresses so the user sends from the same address the mail arrived at.
+  let fromIndex = 0
+  const recipients = prefill._originalRecipients
+  if (recipients?.length) {
+    const lc = recipients.map(r => r.toLowerCase())
+    const match = fromOptions.value.findIndex(opt =>
+      lc.some(r => r.includes(opt.email.toLowerCase()))
+    )
+    if (match !== -1) fromIndex = match
+  }
+
   // Signature goes between the user's typing area and any quoted text
-  // (prefill.body carries forwarded content).
+  // (prefill.body carries forwarded content). Strip the internal hint key.
+  const { _originalRecipients: _, ...rest } = prefill
   Object.assign(form, {
+    fromIndex,
     to: '',
     cc: '',
     subject: '',
-    body: sigBlock + (prefill.body ?? ''),
-    ...prefill,
+    body: sigBlock + (rest.body ?? ''),
+    ...rest,
     // body from prefill is already incorporated above; don't let the spread
     // overwrite our assembled value when body is the only prefilled key.
-    body: sigBlock + (prefill.body ?? ''),
+    body: sigBlock + (rest.body ?? ''),
+    fromIndex, // restore after spread in case prefill had a fromIndex key
   })
 
   visible.value = true
@@ -78,7 +101,10 @@ async function send() {
   sending.value = true
   error.value = ''
   try {
+    const selectedFrom = fromOptions.value[form.fromIndex] ?? fromOptions.value[0]
     await mail.sendMessage({
+      from_name: selectedFrom?.name ?? '',
+      from_email: selectedFrom?.email ?? '',
       to: form.to.split(',').map(s => s.trim()).filter(Boolean),
       cc: form.cc.split(',').map(s => s.trim()).filter(Boolean),
       subject: form.subject,
@@ -124,6 +150,28 @@ defineExpose({ open, close })
   font-weight: 500;
 }
 .close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--color-text-muted); }
+.from-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 0.5px solid var(--color-border);
+}
+.from-label {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.from-select {
+  flex: 1;
+  padding: 8px 8px 8px 0;
+  border: none;
+  font-size: 13px;
+  font-family: inherit;
+  background: transparent;
+  color: var(--color-text);
+  outline: none;
+  cursor: pointer;
+}
 .fields input, .subject-input {
   display: block;
   width: 100%;

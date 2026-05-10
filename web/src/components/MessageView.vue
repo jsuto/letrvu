@@ -297,6 +297,8 @@ function reply() {
   compose?.value?.open({
     to: msg.from,
     subject: msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
+    // Pass original recipients so ComposeModal can pick the matching identity.
+    _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
   })
 }
 
