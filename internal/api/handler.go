@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/jsuto/letrvu/internal/calendar"
 	"github.com/jsuto/letrvu/internal/contacts"
@@ -29,20 +30,22 @@ func randomHex(n int) (string, error) {
 // ServerConfig holds server-level IMAP/SMTP defaults exposed via /api/config
 // to pre-fill the login form.
 type ServerConfig struct {
-	IMAPHost      string `json:"imap_host"`
-	IMAPPort      int    `json:"imap_port"`
-	SMTPHost      string `json:"smtp_host"`
-	SMTPPort      int    `json:"smtp_port"`
-	SecureCookies bool   `json:"-"`
+	IMAPHost        string        `json:"imap_host"`
+	IMAPPort        int           `json:"imap_port"`
+	SMTPHost        string        `json:"smtp_host"`
+	SMTPPort        int           `json:"smtp_port"`
+	SecureCookies   bool          `json:"-"`
+	FolderCacheTTL  time.Duration `json:"-"`
 }
 
 
 type handler struct {
-	sessions *session.Store
-	settings *settings.Store
-	contacts *contacts.Store
-	calendar *calendar.Store
-	config   ServerConfig
+	sessions     *session.Store
+	settings     *settings.Store
+	contacts     *contacts.Store
+	calendar     *calendar.Store
+	config       ServerConfig
+	folderCache  *folderCache
 }
 
 // requireAuth is middleware that checks for a valid session cookie and, for
@@ -162,19 +165,46 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) listFolders(w http.ResponseWriter, r *http.Request) {
 	sess := h.sessionFrom(r)
-	c, err := imapConnect(sess)
+	key := cacheKey(sess.Username, sess.IMAPHost)
+
+	// Serve cached data immediately if available.
+	if cached, ok := h.folderCache.get(key); ok {
+		writeJSON(w, http.StatusOK, cached)
+		// Refresh in the background if the entry is stale.
+		if h.folderCache.stale(key) && h.folderCache.markRefreshing(key) {
+			go h.refreshFolderCache(sess.IMAPHost, sess.IMAPPort, sess.Username, sess.Password, key)
+		}
+		return
+	}
+
+	// No cache yet — fetch synchronously so the first load has real data.
+	folders, err := h.fetchAndCacheFolders(sess.IMAPHost, sess.IMAPPort, sess.Username, sess.Password, key)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
 		return
 	}
-	defer c.Close()
+	writeJSON(w, http.StatusOK, folders)
+}
 
+func (h *handler) fetchAndCacheFolders(imapHost string, imapPort int, username, password, key string) ([]imap.Folder, error) {
+	c, err := imapConnect(&session.Session{
+		IMAPHost: imapHost, IMAPPort: imapPort,
+		Username: username, Password: password,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
 	folders, err := c.ListFolders()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
-		return
+		return nil, err
 	}
-	writeJSON(w, http.StatusOK, folders)
+	h.folderCache.set(key, folders)
+	return folders, nil
+}
+
+func (h *handler) refreshFolderCache(imapHost string, imapPort int, username, password, key string) {
+	h.fetchAndCacheFolders(imapHost, imapPort, username, password, key) //nolint:errcheck
 }
 
 func (h *handler) listMessages(w http.ResponseWriter, r *http.Request) {
@@ -627,6 +657,8 @@ func (h *handler) events(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return // IDLE connection dropped
 			}
+			// Invalidate folder cache so unseen counts refresh on next fetch.
+			h.folderCache.invalidate(cacheKey(sess.Username, sess.IMAPHost))
 			data, _ := json.Marshal(ev)
 			fmt.Fprintf(w, "event: mailbox\ndata: %s\n\n", data)
 			flusher.Flush()

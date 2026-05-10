@@ -12,7 +12,7 @@ import (
 // NewRouter wires all HTTP routes and returns the root handler.
 func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsStore *contacts.Store, calendarStore *calendar.Store, cfg ServerConfig) http.Handler {
 	mux := http.NewServeMux()
-	h := &handler{sessions: sessions, settings: settingsStore, contacts: contactsStore, calendar: calendarStore, config: cfg}
+	h := &handler{sessions: sessions, settings: settingsStore, contacts: contactsStore, calendar: calendarStore, config: cfg, folderCache: newFolderCache(cfg.FolderCacheTTL)}
 
 	// Public
 	mux.HandleFunc("GET /api/config", h.getConfig)

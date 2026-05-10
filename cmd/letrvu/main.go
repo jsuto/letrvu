@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/jsuto/letrvu/internal/api"
@@ -55,11 +56,12 @@ func main() {
 
 	// Server-level IMAP/SMTP defaults (pre-fill login form via /api/config).
 	cfg := api.ServerConfig{
-		IMAPHost:      envOr("IMAP_HOST", ""),
-		IMAPPort:      envInt("IMAP_PORT", 993),
-		SMTPHost:      envOr("SMTP_HOST", ""),
-		SMTPPort:      envInt("SMTP_PORT", 587),
-		SecureCookies: envBool("SECURE_COOKIES", false),
+		IMAPHost:       envOr("IMAP_HOST", ""),
+		IMAPPort:       envInt("IMAP_PORT", 993),
+		SMTPHost:       envOr("SMTP_HOST", ""),
+		SMTPPort:       envInt("SMTP_PORT", 587),
+		SecureCookies:  envBool("SECURE_COOKIES", false),
+		FolderCacheTTL: envDuration("FOLDER_CACHE_TTL", 2*time.Minute),
 	}
 
 	handler := api.NewRouter(sessions, settingsStore, contactsStore, calendarStore, cfg)
@@ -123,4 +125,17 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		log.Printf("WARNING: invalid %s=%q, using default %s", key, v, fallback)
+		return fallback
+	}
+	return d
 }
