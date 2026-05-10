@@ -146,6 +146,10 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] iCal import/export
 - [x] Email invite detection ("Add to calendar" button)
 - [X] Signature insertion in compose
+- [ ] Save sent messages to Sent folder (IMAP APPEND)
+- [ ] Draft saving (IMAP APPEND to Drafts)
+- [ ] Reply-all
+- [ ] IMAP folder subscription handling
 - [ ] Calendar recurring events (RRULE)
 - [ ] Calendar outgoing invites (attach iCal to composed email)
 - [ ] Multi-account support
@@ -153,7 +157,6 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [X] Show message source
 - [X] Flag messages
 - [X] Multiple identities
-- [ ] IMAP folder subscription handling
 
 ## License
 
