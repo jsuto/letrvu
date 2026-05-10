@@ -15,7 +15,7 @@
 
 ---
 
-**letrvu** (from French *lettre vue* — "letter seen") is a lightweight, modern webmail client that connects to any standard IMAP/SMTP server. No bundled mail server, no PHP, no database required.
+**letrvu** ("letter view") is a lightweight, modern webmail client that connects to any standard IMAP/SMTP server. No bundled mail server, no PHP, no database required.
 
 ## Features
 
