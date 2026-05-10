@@ -70,13 +70,18 @@
       </div>
 
       <!-- HTML email rendered in a sandboxed iframe to prevent XSS.
-           allow-popups is required so target="_blank" links can open in a new tab. -->
+           allow-popups: target="_blank" links open in a new tab.
+           allow-same-origin: lets the parent read scrollHeight to auto-size
+           the iframe so the outer pane scrolls instead of the iframe itself.
+           Scripts are still blocked (no allow-scripts). -->
       <iframe
         v-if="mail.currentMessage.html_body"
+        ref="iframeEl"
         class="body-frame"
-        sandbox="allow-popups"
+        sandbox="allow-popups allow-same-origin"
         :srcdoc="displayHtml"
         title="Message body"
+        @load="resizeIframe"
       />
       <pre v-else class="body-text">{{ mail.currentMessage.text_body }}</pre>
       <div v-if="mail.currentMessage.attachments?.length" class="attachments">
@@ -119,6 +124,7 @@ const processedHtml = ref(null)
 const sourceOpen = ref(false)
 const sourceText = ref('')
 const sourceCopied = ref(false)
+const iframeEl = ref(null)
 
 // Placeholder: grey box with image icon, sized to replace the original image
 const PLACEHOLDER_SRC =
@@ -261,6 +267,21 @@ const displayHtml = computed(() => {
   return processHtml(msg?.html_body ?? '', msg?.inline_images, false).html
 })
 
+// Resize the iframe to match its content height so the outer pane scrolls
+// rather than the iframe itself. Requires allow-same-origin in the sandbox.
+function resizeIframe() {
+  const frame = iframeEl.value
+  if (!frame) return
+  const doc = frame.contentDocument
+  if (!doc) return
+  frame.style.height = doc.documentElement.scrollHeight + 'px'
+}
+
+// Reset iframe height when content changes so the @load event fires fresh.
+watch(displayHtml, () => {
+  if (iframeEl.value) iframeEl.value.style.height = ''
+})
+
 const otherFolders = computed(() =>
   mail.folders.filter(f => f.name !== mail.currentFolder)
 )
@@ -392,7 +413,7 @@ async function saveContact() {
   color: var(--color-text-muted);
   font-size: 13px;
 }
-.message { padding: 2rem; max-width: 780px; margin: 0 auto; }
+.message { padding: 2rem; max-width: 80%; margin: 0 auto; }
 .header { margin-bottom: 1.5rem; }
 h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 .meta { font-size: 13px; color: var(--color-text-muted); margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; }
@@ -492,10 +513,11 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 .invite-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .body-frame {
   width: 100%;
-  min-height: 400px;
+  min-height: 200px;
   border: 0.5px solid var(--color-border);
   border-radius: 8px;
   background: white;
+  display: block;
 }
 .body-text {
   white-space: pre-wrap;
