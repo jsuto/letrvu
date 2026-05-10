@@ -281,6 +281,40 @@ func (h *handler) markRead(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (h *handler) moveMessage(w http.ResponseWriter, r *http.Request) {
+	folder, err := url.PathUnescape(r.PathValue("folder"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid folder name"))
+		return
+	}
+	uidVal, err := strconv.ParseUint(r.PathValue("uid"), 10, 32)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid uid"))
+		return
+	}
+	var body struct {
+		Dest string `json:"dest"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Dest == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("dest folder required"))
+		return
+	}
+
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+
+	if err := c.MoveMessage(folder, uint32(uidVal), body.Dest); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		To      []string `json:"to"`

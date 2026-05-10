@@ -73,6 +73,17 @@ export const useMailStore = defineStore('mail', () => {
     if (msg) msg.read = read
   }
 
+  async function moveMessage(folder, uid, dest) {
+    const res = await fetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dest }),
+    })
+    if (!res.ok) throw new Error('Move failed')
+    messages.value = messages.value.filter(m => m.uid !== uid)
+    if (currentMessage.value?.uid === uid) currentMessage.value = null
+  }
+
   async function sendMessage(payload) {
     const res = await fetch('/api/send', {
       method: 'POST',
@@ -95,6 +106,7 @@ export const useMailStore = defineStore('mail', () => {
     searchMessages,
     fetchMessage,
     deleteMessage,
+    moveMessage,
     markRead,
     sendMessage,
   }

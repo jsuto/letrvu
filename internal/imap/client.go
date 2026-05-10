@@ -419,6 +419,15 @@ func (c *Client) DeleteMessage(folder string, uid uint32) error {
 	return c.c.Expunge().Close()
 }
 
+// MoveMessage moves a message to another folder using IMAP MOVE (RFC 6851).
+func (c *Client) MoveMessage(folder string, uid uint32, destFolder string) error {
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return fmt.Errorf("select %q: %w", folder, err)
+	}
+	_, err := c.c.Move(goimap.UIDSetNum(goimap.UID(uid)), destFolder).Wait()
+	return err
+}
+
 // MarkRead sets or clears the \Seen flag on a message.
 func (c *Client) MarkRead(folder string, uid uint32, read bool) error {
 	if _, err := c.c.Select(folder, nil).Wait(); err != nil {

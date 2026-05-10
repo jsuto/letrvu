@@ -14,6 +14,16 @@
         <div class="actions">
           <button @click="reply">Reply</button>
           <button @click="forward">Forward</button>
+          <div class="move-wrap" ref="moveWrapEl">
+            <button @click="moveOpen = !moveOpen">Move to…</button>
+            <ul v-if="moveOpen" class="move-dropdown">
+              <li
+                v-for="f in otherFolders"
+                :key="f.name"
+                @click="moveTo(f.name)"
+              >{{ f.name }}</li>
+            </ul>
+          </div>
           <button @click="remove" class="danger">Delete</button>
         </div>
       </div>
@@ -52,7 +62,7 @@
 </template>
 
 <script setup>
-import { inject, ref, watch } from 'vue'
+import { inject, ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useMailStore } from '../stores/mail'
 import { useContactsStore } from '../stores/contacts'
 import { useCalendarStore } from '../stores/calendar'
@@ -64,6 +74,18 @@ const compose = inject('compose')
 
 const inviteAdding = ref(false)
 const inviteAdded = ref(false)
+const moveOpen = ref(false)
+const moveWrapEl = ref(null)
+
+const otherFolders = computed(() =>
+  mail.folders.filter(f => f.name !== mail.currentFolder)
+)
+
+function onDocClick(e) {
+  if (moveWrapEl.value && !moveWrapEl.value.contains(e.target)) moveOpen.value = false
+}
+onMounted(() => document.addEventListener('click', onDocClick))
+onUnmounted(() => document.removeEventListener('click', onDocClick))
 
 // Reset invite state when message changes
 watch(() => mail.currentMessage?.uid, () => { inviteAdded.value = false })
@@ -121,6 +143,13 @@ async function addToCalendar() {
   }
 }
 
+async function moveTo(dest) {
+  moveOpen.value = false
+  const msg = mail.currentMessage
+  if (!msg) return
+  await mail.moveMessage(mail.currentFolder, msg.uid, dest)
+}
+
 async function saveContact() {
   const msg = mail.currentMessage
   if (!msg) return
@@ -175,6 +204,30 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 }
 .actions button:hover { background: var(--color-bg); }
 .actions button.danger { color: #c0392b; border-color: #f5c6c6; }
+.move-wrap { position: relative; }
+.move-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  min-width: 160px;
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.move-dropdown li {
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.move-dropdown li:hover { background: var(--color-teal-light); }
 .invite-banner {
   display: flex;
   align-items: center;

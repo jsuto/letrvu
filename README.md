@@ -137,7 +137,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] Calendar recurring events (RRULE)
 - [ ] Calendar outgoing invites (attach iCal to composed email)
 - [ ] Multi-account support
-- [ ] Move messages between folders
+- [X] Move messages between folders
 
 ## License
 

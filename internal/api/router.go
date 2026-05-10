@@ -30,6 +30,7 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("DELETE /api/folders/{folder}/messages/{uid}", h.requireAuth(h.deleteMessage))
 	mux.HandleFunc("PATCH /api/folders/{folder}/messages/{uid}/read", h.requireAuth(h.markRead))
 	mux.HandleFunc("GET /api/folders/{folder}/messages/{uid}/attachments/{index}", h.requireAuth(h.downloadAttachment))
+	mux.HandleFunc("POST /api/folders/{folder}/messages/{uid}/move", h.requireAuth(h.moveMessage))
 
 	// Compose
 	mux.HandleFunc("POST /api/send", h.requireAuth(h.sendMessage))
