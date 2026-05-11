@@ -148,7 +148,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [X] Signature insertion in compose
 - [x] Save sent messages to Sent folder (IMAP APPEND)
 - [x] Draft saving (IMAP APPEND to Drafts)
-- [ ] Reply-all
+- [x] Reply-all
 - [x] IMAP folder subscription handling
 - [ ] Calendar recurring events (RRULE)
 - [ ] Calendar outgoing invites (attach iCal to composed email)

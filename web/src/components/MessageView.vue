@@ -15,7 +15,13 @@
         </div>
         <div class="actions">
           <button v-if="isDraftsFolder" @click="editDraft" class="edit-draft-btn">Edit Draft</button>
-          <button v-if="!isDraftsFolder" @click="reply">Reply</button>
+          <div v-if="!isDraftsFolder" class="reply-wrap" ref="replyWrapEl">
+            <button @click="replyMenuOpen = !replyMenuOpen">Reply ▾</button>
+            <ul v-if="replyMenuOpen" class="reply-dropdown">
+              <li @click="reply">Reply</li>
+              <li @click="replyAll">Reply All</li>
+            </ul>
+          </div>
           <div v-if="!isDraftsFolder" class="forward-wrap" ref="forwardWrapEl">
             <button @click="forwardMenuOpen = !forwardMenuOpen">Forward ▾</button>
             <ul v-if="forwardMenuOpen" class="forward-dropdown">
@@ -122,6 +128,7 @@ import { useMailStore } from '../stores/mail'
 import { useContactsStore } from '../stores/contacts'
 import { useCalendarStore } from '../stores/calendar'
 import { useSettingsStore } from '../stores/settings'
+import { extractEmail, buildReplyAllCc } from '../utils/mail.js'
 
 const mail = useMailStore()
 const contacts = useContactsStore()
@@ -133,6 +140,8 @@ const inviteAdding = ref(false)
 const inviteAdded = ref(false)
 const moveOpen = ref(false)
 const moveWrapEl = ref(null)
+const replyMenuOpen = ref(false)
+const replyWrapEl = ref(null)
 const forwardMenuOpen = ref(false)
 const forwardWrapEl = ref(null)
 const showRemoteImages = ref(false)
@@ -377,6 +386,7 @@ const isUnverified = computed(() => {
 
 function onDocClick(e) {
   if (moveWrapEl.value && !moveWrapEl.value.contains(e.target)) moveOpen.value = false
+  if (replyWrapEl.value && !replyWrapEl.value.contains(e.target)) replyMenuOpen.value = false
   if (forwardWrapEl.value && !forwardWrapEl.value.contains(e.target)) forwardMenuOpen.value = false
 }
 onMounted(() => document.addEventListener('click', onDocClick))
@@ -424,6 +434,7 @@ async function editDraft() {
 }
 
 function reply() {
+  replyMenuOpen.value = false
   const msg = mail.currentMessage
   if (!msg) return
 
@@ -450,6 +461,35 @@ function reply() {
     subject: msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
     body: `\n\nOn ${date}, ${msg.from} wrote:\n${quoted}`,
     // Pass original recipients so ComposeModal can pick the matching identity.
+    _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
+  })
+}
+
+function replyAll() {
+  replyMenuOpen.value = false
+  const msg = mail.currentMessage
+  if (!msg) return
+
+  let bodyText = msg.text_body || ''
+  if (!bodyText && msg.html_body) {
+    const tmp = document.createElement('div')
+    tmp.innerHTML = msg.html_body
+    for (const el of tmp.querySelectorAll('style, script, head')) el.remove()
+    bodyText = tmp.innerText.replace(/\n{3,}/g, '\n\n').trim()
+  }
+
+  const date = msg.date ? new Date(msg.date).toLocaleString() : ''
+  const quoted = bodyText.split('\n').map(line => `> ${line}`).join('\n')
+  const replyTo = msg.reply_to || msg.from
+
+  const ownEmails = settings.fromOptions.map(opt => opt.email)
+  const cc = buildReplyAllCc(msg.to, msg.cc, replyTo, ownEmails)
+
+  compose?.value?.open({
+    to: replyTo,
+    cc,
+    subject: msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
+    body: `\n\nOn ${date}, ${msg.from} wrote:\n${quoted}`,
     _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
   })
 }
@@ -638,8 +678,8 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 .actions button.danger { color: #c0392b; border-color: #f5c6c6; }
 .edit-draft-btn { color: var(--color-teal); border-color: var(--color-teal) !important; font-weight: 500; }
 .actions button.active { color: #e67e22; border-color: #f5c6a0; background: #fef9ec; }
-.move-wrap, .forward-wrap { position: relative; }
-.move-dropdown, .forward-dropdown {
+.move-wrap, .reply-wrap, .forward-wrap { position: relative; }
+.move-dropdown, .reply-dropdown, .forward-dropdown {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
@@ -655,13 +695,13 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
   z-index: 50;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
-.move-dropdown li, .forward-dropdown li {
+.move-dropdown li, .reply-dropdown li, .forward-dropdown li {
   padding: 6px 14px;
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
 }
-.move-dropdown li:hover, .forward-dropdown li:hover { background: var(--color-teal-light); }
+.move-dropdown li:hover, .reply-dropdown li:hover, .forward-dropdown li:hover { background: var(--color-teal-light); }
 .invite-banner, .remote-images-banner, .phishing-banner, .auth-banner {
   display: flex;
   align-items: center;
