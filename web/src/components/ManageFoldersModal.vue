@@ -78,22 +78,20 @@
     </div>
   </div>
 
-  <!-- Delete confirmation -->
-  <div v-if="deleteTarget" class="overlay confirm-overlay" @click.self="deleteTarget = null">
-    <div class="confirm-modal">
-      <p>Delete <strong>{{ deleteTarget }}</strong> and all its messages?</p>
-      <p class="confirm-warn">This cannot be undone.</p>
-      <div class="confirm-actions">
-        <button @click="deleteTarget = null" class="cancel-btn">Cancel</button>
-        <button @click="doDelete" :disabled="!!busy" class="delete-btn">Delete</button>
-      </div>
-    </div>
-  </div>
+  <ConfirmDialog
+    :visible="!!deleteTarget"
+    :message="`Delete &quot;${deleteTarget}&quot; and all its messages?`"
+    :busy="!!busy"
+    @confirm="doDelete"
+    @cancel="deleteTarget = null"
+    @update:visible="v => { if (!v) deleteTarget = null }"
+  />
 </template>
 
 <script setup>
 import { ref, nextTick, onMounted, onUnmounted } from 'vue'
 import { useMailStore } from '../stores/mail'
+import ConfirmDialog from './ConfirmDialog.vue'
 
 const mail = useMailStore()
 const visible = ref(false)
@@ -233,7 +231,7 @@ async function doDelete() {
 
 function onKeydown(e) {
   if (e.key !== 'Escape') return
-  if (deleteTarget.value) { deleteTarget.value = null; return }
+  if (deleteTarget.value) return // ConfirmDialog handles this via capture
   if (renamingFolder.value) { cancelRename(); return }
   if (visible.value) close()
 }
@@ -378,36 +376,4 @@ defineExpose({ open, close })
 }
 .error { font-size: 12px; color: #c0392b; margin-bottom: 10px; }
 
-/* Delete confirmation */
-.confirm-overlay { z-index: 110; }
-.confirm-modal {
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
-  padding: 24px;
-  width: 340px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-}
-.confirm-modal p { font-size: 14px; margin: 0 0 8px; }
-.confirm-warn { font-size: 12px; color: #c0392b; }
-.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
-.cancel-btn {
-  padding: 7px 16px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  font-size: 13px;
-  cursor: pointer;
-}
-.cancel-btn:hover { background: var(--color-bg); }
-.delete-btn {
-  padding: 7px 16px;
-  background: #c0392b;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.delete-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

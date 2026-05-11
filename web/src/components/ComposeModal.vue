@@ -220,7 +220,7 @@ function onKeydown(e) { if (e.key === 'Escape' && visible.value) close() }
 onMounted(() => document.addEventListener('keydown', onKeydown))
 onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
-defineExpose({ open, close })
+defineExpose({ open, close, visible })
 </script>
 
 <style scoped>

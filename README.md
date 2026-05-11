@@ -164,8 +164,8 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [X] Attachment preview
 - [X] Brute force login protection
 - [x] Folder management (create / rename / delete IMAP folders)
-- [ ] Bulk actions (select multiple messages → delete / move / mark read)
-- [ ] Keyboard shortcuts (n/p next/prev, r reply, d delete, c compose)
+- [x] Bulk actions (select multiple messages → delete / move / mark read)
+- [x] Keyboard shortcuts (n/p next/prev, r reply, d delete, c compose)
 - [ ] HTML compose (rich text editor)
 - [ ] Conversation / thread view
 - [ ] Unread count in browser tab title
@@ -179,6 +179,19 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] Per-sender image trust ("always show images from this sender")
 - [ ] Print view
 - [ ] PGP / S-MIME encryption
+
+## Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| `c` | Compose new message |
+| `r` | Reply to current message |
+| `n` | Next message (older) |
+| `p` | Previous message (newer) |
+| `d` | Delete current message |
+| `Esc` | Close modal / overlay (compose, attachment preview, message source) |
+
+Shortcuts are disabled when focus is inside a text field or the compose window is open.
 
 ## License
 

@@ -139,6 +139,36 @@ export const useMailStore = defineStore('mail', () => {
     if (f) f.subscribed = false
   }
 
+  async function deleteMessages(folder, uids) {
+    const res = await apiFetch(`/api/folders/${encodeURIComponent(folder)}/messages/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uids }),
+    })
+    if (!res.ok) throw new Error('Delete failed')
+    const uidSet = new Set(uids)
+    messages.value = messages.value.filter(m => !uidSet.has(m.uid))
+    if (currentMessage.value && uidSet.has(currentMessage.value.uid)) currentMessage.value = null
+    selectedUids.value = new Set()
+  }
+
+  async function markReadMessages(folder, uids, read) {
+    const res = await apiFetch(`/api/folders/${encodeURIComponent(folder)}/messages/read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uids, read }),
+    })
+    if (!res.ok) throw new Error('Mark read failed')
+    const uidSet = new Set(uids)
+    for (const m of messages.value) {
+      if (uidSet.has(m.uid)) m.read = read
+    }
+    if (currentMessage.value && uidSet.has(currentMessage.value.uid)) {
+      currentMessage.value = { ...currentMessage.value, read }
+    }
+    selectedUids.value = new Set()
+  }
+
   async function createFolder(name) {
     const res = await apiFetch('/api/folders', {
       method: 'POST',
@@ -202,6 +232,8 @@ export const useMailStore = defineStore('mail', () => {
     markFlagged,
     sendMessage,
     saveDraft,
+    deleteMessages,
+    markReadMessages,
     subscribeFolder,
     unsubscribeFolder,
     createFolder,

@@ -1,5 +1,10 @@
 <template>
   <div class="message-view">
+  <ConfirmDialog
+    v-model:visible="confirmDeleteVisible"
+    :message="`Delete &quot;${mail.currentMessage?.subject || '(no subject)'}&quot;?`"
+    @confirm="doDelete"
+  />
     <div v-if="!mail.currentMessage" class="empty-state">
       <p>Select a message to read</p>
     </div>
@@ -48,7 +53,7 @@
               >{{ f.name }}</li>
             </ul>
           </div>
-          <button @click="remove" class="danger">Delete</button>
+          <button @click="confirmDeleteVisible = true" class="danger">Delete</button>
           <button @click="viewSource" title="View message source" class="source-btn">&lt;/&gt;</button>
         </div>
       </div>
@@ -158,6 +163,7 @@ import { useCalendarStore } from '../stores/calendar'
 import { useSettingsStore } from '../stores/settings'
 import { useDarkMode } from '../composables/useDarkMode'
 import { extractEmail, buildReplyAllCc, isPreviewable } from '../utils/mail.js'
+import ConfirmDialog from './ConfirmDialog.vue'
 
 const mail = useMailStore()
 const contacts = useContactsStore()
@@ -166,6 +172,7 @@ const settings = useSettingsStore()
 const compose = inject('compose')
 const { dark } = useDarkMode()
 
+const confirmDeleteVisible = ref(false)
 const inviteAdding = ref(false)
 const inviteAdded = ref(false)
 const moveOpen = ref(false)
@@ -614,10 +621,15 @@ async function forwardAsAttachment() {
   })
 }
 
-async function remove() {
+async function doDelete() {
   const msg = mail.currentMessage
   if (!msg) return
+  confirmDeleteVisible.value = false
   await mail.deleteMessage(mail.currentFolder, msg.uid)
+}
+
+function remove() {
+  if (mail.currentMessage) confirmDeleteVisible.value = true
 }
 
 async function addToCalendar() {
@@ -667,6 +679,8 @@ async function copySource() {
   sourceCopied.value = true
   setTimeout(() => { sourceCopied.value = false }, 2000)
 }
+
+defineExpose({ reply, remove })
 
 async function saveContact() {
   const msg = mail.currentMessage

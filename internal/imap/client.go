@@ -718,6 +718,45 @@ func (c *Client) DeleteMessage(folder string, uid uint32) error {
 	return c.c.Expunge().Close()
 }
 
+// DeleteMessages sets \Deleted on all given UIDs and expunges them in one pass.
+func (c *Client) DeleteMessages(folder string, uids []uint32) error {
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return fmt.Errorf("select %q: %w", folder, err)
+	}
+	var uidSet goimap.UIDSet
+	for _, uid := range uids {
+		uidSet.AddNum(goimap.UID(uid))
+	}
+	if err := c.c.Store(uidSet, &goimap.StoreFlags{
+		Op:     goimap.StoreFlagsAdd,
+		Silent: true,
+		Flags:  []goimap.Flag{goimap.FlagDeleted},
+	}, nil).Close(); err != nil {
+		return fmt.Errorf("mark deleted: %w", err)
+	}
+	return c.c.Expunge().Close()
+}
+
+// MarkReadMessages sets or clears \Seen on multiple UIDs in one STORE command.
+func (c *Client) MarkReadMessages(folder string, uids []uint32, read bool) error {
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return fmt.Errorf("select %q: %w", folder, err)
+	}
+	var uidSet goimap.UIDSet
+	for _, uid := range uids {
+		uidSet.AddNum(goimap.UID(uid))
+	}
+	op := goimap.StoreFlagsAdd
+	if !read {
+		op = goimap.StoreFlagsDel
+	}
+	return c.c.Store(uidSet, &goimap.StoreFlags{
+		Op:     op,
+		Silent: true,
+		Flags:  []goimap.Flag{goimap.FlagSeen},
+	}, nil).Close()
+}
+
 // MoveMessage moves a single message to another folder using IMAP MOVE (RFC 6851).
 func (c *Client) MoveMessage(folder string, uid uint32, destFolder string) error {
 	return c.MoveMessages(folder, []uint32{uid}, destFolder)

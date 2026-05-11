@@ -348,6 +348,105 @@ describe('mail store — saveDraft', () => {
   })
 })
 
+describe('mail store — deleteMessages (bulk)', () => {
+  it('POSTs uids to /messages/delete', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.deleteMessages('INBOX', [1, 2])
+    const [url, opts] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/folders/INBOX/messages/delete')
+    expect(opts.method).toBe('POST')
+    expect(JSON.parse(opts.body)).toEqual({ uids: [1, 2] })
+  })
+
+  it('removes all deleted messages from the list', async () => {
+    const store = useMailStore()
+    seedMessages(store)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.deleteMessages('INBOX', [1, 3])
+    expect(store.messages.map(m => m.uid)).toEqual([2])
+  })
+
+  it('clears currentMessage if it is among deleted', async () => {
+    const store = useMailStore()
+    seedMessages(store)
+    store.currentMessage = { uid: 2 }
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.deleteMessages('INBOX', [2])
+    expect(store.currentMessage).toBeNull()
+  })
+
+  it('clears selectedUids after delete', async () => {
+    const store = useMailStore()
+    seedMessages(store)
+    store.toggleSelect(1)
+    store.toggleSelect(2)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.deleteMessages('INBOX', [1, 2])
+    expect(store.selectedUids.size).toBe(0)
+  })
+
+  it('throws when server returns error', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: false })
+    await expect(store.deleteMessages('INBOX', [1])).rejects.toThrow()
+  })
+})
+
+describe('mail store — markReadMessages (bulk)', () => {
+  it('POSTs uids and read flag to /messages/read', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.markReadMessages('INBOX', [1, 2], true)
+    const [url, opts] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/folders/INBOX/messages/read')
+    expect(opts.method).toBe('POST')
+    expect(JSON.parse(opts.body)).toEqual({ uids: [1, 2], read: true })
+  })
+
+  it('updates read flag on all matching messages', async () => {
+    const store = useMailStore()
+    seedMessages(store)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.markReadMessages('INBOX', [1, 3], true)
+    expect(store.messages.find(m => m.uid === 1).read).toBe(true)
+    expect(store.messages.find(m => m.uid === 3).read).toBe(true)
+    expect(store.messages.find(m => m.uid === 2).read).toBe(true) // was already true
+  })
+
+  it('marks messages as unread', async () => {
+    const store = useMailStore()
+    seedMessages(store)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.markReadMessages('INBOX', [2], false)
+    expect(store.messages.find(m => m.uid === 2).read).toBe(false)
+  })
+
+  it('updates currentMessage when it is in the uid list', async () => {
+    const store = useMailStore()
+    seedMessages(store)
+    store.currentMessage = { uid: 1, read: false }
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.markReadMessages('INBOX', [1], true)
+    expect(store.currentMessage.read).toBe(true)
+  })
+
+  it('clears selectedUids after marking', async () => {
+    const store = useMailStore()
+    seedMessages(store)
+    store.toggleSelect(1)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.markReadMessages('INBOX', [1], true)
+    expect(store.selectedUids.size).toBe(0)
+  })
+
+  it('throws when server returns error', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: false })
+    await expect(store.markReadMessages('INBOX', [1], true)).rejects.toThrow()
+  })
+})
+
 describe('mail store — createFolder', () => {
   it('POSTs to /api/folders with the folder name', async () => {
     const store = useMailStore()

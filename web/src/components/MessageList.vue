@@ -1,5 +1,10 @@
 <template>
   <div class="message-list">
+  <ConfirmDialog
+    v-model:visible="confirmBulkDeleteVisible"
+    :message="`Delete ${mail.selectedUids.size} selected ${mail.selectedUids.size === 1 ? 'message' : 'messages'}?`"
+    @confirm="doBulkDelete"
+  />
     <div class="toolbar">
       <span class="folder-name">{{ mail.currentFolder }}</span>
       <form class="search-form" @submit.prevent="onSearch">
@@ -13,10 +18,22 @@
       </form>
     </div>
 
-    <!-- Selection bar -->
+    <!-- Bulk action bar -->
     <div v-if="mail.selectedUids.size > 0" class="selection-bar">
-      <span>{{ mail.selectedUids.size }} selected</span>
-      <button @click="mail.clearSelection()">Clear</button>
+      <label class="select-all-wrap" title="Select / deselect all on this page">
+        <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
+      </label>
+      <span class="sel-count">{{ mail.selectedUids.size }}</span>
+      <button class="icon-btn" @click="bulkMarkRead(true)" title="Mark as read">✓</button>
+      <button class="icon-btn" @click="bulkMarkRead(false)" title="Mark as unread">◯</button>
+      <div class="move-wrap" ref="bulkMoveWrapEl">
+        <button class="icon-btn" @click="bulkMoveOpen = !bulkMoveOpen" title="Move to…">⤷</button>
+        <ul v-if="bulkMoveOpen" class="bulk-move-dropdown">
+          <li v-for="f in otherFolders" :key="f.name" @click="bulkMove(f.name)">{{ f.name }}</li>
+        </ul>
+      </div>
+      <button class="icon-btn danger" @click="confirmBulkDeleteVisible = true" title="Delete">🗑</button>
+      <button class="icon-btn clear-btn" @click="mail.clearSelection()" title="Clear selection">✕</button>
     </div>
 
     <div v-if="mail.loading" class="state">Loading…</div>
@@ -63,14 +80,61 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useMailStore } from '../stores/mail'
+import ConfirmDialog from './ConfirmDialog.vue'
 
 const mail = useMailStore()
 const query = ref('')
+const confirmBulkDeleteVisible = ref(false)
 const searching = ref(false)
 const anchorIndex = ref(null)
+const bulkMoveOpen = ref(false)
+const bulkMoveWrapEl = ref(null)
 watch(() => mail.currentFolder, () => { anchorIndex.value = null })
+
+const otherFolders = computed(() =>
+  mail.folders.filter(f => f.name !== mail.currentFolder)
+)
+
+const allSelected = computed(() =>
+  mail.messages.length > 0 && mail.messages.every(m => mail.selectedUids.has(m.uid))
+)
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    mail.clearSelection()
+  } else {
+    mail.messages.forEach(m => {
+      if (!mail.selectedUids.has(m.uid)) mail.toggleSelect(m.uid)
+    })
+  }
+}
+
+async function bulkMarkRead(read) {
+  const uids = [...mail.selectedUids]
+  await mail.markReadMessages(mail.currentFolder, uids, read)
+}
+
+async function bulkMove(dest) {
+  bulkMoveOpen.value = false
+  const uids = [...mail.selectedUids]
+  await mail.moveMessagesTo(mail.currentFolder, uids, dest)
+}
+
+async function doBulkDelete() {
+  confirmBulkDeleteVisible.value = false
+  const uids = [...mail.selectedUids]
+  await mail.deleteMessages(mail.currentFolder, uids)
+}
+
+function onDocClick(e) {
+  if (bulkMoveWrapEl.value && !bulkMoveWrapEl.value.contains(e.target)) {
+    bulkMoveOpen.value = false
+  }
+}
+onMounted(() => document.addEventListener('click', onDocClick))
+onUnmounted(() => document.removeEventListener('click', onDocClick))
 
 function onRowClick(e, msg, i) {
   if (e.shiftKey && anchorIndex.value !== null) {
@@ -180,19 +244,55 @@ function formatDate(dateStr) {
 .selection-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 4px 14px;
+  gap: 6px;
+  padding: 5px 10px;
   background: var(--color-teal-light);
   border-bottom: 0.5px solid var(--color-teal);
   font-size: 12px;
+  flex-shrink: 0;
 }
+.select-all-wrap { display: flex; align-items: center; cursor: pointer; }
+.select-all-wrap input { accent-color: var(--color-teal); cursor: pointer; }
+.sel-count { color: var(--color-teal); font-weight: 500; white-space: nowrap; margin-right: 4px; }
 .selection-bar button {
-  background: none;
-  border: none;
+  padding: 3px 10px;
+  border: 0.5px solid var(--color-teal);
+  border-radius: 5px;
+  background: transparent;
   font-size: 12px;
   cursor: pointer;
   color: var(--color-teal);
+  white-space: nowrap;
 }
+.selection-bar button:hover { background: var(--color-teal); color: white; }
+.selection-bar button.danger { border-color: #e07070; color: #c0392b; }
+.selection-bar button.danger:hover { background: #c0392b; color: white; border-color: #c0392b; }
+.selection-bar button.clear-btn { border-color: transparent; color: var(--color-text-muted); margin-left: auto; }
+.selection-bar button.clear-btn:hover { background: transparent; color: var(--color-text); }
+.move-wrap { position: relative; }
+.bulk-move-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  min-width: 160px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.bulk-move-dropdown li {
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bulk-move-dropdown li:hover { background: var(--color-teal-light); }
 
 .state {
   padding: 2rem 1rem;
