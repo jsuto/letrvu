@@ -486,11 +486,26 @@ function attachmentUrl(att) {
   return `/api/folders/${folder}/messages/${uid}/attachments/${att.index}`
 }
 
+// --- Helpers used by reply / forward ---
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function plainToHtml(text) {
+  if (!text) return ''
+  return text.split('\n').map(l => `<p>${escHtml(l) || '<br>'}</p>`).join('')
+}
+
+function buildQuoteHtml(msg, date) {
+  const bodyHtml = msg.html_body || plainToHtml(msg.text_body || '')
+  return `<p>On ${escHtml(date)}, ${escHtml(msg.from || '')} wrote:</p><blockquote>${bodyHtml}</blockquote>`
+}
+
 async function editDraft() {
   const msg = mail.currentMessage
   if (!msg) return
 
-  // Extract the bare email address from "Name <email>" or plain "email".
   const from = msg.from || ''
   const angleMatch = from.match(/<(.+?)>/)
   const fromEmail = angleMatch ? angleMatch[1].trim() : from.trim()
@@ -503,7 +518,9 @@ async function editDraft() {
     to: (msg.to ?? []).join(', '),
     cc: (msg.cc ?? []).join(', '),
     subject: msg.subject ?? '',
-    body: msg.text_body ?? '',
+    // Prefer saved HTML body; fall back to plain text.
+    html: msg.html_body || undefined,
+    body: !msg.html_body ? (msg.text_body ?? '') : undefined,
   })
 }
 
@@ -512,29 +529,14 @@ function reply() {
   const msg = mail.currentMessage
   if (!msg) return
 
-  // Build quoted body from plain text, or fall back to stripping HTML.
-  let bodyText = msg.text_body || ''
-  if (!bodyText && msg.html_body) {
-    const tmp = document.createElement('div')
-    tmp.innerHTML = msg.html_body
-    for (const el of tmp.querySelectorAll('style, script, head')) el.remove()
-    bodyText = tmp.innerText.replace(/\n{3,}/g, '\n\n').trim()
-  }
-
   const date = msg.date ? new Date(msg.date).toLocaleString() : ''
-  const quoted = bodyText
-    .split('\n')
-    .map(line => `> ${line}`)
-    .join('\n')
-
-  // Reply-To takes precedence over From when present.
   const replyTo = msg.reply_to || msg.from
+  const quotedHtml = buildQuoteHtml(msg, date)
 
   compose?.value?.open({
     to: replyTo,
     subject: msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
-    body: `\n\nOn ${date}, ${msg.from} wrote:\n${quoted}`,
-    // Pass original recipients so ComposeModal can pick the matching identity.
+    html: quotedHtml,
     _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
     _inReplyTo: msg.message_id || '',
     _references: [msg.references, msg.message_id].filter(Boolean).join(' '),
@@ -546,17 +548,9 @@ function replyAll() {
   const msg = mail.currentMessage
   if (!msg) return
 
-  let bodyText = msg.text_body || ''
-  if (!bodyText && msg.html_body) {
-    const tmp = document.createElement('div')
-    tmp.innerHTML = msg.html_body
-    for (const el of tmp.querySelectorAll('style, script, head')) el.remove()
-    bodyText = tmp.innerText.replace(/\n{3,}/g, '\n\n').trim()
-  }
-
   const date = msg.date ? new Date(msg.date).toLocaleString() : ''
-  const quoted = bodyText.split('\n').map(line => `> ${line}`).join('\n')
   const replyTo = msg.reply_to || msg.from
+  const quotedHtml = buildQuoteHtml(msg, date)
 
   const ownEmails = settings.fromOptions.map(opt => opt.email)
   const cc = buildReplyAllCc(msg.to, msg.cc, replyTo, ownEmails)
@@ -565,7 +559,7 @@ function replyAll() {
     to: replyTo,
     cc,
     subject: msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
-    body: `\n\nOn ${date}, ${msg.from} wrote:\n${quoted}`,
+    html: quotedHtml,
     _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
     _inReplyTo: msg.message_id || '',
     _references: [msg.references, msg.message_id].filter(Boolean).join(' '),
@@ -577,29 +571,22 @@ function forwardInline() {
   const msg = mail.currentMessage
   if (!msg) return
 
-  // Prefer plain text body; fall back to stripping HTML tags for HTML-only emails.
-  let bodyText = msg.text_body || ''
-  if (!bodyText && msg.html_body) {
-    const tmp = document.createElement('div')
-    tmp.innerHTML = msg.html_body
-    for (const el of tmp.querySelectorAll('style, script, head')) el.remove()
-    bodyText = tmp.innerText.replace(/\n{3,}/g, '\n\n').trim()
-  }
-
   const date = msg.date ? new Date(msg.date).toLocaleString() : ''
   const to = Array.isArray(msg.to) ? msg.to.join(', ') : (msg.to || '')
 
-  const header = [
-    '--- Forwarded message ---',
-    `From: ${msg.from}`,
-    date ? `Date: ${date}` : '',
-    `Subject: ${msg.subject || ''}`,
-    to ? `To: ${to}` : '',
-  ].filter(Boolean).join('\n')
+  const headerHtml = [
+    '<p><strong>--- Forwarded message ---</strong></p>',
+    `<p><strong>From:</strong> ${escHtml(msg.from || '')}</p>`,
+    date ? `<p><strong>Date:</strong> ${escHtml(date)}</p>` : '',
+    `<p><strong>Subject:</strong> ${escHtml(msg.subject || '')}</p>`,
+    to ? `<p><strong>To:</strong> ${escHtml(to)}</p>` : '',
+  ].filter(Boolean).join('')
+
+  const bodyHtml = msg.html_body || plainToHtml(msg.text_body || '')
 
   compose?.value?.open({
     subject: `Fwd: ${msg.subject || ''}`,
-    body: `\n\n${header}\n\n${bodyText}`,
+    html: `<blockquote>${headerHtml}${bodyHtml}</blockquote>`,
   })
 }
 

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	netsmtp "net/smtp"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -228,12 +229,16 @@ func buildMIME(msg Message) string {
 // writeBodyPart writes the text/plain or multipart/alternative body section.
 func writeBodyPart(sb *strings.Builder, msg Message) {
 	if msg.HTML != "" {
+		text := msg.Text
+		if text == "" {
+			text = stripHTML(msg.HTML)
+		}
 		boundary := "letrvu-boundary-001"
 		sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q\r\n", boundary))
 		sb.WriteString("\r\n")
 		sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
 		sb.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
-		sb.WriteString(msg.Text)
+		sb.WriteString(text)
 		sb.WriteString("\r\n")
 		sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
 		sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
@@ -245,4 +250,31 @@ func writeBodyPart(sb *strings.Builder, msg Message) {
 		sb.WriteString("\r\n")
 		sb.WriteString(msg.Text)
 	}
+}
+
+// stripHTML converts HTML to a plain-text approximation for the text/plain
+// part of a multipart/alternative message.
+var (
+	reBlockEnd = strings.NewReplacer(
+		"</p>", "\n", "</div>", "\n", "</li>", "\n",
+		"</h1>", "\n", "</h2>", "\n", "</h3>", "\n",
+		"</h4>", "\n", "</h5>", "\n", "</h6>", "\n",
+		"</blockquote>", "\n",
+	)
+	reTags        = regexp.MustCompile(`<[^>]+>`)
+	reExcessLines = regexp.MustCompile(`\n{3,}`)
+	htmlEntities  = strings.NewReplacer(
+		"&amp;", "&", "&lt;", "<", "&gt;", ">",
+		"&quot;", `"`, "&#39;", "'", "&nbsp;", " ",
+	)
+)
+
+func stripHTML(html string) string {
+	s := reBlockEnd.Replace(html)
+	// br tags need a regex due to optional attributes and self-closing slash
+	s = regexp.MustCompile(`(?i)<br\s*/?>|<hr\s*/?>`).ReplaceAllString(s, "\n")
+	s = reTags.ReplaceAllString(s, "")
+	s = htmlEntities.Replace(s)
+	s = reExcessLines.ReplaceAllString(s, "\n\n")
+	return strings.TrimSpace(s)
 }

@@ -166,7 +166,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Folder management (create / rename / delete IMAP folders)
 - [x] Bulk actions (select multiple messages → delete / move / mark read)
 - [x] Keyboard shortcuts (n/p next/prev, r reply, d delete, c compose)
-- [ ] HTML compose (rich text editor)
+- [x] HTML compose (rich text editor)
 - [ ] Conversation / thread view
 - [ ] Unread count in browser tab title
 - [x] Desktop notifications (Browser Notification API + IMAP IDLE)
