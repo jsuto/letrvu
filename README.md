@@ -126,7 +126,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 | `SMTP_HOST` / `SMTP_PORT` | — / `587` | Pre-fill login form |
 | `IMAP_INSECURE_TLS` | `true` | Skip TLS cert verification (self-signed certs) |
 | `WEBMAIL_HOSTNAME` | `localhost` | Right-hand side of generated `Message-ID` headers |
-| `LOGIN_MAX_ATTEMPTS` | `5` | Failed logins before IP lockout |
+| `LOGIN_MAX_ATTEMPTS` | `5` | Failed logins per IP before lockout |
 | `LOGIN_WINDOW` | `1m` | Sliding window for counting failures |
 | `LOGIN_LOCKOUT` | `15m` | Lockout duration after max failures |
 

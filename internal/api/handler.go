@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -62,7 +61,7 @@ type handler struct {
 	calendar     *calendar.Store
 	config       ServerConfig
 	folderCache  *folderCache
-	loginLimiter *loginLimiter
+	loginLimiter *loginLimiter // per source IP
 }
 
 // clientIP returns the real client IP address. If TrustedProxy is configured
@@ -142,7 +141,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 
 	// Reject the request immediately if the IP is currently locked out.
 	if blocked, remaining := h.loginLimiter.blocked(ip); blocked {
-		retryAfter := int(math.Ceil(remaining.Seconds()))
+		retryAfter := int(remaining.Seconds()) + 1
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 		log.Printf("audit: login_blocked ip=%s retry_after=%ds", ip, retryAfter)
 		writeJSON(w, http.StatusTooManyRequests, errorResp("too many failed login attempts, try again later"))
