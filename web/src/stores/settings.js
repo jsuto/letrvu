@@ -60,5 +60,8 @@ export const useSettingsStore = defineStore('settings', () => {
     return isNaN(v) ? 120 : v
   })
 
-  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval }
+  // Whether the user has opted into desktop notifications.
+  const notificationsEnabled = computed(() => settings.value.notifications_enabled === 'true')
+
+  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled }
 })

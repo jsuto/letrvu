@@ -28,18 +28,51 @@ export function useMailEvents() {
     }
   }
 
+  function canNotify() {
+    return (
+      settings.notificationsEnabled &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'granted'
+    )
+  }
+
+  function fireNotification(msg) {
+    const n = new Notification(msg.subject || '(no subject)', {
+      body: msg.from || '',
+      tag: `letrvu-${msg.uid}`,
+    })
+    n.onclick = () => window.focus()
+  }
+
   onMounted(() => {
     es = new EventSource('/api/events')
 
-    es.addEventListener('mailbox', (e) => {
+    es.addEventListener('mailbox', async (e) => {
       const data = JSON.parse(e.data || '{}')
       const folder = data.folder || mail.currentFolder
-      if (folder === mail.currentFolder) {
-        mail.fetchMessages(mail.currentFolder)
-      }
-      // Update folder unread count if folders are loaded
+
+      // Update folder unread count
       const f = mail.folders.find(f => f.name === folder)
       if (f && data.unseen != null) f.unseen = data.unseen
+
+      if (folder === mail.currentFolder) {
+        if (folder === 'INBOX' && canNotify()) {
+          // Capture known UIDs, fetch, then notify for anything new.
+          const knownUids = new Set(mail.messages.map(m => m.uid))
+          await mail.fetchMessages('INBOX')
+          for (const msg of mail.messages) {
+            if (!knownUids.has(msg.uid)) fireNotification(msg)
+          }
+        } else {
+          mail.fetchMessages(mail.currentFolder)
+        }
+      } else if (folder === 'INBOX' && canNotify()) {
+        // New mail in INBOX but user is viewing another folder — generic notification.
+        new Notification('New mail', {
+          body: 'You have new messages in INBOX',
+          tag: 'letrvu-inbox-generic',
+        }).onclick = () => window.focus()
+      }
     })
 
     es.onerror = () => {

@@ -26,6 +26,21 @@
           </select>
         </label>
 
+        <div class="section-title">Notifications</div>
+        <div class="notif-row">
+          <span class="notif-label">Desktop notifications</span>
+          <template v-if="notifPermission === 'denied'">
+            <span class="notif-status blocked">Blocked — enable in browser settings</span>
+          </template>
+          <template v-else-if="settings.notificationsEnabled && notifPermission === 'granted'">
+            <span class="notif-status on">On ✓</span>
+            <button @click="disableNotifications" class="notif-btn">Disable</button>
+          </template>
+          <template v-else>
+            <button @click="enableNotifications" class="notif-btn">Enable</button>
+          </template>
+        </div>
+
         <div class="section-title">Identities (From: addresses)</div>
         <div class="identity-list">
           <div v-for="(id, i) in form.identities" :key="i" class="identity-row">
@@ -55,6 +70,7 @@ const visible = ref(false)
 const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
+const notifPermission = ref(typeof Notification !== 'undefined' ? Notification.permission : 'denied')
 
 const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120 })
 
@@ -64,6 +80,7 @@ async function open() {
   form.signature = settings.settings.signature ?? ''
   form.identities = settings.identities.map(id => ({ ...id }))
   form.poll_interval = settings.pollInterval
+  notifPermission.value = typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   saved.value = false
   error.value = ''
   visible.value = true
@@ -71,6 +88,18 @@ async function open() {
 
 function close() {
   visible.value = false
+}
+
+async function enableNotifications() {
+  const result = await Notification.requestPermission()
+  notifPermission.value = result
+  if (result === 'granted') {
+    await settings.saveSettings({ notifications_enabled: 'true' })
+  }
+}
+
+async function disableNotifications() {
+  await settings.saveSettings({ notifications_enabled: 'false' })
 }
 
 function addIdentity() {
@@ -246,4 +275,25 @@ textarea {
 }
 .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .error { font-size: 12px; color: #c0392b; }
+.notif-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.notif-label { color: var(--color-text); flex: 1; }
+.notif-status { font-size: 12px; }
+.notif-status.on { color: var(--color-teal); font-weight: 500; }
+.notif-status.blocked { color: var(--color-text-muted); }
+.notif-btn {
+  padding: 5px 12px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.notif-btn:hover { border-color: var(--color-teal); color: var(--color-teal); }
 </style>

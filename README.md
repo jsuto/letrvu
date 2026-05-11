@@ -169,7 +169,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] HTML compose (rich text editor)
 - [ ] Conversation / thread view
 - [ ] Unread count in browser tab title
-- [ ] Desktop notifications (Browser Notification API + IMAP IDLE)
+- [x] Desktop notifications (Browser Notification API + IMAP IDLE)
 - [ ] Mobile-responsive layout
 - [ ] Mark as spam (move to Junk folder)
 - [ ] Cross-folder search
