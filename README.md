@@ -163,6 +163,22 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [X] Multiple identities
 - [X] Attachment preview
 - [X] Brute force login protection
+- [ ] Folder management (create / rename / delete IMAP folders)
+- [ ] Bulk actions (select multiple messages → delete / move / mark read)
+- [ ] Keyboard shortcuts (n/p next/prev, r reply, d delete, c compose)
+- [ ] HTML compose (rich text editor)
+- [ ] Conversation / thread view
+- [ ] Unread count in browser tab title
+- [ ] Desktop notifications (Browser Notification API + IMAP IDLE)
+- [ ] Mobile-responsive layout
+- [ ] Mark as spam (move to Junk folder)
+- [ ] Cross-folder search
+- [ ] Undo send (configurable delay before SMTP submission)
+- [ ] Vacation / autoresponder (Sieve)
+- [ ] Contact groups / distribution lists
+- [ ] Per-sender image trust ("always show images from this sender")
+- [ ] Print view
+- [ ] PGP / S-MIME encryption
 
 ## License
 
