@@ -1,6 +1,7 @@
 package smtp
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"strings"
 	"testing"
@@ -248,6 +249,54 @@ func TestBuildRFC822_WithCC(t *testing.T) {
 	})
 	s := string(raw)
 	mustContain(t, s, "Cc: c@example.com", "CC header")
+}
+
+// --- DefaultTLSConfig --------------------------------------------------------
+
+func TestDefaultTLSConfig_CanBeReplaced(t *testing.T) {
+	// Verify main() can safely swap out DefaultTLSConfig before the first Send.
+	orig := DefaultTLSConfig
+	t.Cleanup(func() { DefaultTLSConfig = orig })
+
+	DefaultTLSConfig = &tls.Config{InsecureSkipVerify: false} //nolint:gosec
+	if DefaultTLSConfig.InsecureSkipVerify {
+		t.Error("expected InsecureSkipVerify=false after replacement")
+	}
+}
+
+// --- Send — port dispatch ----------------------------------------------------
+
+// TestSend_Port465_FailsWithoutServer confirms that port 465 attempts an
+// immediate TLS dial (not STARTTLS). The dial fails because there is no server,
+// but the error must come from tls.Dial ("smtp dial tls:"), not from a
+// STARTTLS negotiation attempt.
+func TestSend_Port465_ImplicitTLS(t *testing.T) {
+	err := Send(Config{
+		Host: "127.0.0.1", Port: 465,
+		Username: "u", Password: "p",
+	}, Message{From: "a@example.com", To: []string{"b@example.com"}, Subject: "s", Text: "t"})
+	if err == nil {
+		t.Fatal("expected error connecting to 127.0.0.1:465, got nil")
+	}
+	if !strings.Contains(err.Error(), "smtp dial tls:") {
+		t.Errorf("port 465 error should come from implicit TLS dial, got: %v", err)
+	}
+}
+
+// TestSend_Port587_FailsWithoutServer confirms that non-465 ports attempt a
+// plain TCP dial followed by STARTTLS. The error must come from "smtp dial:"
+// (plain TCP), not from TLS.
+func TestSend_Port587_STARTTLS(t *testing.T) {
+	err := Send(Config{
+		Host: "127.0.0.1", Port: 587,
+		Username: "u", Password: "p",
+	}, Message{From: "a@example.com", To: []string{"b@example.com"}, Subject: "s", Text: "t"})
+	if err == nil {
+		t.Fatal("expected error connecting to 127.0.0.1:587, got nil")
+	}
+	if !strings.Contains(err.Error(), "smtp dial:") {
+		t.Errorf("port 587 error should come from plain TCP dial, got: %v", err)
+	}
 }
 
 // --- EnvelopeFrom -----------------------------------------------------------

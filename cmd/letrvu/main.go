@@ -21,6 +21,7 @@ import (
 	"github.com/jsuto/letrvu/internal/imap"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
+	"github.com/jsuto/letrvu/internal/smtp"
 )
 
 func main() {
@@ -29,8 +30,12 @@ func main() {
 	addr := flag.String("addr", envOr("LISTEN_ADDR", ":8080"), "listen address")
 	flag.Parse()
 
+	insecureTLS := envBool("IMAP_INSECURE_TLS", true)
 	imap.DefaultTLSConfig = &tls.Config{
-		InsecureSkipVerify: envBool("IMAP_INSECURE_TLS", true), //nolint:gosec
+		InsecureSkipVerify: insecureTLS, //nolint:gosec
+	}
+	smtp.DefaultTLSConfig = &tls.Config{
+		InsecureSkipVerify: insecureTLS, //nolint:gosec
 	}
 
 	// Database

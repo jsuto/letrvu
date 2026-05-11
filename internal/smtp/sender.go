@@ -2,12 +2,19 @@
 package smtp
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
-	"net/smtp"
+	netsmtp "net/smtp"
 	"strings"
 	"time"
 )
+
+// DefaultTLSConfig is used for every outbound SMTP connection. main() may
+// replace it before the server starts (e.g. to toggle InsecureSkipVerify).
+var DefaultTLSConfig = &tls.Config{
+	InsecureSkipVerify: true, //nolint:gosec
+}
 
 // Config holds the SMTP server connection details.
 type Config struct {
@@ -41,23 +48,75 @@ type Message struct {
 	Attachments  []Attachment // optional file attachments
 }
 
-// Send delivers msg via SMTP STARTTLS with PLAIN auth.
+// Send delivers msg via SMTP. Port 465 uses implicit TLS (SMTPS — the TLS
+// handshake happens immediately on connect). All other ports use STARTTLS
+// (plain connection that upgrades to TLS after the initial greeting).
 func Send(cfg Config, msg Message) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
-	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
+
+	tlsCfg := DefaultTLSConfig.Clone()
+	tlsCfg.ServerName = cfg.Host
+
+	var c *netsmtp.Client
+	var err error
+
+	if cfg.Port == 465 {
+		// Implicit TLS (SMTPS): TLS wraps the connection from the first byte.
+		conn, dialErr := tls.Dial("tcp", addr, tlsCfg)
+		if dialErr != nil {
+			return fmt.Errorf("smtp dial tls: %w", dialErr)
+		}
+		c, err = netsmtp.NewClient(conn, cfg.Host)
+		if err != nil {
+			conn.Close()
+			return fmt.Errorf("smtp client: %w", err)
+		}
+	} else {
+		// STARTTLS: plain TCP first, then upgrade.
+		c, err = netsmtp.Dial(addr)
+		if err != nil {
+			return fmt.Errorf("smtp dial: %w", err)
+		}
+		if err = c.StartTLS(tlsCfg); err != nil {
+			c.Close()
+			return fmt.Errorf("smtp starttls: %w", err)
+		}
+	}
+	defer c.Close()
+
+	auth := netsmtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
+	if err = c.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
 
 	envelopeFrom := msg.EnvelopeFrom
 	if envelopeFrom == "" {
 		envelopeFrom = msg.From
 	}
 
-	recipients := append(msg.To, msg.CC...)
-	body := buildMIME(msg)
-
-	if err := smtp.SendMail(addr, auth, envelopeFrom, recipients, []byte(body)); err != nil {
-		return fmt.Errorf("smtp send: %w", err)
+	if err = c.Mail(envelopeFrom); err != nil {
+		return fmt.Errorf("smtp mail from: %w", err)
 	}
-	return nil
+
+	for _, rcpt := range append(msg.To, msg.CC...) {
+		if err = c.Rcpt(rcpt); err != nil {
+			return fmt.Errorf("smtp rcpt %s: %w", rcpt, err)
+		}
+	}
+
+	wc, err := c.Data()
+	if err != nil {
+		return fmt.Errorf("smtp data: %w", err)
+	}
+	if _, err = fmt.Fprint(wc, buildMIME(msg)); err != nil {
+		wc.Close()
+		return fmt.Errorf("smtp write: %w", err)
+	}
+	if err = wc.Close(); err != nil {
+		return fmt.Errorf("smtp data close: %w", err)
+	}
+
+	return c.Quit()
 }
 
 // BuildRFC822 returns the complete RFC 2822 message bytes, including a Date
