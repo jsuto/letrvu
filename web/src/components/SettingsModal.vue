@@ -15,6 +15,17 @@
           <textarea v-model="form.signature" placeholder="Your name&#10;your@email.com" />
         </label>
 
+        <label>
+          Poll interval
+          <select v-model.number="form.poll_interval" class="poll-select">
+            <option :value="0">Off (IMAP IDLE only)</option>
+            <option :value="60">1 minute</option>
+            <option :value="120">2 minutes</option>
+            <option :value="300">5 minutes</option>
+            <option :value="600">10 minutes</option>
+          </select>
+        </label>
+
         <div class="section-title">Identities (From: addresses)</div>
         <div class="identity-list">
           <div v-for="(id, i) in form.identities" :key="i" class="identity-row">
@@ -45,13 +56,14 @@ const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
 
-const form = reactive({ display_name: '', signature: '', identities: [] })
+const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120 })
 
 async function open() {
   if (!settings.loaded) await settings.fetchSettings()
   form.display_name = settings.settings.display_name ?? ''
   form.signature = settings.settings.signature ?? ''
   form.identities = settings.identities.map(id => ({ ...id }))
+  form.poll_interval = settings.pollInterval
   saved.value = false
   error.value = ''
   visible.value = true
@@ -78,6 +90,7 @@ async function save() {
       display_name: form.display_name,
       signature: form.signature,
       identities: JSON.stringify(validIdentities),
+      poll_interval: String(form.poll_interval),
     })
     saved.value = true
     setTimeout(() => { saved.value = false }, 2000)
@@ -153,7 +166,17 @@ input, textarea {
   color: var(--color-text);
   outline: none;
 }
-input:focus, textarea:focus { border-color: var(--color-teal); }
+input:focus, textarea:focus, select:focus { border-color: var(--color-teal); }
+.poll-select {
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--color-bg);
+  color: var(--color-text);
+  outline: none;
+}
 textarea {
   resize: vertical;
   min-height: 100px;

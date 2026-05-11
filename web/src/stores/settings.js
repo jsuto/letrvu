@@ -54,5 +54,11 @@ export const useSettingsStore = defineStore('settings', () => {
     return opts
   })
 
-  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains }
+  // Poll interval in seconds. 0 = disabled. Default 120 (2 minutes).
+  const pollInterval = computed(() => {
+    const v = parseInt(settings.value.poll_interval, 10)
+    return isNaN(v) ? 120 : v
+  })
+
+  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval }
 })
