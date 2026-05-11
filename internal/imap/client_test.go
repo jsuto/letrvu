@@ -182,6 +182,89 @@ func TestParseMIMEBody_CalendarInvite(t *testing.T) {
 	}
 }
 
+// --- pickSpecialFolder -------------------------------------------------------
+
+func makeMailbox(name string, attrs ...goimap.MailboxAttr) *goimap.ListData {
+	return &goimap.ListData{Mailbox: name, Attrs: attrs}
+}
+
+func TestPickSpecialFolder_ByAttribute(t *testing.T) {
+	mboxes := []*goimap.ListData{
+		makeMailbox("INBOX"),
+		makeMailbox("MyDrafts", goimap.MailboxAttrDrafts),
+		makeMailbox("MySent", goimap.MailboxAttrSent),
+	}
+	got := pickSpecialFolder(mboxes, goimap.MailboxAttrDrafts, []string{"drafts"})
+	if got != "MyDrafts" {
+		t.Errorf("want MyDrafts, got %q", got)
+	}
+}
+
+func TestPickSpecialFolder_SentAttribute(t *testing.T) {
+	mboxes := []*goimap.ListData{
+		makeMailbox("INBOX"),
+		makeMailbox("Sent Items", goimap.MailboxAttrSent),
+	}
+	got := pickSpecialFolder(mboxes, goimap.MailboxAttrSent, []string{"sent", "sent items", "sent mail"})
+	if got != "Sent Items" {
+		t.Errorf("want %q, got %q", "Sent Items", got)
+	}
+}
+
+func TestPickSpecialFolder_FallbackByName(t *testing.T) {
+	// Server reports no special-use attributes — fall back to name matching.
+	mboxes := []*goimap.ListData{
+		makeMailbox("INBOX"),
+		makeMailbox("Drafts"),
+		makeMailbox("Sent"),
+	}
+	got := pickSpecialFolder(mboxes, goimap.MailboxAttrDrafts, []string{"drafts", "draft"})
+	if got != "Drafts" {
+		t.Errorf("want Drafts, got %q", got)
+	}
+}
+
+func TestPickSpecialFolder_FallbackNameCaseInsensitive(t *testing.T) {
+	mboxes := []*goimap.ListData{
+		makeMailbox("SENT MAIL"),
+	}
+	got := pickSpecialFolder(mboxes, goimap.MailboxAttrSent, []string{"sent", "sent items", "sent mail"})
+	if got != "SENT MAIL" {
+		t.Errorf("want %q, got %q", "SENT MAIL", got)
+	}
+}
+
+func TestPickSpecialFolder_AttributeTakesPriorityOverName(t *testing.T) {
+	// "Outbox" has the \Sent attribute; "Sent" is a plain name match.
+	// The attribute winner should be returned.
+	mboxes := []*goimap.ListData{
+		makeMailbox("Sent"),
+		makeMailbox("Outbox", goimap.MailboxAttrSent),
+	}
+	got := pickSpecialFolder(mboxes, goimap.MailboxAttrSent, []string{"sent"})
+	if got != "Outbox" {
+		t.Errorf("want Outbox (attribute winner), got %q", got)
+	}
+}
+
+func TestPickSpecialFolder_NoneFound(t *testing.T) {
+	mboxes := []*goimap.ListData{
+		makeMailbox("INBOX"),
+		makeMailbox("Archive"),
+	}
+	got := pickSpecialFolder(mboxes, goimap.MailboxAttrDrafts, []string{"drafts", "draft"})
+	if got != "" {
+		t.Errorf("want empty string, got %q", got)
+	}
+}
+
+func TestPickSpecialFolder_EmptyMailboxList(t *testing.T) {
+	got := pickSpecialFolder(nil, goimap.MailboxAttrSent, []string{"sent"})
+	if got != "" {
+		t.Errorf("want empty string for empty list, got %q", got)
+	}
+}
+
 // --- bodyHasAttachments ------------------------------------------------------
 
 func TestBodyHasAttachments_SinglePlain(t *testing.T) {

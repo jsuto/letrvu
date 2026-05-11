@@ -563,12 +563,7 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := smtp.Send(smtp.Config{
-		Host:     sess.SMTPHost,
-		Port:     sess.SMTPPort,
-		Username: sess.Username,
-		Password: sess.Password,
-	}, smtp.Message{
+	smtpMsg := smtp.Message{
 		From:         fromHeader,
 		EnvelopeFrom: sess.Username, // authenticated address for bounce routing
 		To:           body.To,
@@ -577,7 +572,14 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		Text:         body.Text,
 		HTML:         body.HTML,
 		Attachments:  attachments,
-	}); err != nil {
+	}
+
+	if err := smtp.Send(smtp.Config{
+		Host:     sess.SMTPHost,
+		Port:     sess.SMTPPort,
+		Username: sess.Username,
+		Password: sess.Password,
+	}, smtpMsg); err != nil {
 		log.Printf("audit: send_failed user=%s ip=%s to=%d cc=%d attachments=%d err=%v",
 			sess.Username, h.clientIP(r), len(body.To), len(body.CC), len(attachments), err)
 		writeJSON(w, http.StatusBadGateway, errorResp(err.Error()))
@@ -585,6 +587,22 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("audit: send user=%s ip=%s to=%d cc=%d attachments=%d",
 		sess.Username, h.clientIP(r), len(body.To), len(body.CC), len(attachments))
+
+	// Best-effort: save a copy to the Sent folder via IMAP APPEND.
+	// A failure here is logged but does not affect the send response.
+	go func() {
+		raw := smtp.BuildRFC822(smtpMsg)
+		c, err := imapConnect(sess)
+		if err != nil {
+			log.Printf("warn: sent_copy_failed user=%s: imap connect: %v", sess.Username, err)
+			return
+		}
+		defer c.Close()
+		if err := c.SaveSent(raw); err != nil {
+			log.Printf("warn: sent_copy_failed user=%s: %v", sess.Username, err)
+		}
+	}()
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

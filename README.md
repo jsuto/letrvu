@@ -146,7 +146,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] iCal import/export
 - [x] Email invite detection ("Add to calendar" button)
 - [X] Signature insertion in compose
-- [ ] Save sent messages to Sent folder (IMAP APPEND)
+- [x] Save sent messages to Sent folder (IMAP APPEND)
 - [x] Draft saving (IMAP APPEND to Drafts)
 - [ ] Reply-all
 - [x] IMAP folder subscription handling
