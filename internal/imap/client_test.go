@@ -85,6 +85,35 @@ func multipartEmail(text, html string) []byte {
 		"--" + boundary + "--\r\n")
 }
 
+func TestParseMIMEBody_References(t *testing.T) {
+	raw := []byte("From: a@b.com\r\n" +
+		"To: b@a.com\r\n" +
+		"References: <msg1@example.com> <msg2@example.com>\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n" +
+		"\r\n" +
+		"body")
+
+	full := &MessageFull{}
+	if err := parseMIMEBody(raw, full); err != nil {
+		t.Fatalf("parseMIMEBody: %v", err)
+	}
+	want := "<msg1@example.com> <msg2@example.com>"
+	if full.References != want {
+		t.Errorf("References = %q, want %q", full.References, want)
+	}
+}
+
+func TestParseMIMEBody_ReferencesAbsent(t *testing.T) {
+	full := &MessageFull{}
+	if err := parseMIMEBody(plainTextEmail("hi", "body"), full); err != nil {
+		t.Fatalf("parseMIMEBody: %v", err)
+	}
+	if full.References != "" {
+		t.Errorf("References should be empty, got %q", full.References)
+	}
+}
+
 func TestParseMIMEBody_PlainText(t *testing.T) {
 	full := &MessageFull{}
 	if err := parseMIMEBody(plainTextEmail("hi", "Hello, world!"), full); err != nil {

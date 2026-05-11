@@ -524,6 +524,8 @@ function reply() {
     body: `\n\nOn ${date}, ${msg.from} wrote:\n${quoted}`,
     // Pass original recipients so ComposeModal can pick the matching identity.
     _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
+    _inReplyTo: msg.message_id || '',
+    _references: [msg.references, msg.message_id].filter(Boolean).join(' '),
   })
 }
 
@@ -553,6 +555,8 @@ function replyAll() {
     subject: msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
     body: `\n\nOn ${date}, ${msg.from} wrote:\n${quoted}`,
     _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
+    _inReplyTo: msg.message_id || '',
+    _references: [msg.references, msg.message_id].filter(Boolean).join(' '),
   })
 }
 

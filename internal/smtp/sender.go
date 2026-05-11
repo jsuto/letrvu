@@ -2,8 +2,10 @@
 package smtp
 
 import (
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	netsmtp "net/smtp"
 	"strings"
@@ -15,6 +17,11 @@ import (
 var DefaultTLSConfig = &tls.Config{
 	InsecureSkipVerify: true, //nolint:gosec
 }
+
+// Hostname is used as the right-hand side of generated Message-IDs.
+// Set it to the public hostname of the webmail server (e.g. "mail.example.com").
+// Defaults to "localhost" if not configured.
+var Hostname = "localhost"
 
 // Config holds the SMTP server connection details.
 type Config struct {
@@ -46,6 +53,14 @@ type Message struct {
 	Text         string       // plain text body
 	HTML         string       // optional HTML body; if set, sends multipart/alternative
 	Attachments  []Attachment // optional file attachments
+
+	// Threading / identification headers (RFC 2822).
+	// MessageID is used as-is if non-empty; otherwise one is auto-generated
+	// from Hostname. Callers should pre-generate it so the same ID can be
+	// stored in the Sent folder via IMAP APPEND.
+	MessageID  string
+	InReplyTo  string // Message-ID of the message being replied to
+	References string // space-separated chain of Message-IDs for thread tracking
 }
 
 // Send delivers msg via SMTP. Port 465 uses implicit TLS (SMTPS — the TLS
@@ -84,6 +99,11 @@ func Send(cfg Config, msg Message) error {
 	}
 	defer c.Close()
 
+	// Identify ourselves with a proper hostname instead of the default "localhost".
+	if err = c.Hello(Hostname); err != nil {
+		return fmt.Errorf("smtp ehlo: %w", err)
+	}
+
 	auth := netsmtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
 	if err = c.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
@@ -119,17 +139,43 @@ func Send(cfg Config, msg Message) error {
 	return c.Quit()
 }
 
-// BuildRFC822 returns the complete RFC 2822 message bytes, including a Date
-// header. It is used to save drafts via IMAP APPEND.
+// BuildRFC822 returns the complete RFC 2822 message bytes including all
+// headers (Date, Message-ID, X-Mailer, etc.). Used to save drafts and sent
+// copies via IMAP APPEND. Callers should pre-populate msg.MessageID so that
+// the stored copy matches what was handed to Send.
 func BuildRFC822(msg Message) []byte {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
-	sb.WriteString(buildMIME(msg))
-	return []byte(sb.String())
+	return []byte(buildMIME(msg))
+}
+
+// randomToken returns n random bytes encoded as lowercase hex.
+func randomToken(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
 }
 
 func buildMIME(msg Message) string {
 	var sb strings.Builder
+
+	// RFC 2822 §3.6: Date and From are required.
+	sb.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
+
+	// Message-ID: use the pre-generated one if present so Send and the Sent
+	// IMAP copy carry the same ID; otherwise auto-generate.
+	msgID := msg.MessageID
+	if msgID == "" {
+		msgID = fmt.Sprintf("<%d.%s@%s>", time.Now().UnixNano(), randomToken(8), Hostname)
+	}
+	sb.WriteString(fmt.Sprintf("Message-ID: %s\r\n", msgID))
+
+	if msg.InReplyTo != "" {
+		sb.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", msg.InReplyTo))
+	}
+	if msg.References != "" {
+		sb.WriteString(fmt.Sprintf("References: %s\r\n", msg.References))
+	}
 
 	sb.WriteString(fmt.Sprintf("From: %s\r\n", msg.From))
 	sb.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(msg.To, ", ")))
@@ -137,6 +183,7 @@ func buildMIME(msg Message) string {
 		sb.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(msg.CC, ", ")))
 	}
 	sb.WriteString(fmt.Sprintf("Subject: %s\r\n", msg.Subject))
+	sb.WriteString("X-Mailer: letrvu\r\n")
 	sb.WriteString("MIME-Version: 1.0\r\n")
 
 	if len(msg.Attachments) > 0 {

@@ -278,6 +278,11 @@ type MessageFull struct {
 	SPF   string `json:"spf,omitempty"`
 	DKIM  string `json:"dkim,omitempty"`
 	DMARC string `json:"dmarc,omitempty"`
+
+	// Threading headers — needed by the frontend to set In-Reply-To /
+	// References when the user replies to this message.
+	MessageID  string `json:"message_id,omitempty"`
+	References string `json:"references,omitempty"`
 }
 
 // GetMessage fetches the full content of a single message by UID.
@@ -315,6 +320,7 @@ func (c *Client) GetMessage(folder string, uid uint32) (*MessageFull, error) {
 	if buf.Envelope != nil {
 		full.Subject = buf.Envelope.Subject
 		full.Date = buf.Envelope.Date
+		full.MessageID = buf.Envelope.MessageID
 		if len(buf.Envelope.From) > 0 {
 			full.From = formatAddress(buf.Envelope.From[0])
 		}
@@ -446,6 +452,12 @@ func parseMIMEBody(raw []byte, full *MessageFull) error {
 	// the receiving MTA and cannot be spoofed by the sender.
 	rh := rawHeaders(raw)
 	debugf("uid=%d raw header keys: %v", full.UID, headerKeys(rh))
+
+	// References header (RFC 2822 threading).
+	if refs := rh["references"]; len(refs) > 0 {
+		full.References = strings.TrimSpace(refs[0])
+	}
+
 	for _, v := range rh["authentication-results"] {
 		debugf("uid=%d Authentication-Results value: %q", full.UID, v)
 		spf, dkim, dmarc := parseAuthResults(v)

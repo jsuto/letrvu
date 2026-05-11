@@ -523,6 +523,8 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		Subject   string   `json:"subject"`
 		Text      string   `json:"text"`
 		HTML      string   `json:"html"`
+		InReplyTo  string   `json:"in_reply_to,omitempty"`
+		References string   `json:"references,omitempty"`
 		Attachments []struct {
 			Filename    string `json:"filename"`
 			ContentType string `json:"content_type"`
@@ -563,15 +565,23 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Generate Message-ID here so the same value is used in both the SMTP
+	// DATA command and the IMAP APPEND to the Sent folder.
+	msgIDRnd, _ := randomHex(8)
+	msgID := fmt.Sprintf("<%d.%s@%s>", time.Now().UnixNano(), msgIDRnd, smtp.Hostname)
+
 	smtpMsg := smtp.Message{
 		From:         fromHeader,
-		EnvelopeFrom: sess.Username, // authenticated address for bounce routing
+		EnvelopeFrom: fromEmail, // use the selected From address for SPF alignment
 		To:           body.To,
 		CC:           body.CC,
 		Subject:      body.Subject,
 		Text:         body.Text,
 		HTML:         body.HTML,
 		Attachments:  attachments,
+		MessageID:    msgID,
+		InReplyTo:    body.InReplyTo,
+		References:   body.References,
 	}
 
 	if err := smtp.Send(smtp.Config{

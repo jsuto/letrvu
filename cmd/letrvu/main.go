@@ -37,6 +37,9 @@ func main() {
 	smtp.DefaultTLSConfig = &tls.Config{
 		InsecureSkipVerify: insecureTLS, //nolint:gosec
 	}
+	if h := os.Getenv("WEBMAIL_HOSTNAME"); h != "" {
+		smtp.Hostname = h
+	}
 
 	// Database
 	database, err := db.Open(

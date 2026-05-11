@@ -59,6 +59,9 @@ const form = reactive({ fromIndex: 0, to: '', cc: '', subject: '', body: '' })
 const attachments = ref([])
 // When resuming a draft, remember its location so we can delete it after send/save.
 const originalDraft = ref(null) // { folder, uid } | null
+// Threading headers carried through from the message being replied to.
+const inReplyTo = ref('')
+const references = ref('')
 
 // Auto-save draft after 30 s of inactivity while compose is open.
 let autoSaveTimer = null
@@ -139,8 +142,10 @@ async function open(prefill = {}) {
 
   // Signature goes between the user's typing area and any quoted text
   // (prefill.body carries forwarded content). Strip internal hint keys.
-  const { _originalRecipients: _r, _attachments: _a, _fromEmail: _fe, _noSignature: _ns, _draftFolder: _df, _draftUid: _du, ...rest } = prefill
+  const { _originalRecipients: _r, _attachments: _a, _fromEmail: _fe, _noSignature: _ns, _draftFolder: _df, _draftUid: _du, _inReplyTo: _irt, _references: _refs, ...rest } = prefill
   originalDraft.value = (_df && _du != null) ? { folder: _df, uid: _du } : null
+  inReplyTo.value = _irt || ''
+  references.value = _refs || ''
   Object.assign(form, {
     fromIndex,
     to: '',
@@ -174,6 +179,8 @@ function close() {
   draftSaved.value = false
   attachments.value = []
   originalDraft.value = null
+  inReplyTo.value = ''
+  references.value = ''
 }
 
 function removeAttachment(i) {
@@ -193,6 +200,8 @@ async function send() {
       subject: form.subject,
       text: form.body,
       attachments: attachments.value.length ? attachments.value : undefined,
+      in_reply_to: inReplyTo.value || undefined,
+      references: references.value || undefined,
     })
     // Message sent — remove the original draft so there's no stale copy.
     if (originalDraft.value) {

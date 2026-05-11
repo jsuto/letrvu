@@ -125,6 +125,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 | `IMAP_HOST` / `IMAP_PORT` | — / `993` | Pre-fill login form |
 | `SMTP_HOST` / `SMTP_PORT` | — / `587` | Pre-fill login form |
 | `IMAP_INSECURE_TLS` | `true` | Skip TLS cert verification (self-signed certs) |
+| `WEBMAIL_HOSTNAME` | `localhost` | Right-hand side of generated `Message-ID` headers |
 
 ## Roadmap
 
@@ -157,7 +158,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [X] Show message source
 - [X] Flag messages
 - [X] Multiple identities
-- [ ] Attachment preview
+- [X] Attachment preview
 - [ ] Brute force login protection
 
 ## License
