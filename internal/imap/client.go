@@ -76,9 +76,10 @@ func (c *Client) Close() error {
 
 // Folder is a mailbox folder.
 type Folder struct {
-	Name      string `json:"name"`
-	Delimiter string `json:"delimiter"`
-	Unseen    uint32 `json:"unseen"`
+	Name       string `json:"name"`
+	Delimiter  string `json:"delimiter"`
+	Unseen     uint32 `json:"unseen"`
+	Subscribed bool   `json:"subscribed"`
 }
 
 // folderPriority returns a sort key so well-known folders appear first.
@@ -99,12 +100,18 @@ func folderPriority(name string) int {
 	return 5
 }
 
-// ListFolders returns all subscribed mailbox folders with unseen counts,
-// sorted by well-known order then alphabetically.
+// ListFolders returns all mailbox folders with unseen counts and subscription
+// status, sorted by well-known order then alphabetically. The Subscribed field
+// is true when the server reports the \Subscribed attribute or when it is in
+// the subscribed set (LIST RETURN (SUBSCRIBED)).
 func (c *Client) ListFolders() ([]Folder, error) {
-	mailboxes, err := c.c.List("", "*", nil).Collect()
+	mailboxes, err := c.c.List("", "*", &goimap.ListOptions{ReturnSubscribed: true}).Collect()
 	if err != nil {
-		return nil, fmt.Errorf("list folders: %w", err)
+		// Retry without the RETURN extension in case the server doesn't support it.
+		mailboxes, err = c.c.List("", "*", nil).Collect()
+		if err != nil {
+			return nil, fmt.Errorf("list folders: %w", err)
+		}
 	}
 	folders := make([]Folder, 0, len(mailboxes))
 	for _, data := range mailboxes {
@@ -112,9 +119,17 @@ func (c *Client) ListFolders() ([]Folder, error) {
 		if data.Delim != 0 {
 			delim = string(data.Delim)
 		}
+		subscribed := false
+		for _, attr := range data.Attrs {
+			if strings.EqualFold(string(attr), string(goimap.MailboxAttrSubscribed)) {
+				subscribed = true
+				break
+			}
+		}
 		f := Folder{
-			Name:      data.Mailbox,
-			Delimiter: delim,
+			Name:       data.Mailbox,
+			Delimiter:  delim,
+			Subscribed: subscribed,
 		}
 		// Fetch unseen count via STATUS; ignore errors (best-effort).
 		if status, err := c.c.Status(data.Mailbox, &goimap.StatusOptions{NumUnseen: true}).Wait(); err == nil && status.NumUnseen != nil {
@@ -130,6 +145,22 @@ func (c *Client) ListFolders() ([]Folder, error) {
 		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 	})
 	return folders, nil
+}
+
+// Subscribe adds the named mailbox to the user's subscription list.
+func (c *Client) Subscribe(folder string) error {
+	if err := c.c.Subscribe(folder).Wait(); err != nil {
+		return fmt.Errorf("subscribe %q: %w", folder, err)
+	}
+	return nil
+}
+
+// Unsubscribe removes the named mailbox from the user's subscription list.
+func (c *Client) Unsubscribe(folder string) error {
+	if err := c.c.Unsubscribe(folder).Wait(); err != nil {
+		return fmt.Errorf("unsubscribe %q: %w", folder, err)
+	}
+	return nil
 }
 
 // Message is a lightweight summary used in folder listings.

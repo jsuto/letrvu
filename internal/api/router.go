@@ -23,6 +23,8 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 
 	// Folders
 	mux.HandleFunc("GET /api/folders", h.requireAuth(h.listFolders))
+	mux.HandleFunc("POST /api/folders/{folder}/subscribe", h.requireAuth(h.subscribeFolder))
+	mux.HandleFunc("DELETE /api/folders/{folder}/subscribe", h.requireAuth(h.unsubscribeFolder))
 
 	// Messages
 	mux.HandleFunc("GET /api/folders/{folder}/messages", h.requireAuth(h.listMessages))

@@ -125,6 +125,20 @@ export const useMailStore = defineStore('mail', () => {
     if (!res.ok) throw new Error('Send failed')
   }
 
+  async function subscribeFolder(folder) {
+    const res = await apiFetch(`/api/folders/${encodeURIComponent(folder)}/subscribe`, { method: 'POST' })
+    if (!res.ok) throw new Error('Subscribe failed')
+    const f = folders.value.find(f => f.name === folder)
+    if (f) f.subscribed = true
+  }
+
+  async function unsubscribeFolder(folder) {
+    const res = await apiFetch(`/api/folders/${encodeURIComponent(folder)}/subscribe`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Unsubscribe failed')
+    const f = folders.value.find(f => f.name === folder)
+    if (f) f.subscribed = false
+  }
+
   async function saveDraft(payload) {
     const res = await apiFetch('/api/draft', {
       method: 'POST',
@@ -156,5 +170,7 @@ export const useMailStore = defineStore('mail', () => {
     markFlagged,
     sendMessage,
     saveDraft,
+    subscribeFolder,
+    unsubscribeFolder,
   }
 })

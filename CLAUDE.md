@@ -72,3 +72,7 @@ Frontend (Vue 3 SPA)
 **Key dependencies:**
 - Go: `github.com/emersion/go-imap/v2`, `go-smtp`, `go-message`, `go-vcard`, `go-ical`, `modernc.org/sqlite`, `pgx/v5`
 - Frontend: Vue 3, Vue Router 4, Pinia, Vite 5
+
+## Tests
+
+Add both backend and frontend unit tests for every new feature.

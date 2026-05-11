@@ -6,9 +6,9 @@
     <button class="compose-btn" @click="compose?.open()">Compose</button>
     <RouterLink to="/contacts" class="nav-link">Contacts</RouterLink>
     <RouterLink to="/calendar" class="nav-link">Calendar</RouterLink>
-    <ul v-if="mail.folders.length">
+    <ul v-if="visibleFolders.length">
       <li
-        v-for="folder in mail.folders"
+        v-for="folder in visibleFolders"
         :key="folder.name"
         :class="{
           active: mail.currentFolder === folder.name,
@@ -25,6 +25,7 @@
       </li>
     </ul>
     <p v-else class="empty">Loading folders…</p>
+    <button class="manage-btn" @click="manageFoldersModal?.open()">Manage folders</button>
     <div class="bottom">
       <button class="icon-btn" :title="dark ? 'Switch to light mode' : 'Switch to dark mode'" @click="toggleDark">
         {{ dark ? '☀️' : '🌙' }}
@@ -34,15 +35,17 @@
     </div>
   </nav>
   <SettingsModal ref="settingsModal" />
+  <ManageFoldersModal ref="manageFoldersModal" />
 </template>
 
 <script setup>
-import { inject, onMounted, ref } from 'vue'
+import { inject, onMounted, ref, computed } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useMailStore } from '../stores/mail'
 import { useAuthStore } from '../stores/auth'
 import { useDarkMode } from '../composables/useDarkMode'
 import SettingsModal from './SettingsModal.vue'
+import ManageFoldersModal from './ManageFoldersModal.vue'
 
 const mail = useMailStore()
 const auth = useAuthStore()
@@ -51,6 +54,14 @@ const compose = inject('compose', null)
 const { dark, toggle: toggleDark } = useDarkMode()
 const dragOver = ref(null)
 const settingsModal = ref(null)
+const manageFoldersModal = ref(null)
+
+// Show only subscribed folders; fall back to all if the server doesn't report
+// subscription status (i.e. none are marked subscribed).
+const visibleFolders = computed(() => {
+  const subscribed = mail.folders.filter(f => f.subscribed)
+  return subscribed.length ? subscribed : mail.folders
+})
 
 onMounted(async () => {
   if (!mail.folders.length) {
@@ -149,6 +160,19 @@ li.drop-target .badge { background: white; color: var(--color-teal); }
   padding: 8px;
   flex: 1;
 }
+.manage-btn {
+  width: 100%;
+  padding: 5px 8px;
+  background: none;
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+  text-align: left;
+}
+.manage-btn:hover { background: var(--color-teal-light); color: var(--color-text); }
 .bottom {
   display: flex;
   align-items: center;

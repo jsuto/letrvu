@@ -588,6 +588,48 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (h *handler) subscribeFolder(w http.ResponseWriter, r *http.Request) {
+	folder, err := url.PathUnescape(r.PathValue("folder"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid folder name"))
+		return
+	}
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+	if err := c.Subscribe(folder); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	h.folderCache.invalidate(cacheKey(sess.Username, sess.IMAPHost))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *handler) unsubscribeFolder(w http.ResponseWriter, r *http.Request) {
+	folder, err := url.PathUnescape(r.PathValue("folder"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid folder name"))
+		return
+	}
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+	if err := c.Unsubscribe(folder); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	h.folderCache.invalidate(cacheKey(sess.Username, sess.IMAPHost))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (h *handler) saveDraft(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		FromName  string   `json:"from_name"`

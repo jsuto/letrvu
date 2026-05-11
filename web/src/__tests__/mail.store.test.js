@@ -230,6 +230,84 @@ describe('mail store — sendMessage', () => {
   })
 })
 
+describe('mail store — subscribeFolder / unsubscribeFolder', () => {
+  function seedFolders(store) {
+    store.folders = [
+      { name: 'INBOX', subscribed: true },
+      { name: 'Drafts', subscribed: true },
+      { name: 'OldProject', subscribed: false },
+    ]
+  }
+
+  it('subscribeFolder sets subscribed=true on the matching folder', async () => {
+    const store = useMailStore()
+    seedFolders(store)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.subscribeFolder('OldProject')
+    expect(store.folders.find(f => f.name === 'OldProject').subscribed).toBe(true)
+  })
+
+  it('unsubscribeFolder sets subscribed=false on the matching folder', async () => {
+    const store = useMailStore()
+    seedFolders(store)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.unsubscribeFolder('Drafts')
+    expect(store.folders.find(f => f.name === 'Drafts').subscribed).toBe(false)
+  })
+
+  it('subscribeFolder POSTs to /api/folders/{folder}/subscribe', async () => {
+    const store = useMailStore()
+    seedFolders(store)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.subscribeFolder('OldProject')
+    const [url, opts] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/folders/OldProject/subscribe')
+    expect(opts.method).toBe('POST')
+  })
+
+  it('unsubscribeFolder sends DELETE to /api/folders/{folder}/subscribe', async () => {
+    const store = useMailStore()
+    seedFolders(store)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.unsubscribeFolder('Drafts')
+    const [url, opts] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/folders/Drafts/subscribe')
+    expect(opts.method).toBe('DELETE')
+  })
+
+  it('subscribeFolder throws when server returns error', async () => {
+    const store = useMailStore()
+    seedFolders(store)
+    global.fetch.mockResolvedValue({ ok: false })
+    await expect(store.subscribeFolder('OldProject')).rejects.toThrow()
+  })
+
+  it('unsubscribeFolder throws when server returns error', async () => {
+    const store = useMailStore()
+    seedFolders(store)
+    global.fetch.mockResolvedValue({ ok: false })
+    await expect(store.unsubscribeFolder('INBOX')).rejects.toThrow()
+  })
+
+  it('subscribeFolder encodes folder names with special characters', async () => {
+    const store = useMailStore()
+    store.folders = [{ name: 'My Folder/Sub', subscribed: false }]
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.subscribeFolder('My Folder/Sub')
+    const [url] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/folders/My%20Folder%2FSub/subscribe')
+  })
+
+  it('does not mutate other folders when subscribing one', async () => {
+    const store = useMailStore()
+    seedFolders(store)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.subscribeFolder('OldProject')
+    expect(store.folders.find(f => f.name === 'INBOX').subscribed).toBe(true)
+    expect(store.folders.find(f => f.name === 'Drafts').subscribed).toBe(true)
+  })
+})
+
 describe('mail store — saveDraft', () => {
   it('resolves when server returns ok', async () => {
     const store = useMailStore()
