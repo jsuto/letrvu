@@ -163,6 +163,30 @@ func (c *Client) Unsubscribe(folder string) error {
 	return nil
 }
 
+// CreateFolder creates a new mailbox with the given name.
+func (c *Client) CreateFolder(name string) error {
+	if err := c.c.Create(name, nil).Wait(); err != nil {
+		return fmt.Errorf("create folder %q: %w", name, err)
+	}
+	return nil
+}
+
+// RenameFolder renames an existing mailbox.
+func (c *Client) RenameFolder(oldName, newName string) error {
+	if err := c.c.Rename(oldName, newName).Wait(); err != nil {
+		return fmt.Errorf("rename folder %q → %q: %w", oldName, newName, err)
+	}
+	return nil
+}
+
+// DeleteFolder permanently removes a mailbox and all its messages.
+func (c *Client) DeleteFolder(name string) error {
+	if err := c.c.Delete(name).Wait(); err != nil {
+		return fmt.Errorf("delete folder %q: %w", name, err)
+	}
+	return nil
+}
+
 // Message is a lightweight summary used in folder listings.
 type Message struct {
 	UID            uint32    `json:"uid"`

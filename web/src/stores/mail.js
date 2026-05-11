@@ -139,6 +139,38 @@ export const useMailStore = defineStore('mail', () => {
     if (f) f.subscribed = false
   }
 
+  async function createFolder(name) {
+    const res = await apiFetch('/api/folders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    if (!res.ok) throw new Error('Create folder failed')
+    await fetchFolders()
+  }
+
+  async function renameFolder(oldName, newName) {
+    const res = await apiFetch(`/api/folders/${encodeURIComponent(oldName)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_name: newName }),
+    })
+    if (!res.ok) throw new Error('Rename folder failed')
+    await fetchFolders()
+    // If the renamed folder is currently open, navigate to the new name.
+    if (currentFolder.value === oldName) currentFolder.value = newName
+  }
+
+  async function deleteFolder(name) {
+    const res = await apiFetch(`/api/folders/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Delete folder failed')
+    await fetchFolders()
+    if (currentFolder.value === name) {
+      currentFolder.value = 'INBOX'
+      await fetchMessages('INBOX')
+    }
+  }
+
   async function saveDraft(payload) {
     const res = await apiFetch('/api/draft', {
       method: 'POST',
@@ -172,5 +204,8 @@ export const useMailStore = defineStore('mail', () => {
     saveDraft,
     subscribeFolder,
     unsubscribeFolder,
+    createFolder,
+    renameFolder,
+    deleteFolder,
   }
 })

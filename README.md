@@ -163,7 +163,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [X] Multiple identities
 - [X] Attachment preview
 - [X] Brute force login protection
-- [ ] Folder management (create / rename / delete IMAP folders)
+- [x] Folder management (create / rename / delete IMAP folders)
 - [ ] Bulk actions (select multiple messages → delete / move / mark read)
 - [ ] Keyboard shortcuts (n/p next/prev, r reply, d delete, c compose)
 - [ ] HTML compose (rich text editor)

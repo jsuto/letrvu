@@ -347,3 +347,118 @@ describe('mail store — saveDraft', () => {
     expect(store.messages).toHaveLength(3)
   })
 })
+
+describe('mail store — createFolder', () => {
+  it('POSTs to /api/folders with the folder name', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    await store.createFolder('Archive')
+    const [url, opts] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/folders')
+    expect(opts.method).toBe('POST')
+    expect(JSON.parse(opts.body)).toEqual({ name: 'Archive' })
+  })
+
+  it('refreshes folder list after creation', async () => {
+    const store = useMailStore()
+    const newFolders = [{ name: 'INBOX' }, { name: 'Archive' }]
+    global.fetch
+      .mockResolvedValueOnce({ ok: true })               // POST create
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(newFolders) }) // GET folders
+    await store.createFolder('Archive')
+    expect(store.folders).toHaveLength(2)
+  })
+
+  it('throws when server returns error', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: false })
+    await expect(store.createFolder('Bad')).rejects.toThrow()
+  })
+})
+
+describe('mail store — renameFolder', () => {
+  it('PATCHes /api/folders/{name} with new_name', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    await store.renameFolder('OldName', 'NewName')
+    const [url, opts] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/folders/OldName')
+    expect(opts.method).toBe('PATCH')
+    expect(JSON.parse(opts.body)).toEqual({ new_name: 'NewName' })
+  })
+
+  it('URL-encodes folder names with special characters', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    await store.renameFolder('My Folder/Sub', 'Archive')
+    const [url] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/folders/My%20Folder%2FSub')
+  })
+
+  it('updates currentFolder when the renamed folder is open', async () => {
+    const store = useMailStore()
+    store.currentFolder = 'OldName'
+    global.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    await store.renameFolder('OldName', 'NewName')
+    expect(store.currentFolder).toBe('NewName')
+  })
+
+  it('does not change currentFolder when a different folder is renamed', async () => {
+    const store = useMailStore()
+    store.currentFolder = 'INBOX'
+    global.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    await store.renameFolder('OldName', 'NewName')
+    expect(store.currentFolder).toBe('INBOX')
+  })
+
+  it('throws when server returns error', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: false })
+    await expect(store.renameFolder('A', 'B')).rejects.toThrow()
+  })
+})
+
+describe('mail store — deleteFolder', () => {
+  it('DELETEs /api/folders/{name}', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    await store.deleteFolder('Archive')
+    const [url, opts] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/folders/Archive')
+    expect(opts.method).toBe('DELETE')
+  })
+
+  it('URL-encodes special characters in folder name', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    await store.deleteFolder('My Folder/Sub')
+    const [url] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/folders/My%20Folder%2FSub')
+  })
+
+  it('navigates to INBOX when the deleted folder is currently open', async () => {
+    const store = useMailStore()
+    store.currentFolder = 'Archive'
+    const inboxMessages = [{ uid: 1, subject: 'hello' }]
+    global.fetch
+      .mockResolvedValueOnce({ ok: true })  // DELETE
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) })  // fetchFolders
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(inboxMessages) }) // fetchMessages INBOX
+    await store.deleteFolder('Archive')
+    expect(store.currentFolder).toBe('INBOX')
+  })
+
+  it('does not change currentFolder when a non-open folder is deleted', async () => {
+    const store = useMailStore()
+    store.currentFolder = 'INBOX'
+    global.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    await store.deleteFolder('Archive')
+    expect(store.currentFolder).toBe('INBOX')
+  })
+
+  it('throws when server returns error', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: false })
+    await expect(store.deleteFolder('Archive')).rejects.toThrow()
+  })
+})
