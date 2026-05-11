@@ -53,6 +53,7 @@
               >{{ f.name }}</li>
             </ul>
           </div>
+          <button v-if="!isJunkFolder" @click="spam" title="Move to Junk">Spam</button>
           <button @click="confirmDeleteVisible = true" class="danger">Delete</button>
           <button @click="viewSource" title="View message source" class="source-btn">&lt;/&gt;</button>
         </div>
@@ -375,6 +376,10 @@ const isDraftsFolder = computed(() =>
   ['drafts', 'draft'].includes(mail.currentFolder.toLowerCase())
 )
 
+const isJunkFolder = computed(() =>
+  ['junk', 'junk email', 'spam'].includes(mail.currentFolder.toLowerCase())
+)
+
 const debugMode = import.meta.env.VITE_LOG_LEVEL === 'debug'
 function debugLog(...args) {
   if (debugMode) console.debug('[letrvu]', ...args)
@@ -619,6 +624,12 @@ async function forwardAsAttachment() {
     subject: `Fwd: ${msg.subject || ''}`,
     _attachments: [{ filename, content_type: 'message/rfc822', data: base64 }],
   })
+}
+
+async function spam() {
+  const msg = mail.currentMessage
+  if (!msg) return
+  await mail.markAsSpam(mail.currentFolder, [msg.uid])
 }
 
 async function doDelete() {

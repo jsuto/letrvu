@@ -32,6 +32,7 @@
           <li v-for="f in otherFolders" :key="f.name" @click="bulkMove(f.name)">{{ f.name }}</li>
         </ul>
       </div>
+      <button v-if="!isJunkFolder" class="icon-btn" @click="bulkSpam" title="Mark as spam">⊘</button>
       <button class="icon-btn danger" @click="confirmBulkDeleteVisible = true" title="Delete">🗑</button>
       <button class="icon-btn clear-btn" @click="mail.clearSelection()" title="Clear selection">✕</button>
     </div>
@@ -97,6 +98,10 @@ const otherFolders = computed(() =>
   mail.folders.filter(f => f.name !== mail.currentFolder)
 )
 
+const isJunkFolder = computed(() =>
+  ['junk', 'junk email', 'spam'].includes(mail.currentFolder.toLowerCase())
+)
+
 const allSelected = computed(() =>
   mail.messages.length > 0 && mail.messages.every(m => mail.selectedUids.has(m.uid))
 )
@@ -120,6 +125,11 @@ async function bulkMove(dest) {
   bulkMoveOpen.value = false
   const uids = [...mail.selectedUids]
   await mail.moveMessagesTo(mail.currentFolder, uids, dest)
+}
+
+async function bulkSpam() {
+  const uids = [...mail.selectedUids]
+  await mail.markAsSpam(mail.currentFolder, uids)
 }
 
 async function doBulkDelete() {

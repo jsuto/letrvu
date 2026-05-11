@@ -818,6 +818,17 @@ func (c *Client) SaveDraft(msg []byte) error {
 	return c.appendMessage(folder, []goimap.Flag{goimap.FlagDraft, goimap.FlagSeen}, msg)
 }
 
+// JunkFolder returns the name of the Junk/Spam mailbox. It checks for the
+// \Junk special-use attribute first, then falls back to common name patterns,
+// and finally returns "Junk" if nothing else matches.
+func (c *Client) JunkFolder() string {
+	folder := c.findSpecialFolder(goimap.MailboxAttrJunk, []string{"junk", "junk email", "spam"})
+	if folder == "" {
+		folder = "Junk"
+	}
+	return folder
+}
+
 // SaveSent appends a raw RFC 2822 message to the Sent mailbox with the \Seen
 // flag. The folder is discovered by special-use attribute first, then by
 // common name patterns; falls back to "Sent".

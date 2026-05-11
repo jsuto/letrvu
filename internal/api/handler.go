@@ -531,6 +531,35 @@ func (h *handler) moveMessages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (h *handler) markSpam(w http.ResponseWriter, r *http.Request) {
+	folder, err := url.PathUnescape(r.PathValue("folder"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid folder name"))
+		return
+	}
+	var body struct {
+		UIDs []uint32 `json:"uids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.UIDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, errorResp("uids required"))
+		return
+	}
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+
+	dest := c.JunkFolder()
+	if err := c.MoveMessages(folder, body.UIDs, dest); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "dest": dest})
+}
+
 func (h *handler) deleteMessages(w http.ResponseWriter, r *http.Request) {
 	folder, err := url.PathUnescape(r.PathValue("folder"))
 	if err != nil {

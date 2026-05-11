@@ -171,7 +171,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] Unread count in browser tab title
 - [x] Desktop notifications (Browser Notification API + IMAP IDLE)
 - [ ] Mobile-responsive layout
-- [ ] Mark as spam (move to Junk folder)
+- [x] Mark as spam (move to Junk folder)
 - [ ] Cross-folder search
 - [ ] Undo send (configurable delay before SMTP submission)
 - [ ] Vacation / autoresponder (Sieve)

@@ -49,6 +49,7 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("POST /api/folders/{folder}/messages/move", h.requireAuth(h.moveMessages))
 	mux.HandleFunc("POST /api/folders/{folder}/messages/delete", h.requireAuth(h.deleteMessages))
 	mux.HandleFunc("POST /api/folders/{folder}/messages/read", h.requireAuth(h.markReadMessages))
+	mux.HandleFunc("POST /api/folders/{folder}/messages/spam", h.requireAuth(h.markSpam))
 
 	// Compose
 	mux.HandleFunc("POST /api/send", h.requireAuth(h.sendMessage))
