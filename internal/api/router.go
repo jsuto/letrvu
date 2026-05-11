@@ -37,6 +37,7 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 
 	// Compose
 	mux.HandleFunc("POST /api/send", h.requireAuth(h.sendMessage))
+	mux.HandleFunc("POST /api/draft", h.requireAuth(h.saveDraft))
 
 	// User settings
 	mux.HandleFunc("GET /api/settings", h.requireAuth(h.getSettings))

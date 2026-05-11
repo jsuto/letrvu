@@ -177,6 +177,79 @@ func TestBuildMIME_MultipleAttachments(t *testing.T) {
 	mustContain(t, m, `"b.txt"`, "second attachment")
 }
 
+// --- BuildRFC822 -------------------------------------------------------------
+
+func TestBuildRFC822_HasDateHeader(t *testing.T) {
+	raw := BuildRFC822(Message{
+		From:    "alice@example.com",
+		To:      []string{"bob@example.com"},
+		Subject: "draft test",
+		Text:    "body",
+	})
+	s := string(raw)
+	mustContain(t, s, "Date: ", "Date header")
+}
+
+func TestBuildRFC822_ContainsMIMEContent(t *testing.T) {
+	raw := BuildRFC822(Message{
+		From:    "Alice <alice@example.com>",
+		To:      []string{"bob@example.com"},
+		Subject: "My Draft",
+		Text:    "draft body",
+	})
+	s := string(raw)
+	mustContain(t, s, "From: Alice <alice@example.com>", "From header")
+	mustContain(t, s, "To: bob@example.com", "To header")
+	mustContain(t, s, "Subject: My Draft", "Subject header")
+	mustContain(t, s, "draft body", "body text")
+}
+
+func TestBuildRFC822_DateBeforeMIMEHeaders(t *testing.T) {
+	// Date: must appear before the MIME headers so it is a top-level header.
+	raw := BuildRFC822(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "order", Text: "t",
+	})
+	s := string(raw)
+	dateIdx := strings.Index(s, "Date: ")
+	fromIdx := strings.Index(s, "From: ")
+	if dateIdx < 0 {
+		t.Fatal("Date header missing")
+	}
+	if fromIdx < 0 {
+		t.Fatal("From header missing")
+	}
+	if dateIdx > fromIdx {
+		t.Errorf("Date header (pos %d) should appear before From header (pos %d)", dateIdx, fromIdx)
+	}
+}
+
+func TestBuildRFC822_WithHTML(t *testing.T) {
+	raw := BuildRFC822(Message{
+		From:    "a@example.com",
+		To:      []string{"b@example.com"},
+		Subject: "html draft",
+		Text:    "plain",
+		HTML:    "<p>html</p>",
+	})
+	s := string(raw)
+	mustContain(t, s, "multipart/alternative", "multipart content-type")
+	mustContain(t, s, "<p>html</p>", "html body")
+	mustContain(t, s, "Date: ", "Date header")
+}
+
+func TestBuildRFC822_WithCC(t *testing.T) {
+	raw := BuildRFC822(Message{
+		From:    "a@example.com",
+		To:      []string{"b@example.com"},
+		CC:      []string{"c@example.com"},
+		Subject: "cc draft",
+		Text:    "body",
+	})
+	s := string(raw)
+	mustContain(t, s, "Cc: c@example.com", "CC header")
+}
+
 // --- EnvelopeFrom -----------------------------------------------------------
 
 func TestSend_EnvelopeFromFallback(t *testing.T) {

@@ -14,8 +14,9 @@
           <span class="date">{{ formatDate(mail.currentMessage.date) }}</span>
         </div>
         <div class="actions">
-          <button @click="reply">Reply</button>
-          <div class="forward-wrap" ref="forwardWrapEl">
+          <button v-if="isDraftsFolder" @click="editDraft" class="edit-draft-btn">Edit Draft</button>
+          <button v-if="!isDraftsFolder" @click="reply">Reply</button>
+          <div v-if="!isDraftsFolder" class="forward-wrap" ref="forwardWrapEl">
             <button @click="forwardMenuOpen = !forwardMenuOpen">Forward ▾</button>
             <ul v-if="forwardMenuOpen" class="forward-dropdown">
               <li @click="forwardInline">Inline</li>
@@ -303,6 +304,10 @@ const otherFolders = computed(() =>
   mail.folders.filter(f => f.name !== mail.currentFolder)
 )
 
+const isDraftsFolder = computed(() =>
+  ['drafts', 'draft'].includes(mail.currentFolder.toLowerCase())
+)
+
 const debugMode = import.meta.env.VITE_LOG_LEVEL === 'debug'
 function debugLog(...args) {
   if (debugMode) console.debug('[letrvu]', ...args)
@@ -395,6 +400,27 @@ function attachmentUrl(att) {
   const folder = encodeURIComponent(mail.currentFolder)
   const uid = mail.currentMessage.uid
   return `/api/folders/${folder}/messages/${uid}/attachments/${att.index}`
+}
+
+async function editDraft() {
+  const msg = mail.currentMessage
+  if (!msg) return
+
+  // Extract the bare email address from "Name <email>" or plain "email".
+  const from = msg.from || ''
+  const angleMatch = from.match(/<(.+?)>/)
+  const fromEmail = angleMatch ? angleMatch[1].trim() : from.trim()
+
+  compose?.value?.open({
+    _fromEmail: fromEmail,
+    _noSignature: true,
+    _draftFolder: mail.currentFolder,
+    _draftUid: msg.uid,
+    to: (msg.to ?? []).join(', '),
+    cc: (msg.cc ?? []).join(', '),
+    subject: msg.subject ?? '',
+    body: msg.text_body ?? '',
+  })
 }
 
 function reply() {
@@ -610,6 +636,7 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 }
 .actions button:hover { background: var(--color-bg); }
 .actions button.danger { color: #c0392b; border-color: #f5c6c6; }
+.edit-draft-btn { color: var(--color-teal); border-color: var(--color-teal) !important; font-weight: 500; }
 .actions button.active { color: #e67e22; border-color: #f5c6a0; background: #fef9ec; }
 .move-wrap, .forward-wrap { position: relative; }
 .move-dropdown, .forward-dropdown {

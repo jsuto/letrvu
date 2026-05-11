@@ -25,9 +25,13 @@
         </div>
       </div>
       <div class="compose-footer">
-        <button @click="send" :disabled="sending" class="send-btn">
+        <button @click="send" :disabled="sending || savingDraft" class="send-btn">
           {{ sending ? 'Sending…' : 'Send' }}
         </button>
+        <button @click="saveDraftManual" :disabled="sending || savingDraft" class="draft-btn">
+          {{ savingDraft ? 'Saving…' : 'Save Draft' }}
+        </button>
+        <span v-if="draftSaved && !savingDraft" class="draft-status">Draft saved</span>
         <p v-if="error" class="error">{{ error }}</p>
       </div>
     </div>
@@ -35,7 +39,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, computed } from 'vue'
+import { ref, reactive, nextTick, computed, watch } from 'vue'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import AddressInput from './AddressInput.vue'
@@ -45,12 +49,60 @@ const settings = useSettingsStore()
 
 const visible = ref(false)
 const sending = ref(false)
+const savingDraft = ref(false)
+const draftSaved = ref(false)
 const error = ref('')
 const textareaEl = ref(null)
 
 const form = reactive({ fromIndex: 0, to: '', cc: '', subject: '', body: '' })
 // Each entry: { filename, content_type, data } where data is base64.
 const attachments = ref([])
+// When resuming a draft, remember its location so we can delete it after send/save.
+const originalDraft = ref(null) // { folder, uid } | null
+
+// Auto-save draft after 30 s of inactivity while compose is open.
+let autoSaveTimer = null
+
+function scheduleAutoSave() {
+  if (!visible.value) return
+  clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(() => {
+    if (visible.value) saveDraft()
+  }, 30_000)
+}
+
+watch(() => [form.to, form.cc, form.subject, form.body], scheduleAutoSave)
+
+async function saveDraft() {
+  savingDraft.value = true
+  draftSaved.value = false
+  try {
+    const selectedFrom = fromOptions.value[form.fromIndex] ?? fromOptions.value[0]
+    await mail.saveDraft({
+      from_name: selectedFrom?.name ?? '',
+      from_email: selectedFrom?.email ?? '',
+      to: form.to.split(',').map(s => s.trim()).filter(Boolean),
+      cc: form.cc.split(',').map(s => s.trim()).filter(Boolean),
+      subject: form.subject,
+      text: form.body,
+      attachments: attachments.value.length ? attachments.value : undefined,
+    })
+    // New draft saved — remove the original so there's no duplicate.
+    if (originalDraft.value) {
+      await mail.deleteMessage(originalDraft.value.folder, originalDraft.value.uid).catch(() => {})
+      originalDraft.value = null
+    }
+    draftSaved.value = true
+  } catch {
+    // Silent — draft save failure is non-critical
+  } finally {
+    savingDraft.value = false
+  }
+}
+
+async function saveDraftManual() {
+  await saveDraft()
+}
 
 const fromOptions = computed(() => settings.fromOptions)
 
@@ -64,29 +116,41 @@ async function open(prefill = {}) {
 
   // When replying, pick the identity whose email matches one of the original
   // To/CC addresses so the user sends from the same address the mail arrived at.
+  // When resuming a draft, _fromEmail picks the exact From identity used.
   let fromIndex = 0
-  const recipients = prefill._originalRecipients
-  if (recipients?.length) {
-    const lc = recipients.map(r => r.toLowerCase())
-    const match = fromOptions.value.findIndex(opt =>
-      lc.some(r => r.includes(opt.email.toLowerCase()))
-    )
+  if (prefill._fromEmail) {
+    const lc = prefill._fromEmail.toLowerCase()
+    const match = fromOptions.value.findIndex(opt => opt.email.toLowerCase() === lc)
     if (match !== -1) fromIndex = match
+  } else {
+    const recipients = prefill._originalRecipients
+    if (recipients?.length) {
+      const lc = recipients.map(r => r.toLowerCase())
+      const match = fromOptions.value.findIndex(opt =>
+        lc.some(r => r.includes(opt.email.toLowerCase()))
+      )
+      if (match !== -1) fromIndex = match
+    }
   }
+
+  // When resuming a draft the body already contains the signature, so skip
+  // prepending it again. For new/reply/forward, prepend the signature block.
+  const effectiveSigBlock = prefill._noSignature ? '' : sigBlock
 
   // Signature goes between the user's typing area and any quoted text
   // (prefill.body carries forwarded content). Strip internal hint keys.
-  const { _originalRecipients: _r, _attachments: _a, ...rest } = prefill
+  const { _originalRecipients: _r, _attachments: _a, _fromEmail: _fe, _noSignature: _ns, _draftFolder: _df, _draftUid: _du, ...rest } = prefill
+  originalDraft.value = (_df && _du != null) ? { folder: _df, uid: _du } : null
   Object.assign(form, {
     fromIndex,
     to: '',
     cc: '',
     subject: '',
-    body: sigBlock + (rest.body ?? ''),
+    body: effectiveSigBlock + (rest.body ?? ''),
     ...rest,
     // body from prefill is already incorporated above; don't let the spread
     // overwrite our assembled value when body is the only prefilled key.
-    body: sigBlock + (rest.body ?? ''),
+    body: effectiveSigBlock + (rest.body ?? ''),
     fromIndex, // restore after spread in case prefill had a fromIndex key
   })
 
@@ -104,9 +168,12 @@ async function open(prefill = {}) {
 }
 
 function close() {
+  clearTimeout(autoSaveTimer)
   visible.value = false
   error.value = ''
+  draftSaved.value = false
   attachments.value = []
+  originalDraft.value = null
 }
 
 function removeAttachment(i) {
@@ -127,6 +194,11 @@ async function send() {
       text: form.body,
       attachments: attachments.value.length ? attachments.value : undefined,
     })
+    // Message sent — remove the original draft so there's no stale copy.
+    if (originalDraft.value) {
+      await mail.deleteMessage(originalDraft.value.folder, originalDraft.value.uid).catch(() => {})
+      originalDraft.value = null
+    }
     close()
   } catch {
     error.value = 'Failed to send. Please try again.'
@@ -258,5 +330,17 @@ textarea {
   cursor: pointer;
 }
 .send-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.draft-btn {
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.draft-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.draft-status { font-size: 12px; color: var(--color-text-muted); }
 .error { font-size: 12px; color: #c0392b; }
 </style>

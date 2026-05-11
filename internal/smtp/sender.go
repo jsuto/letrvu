@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/smtp"
 	"strings"
+	"time"
 )
 
 // Config holds the SMTP server connection details.
@@ -57,6 +58,15 @@ func Send(cfg Config, msg Message) error {
 		return fmt.Errorf("smtp send: %w", err)
 	}
 	return nil
+}
+
+// BuildRFC822 returns the complete RFC 2822 message bytes, including a Date
+// header. It is used to save drafts via IMAP APPEND.
+func BuildRFC822(msg Message) []byte {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
+	sb.WriteString(buildMIME(msg))
+	return []byte(sb.String())
 }
 
 func buildMIME(msg Message) string {

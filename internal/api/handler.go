@@ -588,6 +588,79 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (h *handler) saveDraft(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		FromName  string   `json:"from_name"`
+		FromEmail string   `json:"from_email"`
+		To        []string `json:"to"`
+		CC        []string `json:"cc"`
+		Subject   string   `json:"subject"`
+		Text      string   `json:"text"`
+		HTML      string   `json:"html"`
+		Attachments []struct {
+			Filename    string `json:"filename"`
+			ContentType string `json:"content_type"`
+			Data        string `json:"data"` // base64-encoded
+		} `json:"attachments,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid request body"))
+		return
+	}
+
+	sess := h.sessionFrom(r)
+
+	fromEmail := body.FromEmail
+	if fromEmail == "" {
+		fromEmail = sess.Username
+	}
+	var fromHeader string
+	if body.FromName != "" {
+		fromHeader = fmt.Sprintf("%s <%s>", body.FromName, fromEmail)
+	} else {
+		fromHeader = fromEmail
+	}
+
+	var attachments []smtp.Attachment
+	for _, a := range body.Attachments {
+		data, err := base64.StdEncoding.DecodeString(a.Data)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResp("invalid attachment data"))
+			return
+		}
+		attachments = append(attachments, smtp.Attachment{
+			Filename:    a.Filename,
+			ContentType: a.ContentType,
+			Data:        data,
+		})
+	}
+
+	raw := smtp.BuildRFC822(smtp.Message{
+		From:        fromHeader,
+		To:          body.To,
+		CC:          body.CC,
+		Subject:     body.Subject,
+		Text:        body.Text,
+		HTML:        body.HTML,
+		Attachments: attachments,
+	})
+
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+
+	if err := c.SaveDraft(raw); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	log.Printf("audit: draft_saved user=%s ip=%s", sess.Username, h.clientIP(r))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (h *handler) downloadAttachment(w http.ResponseWriter, r *http.Request) {
 	folder, err := url.PathUnescape(r.PathValue("folder"))
 	if err != nil {

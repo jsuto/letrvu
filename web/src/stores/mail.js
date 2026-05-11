@@ -125,6 +125,15 @@ export const useMailStore = defineStore('mail', () => {
     if (!res.ok) throw new Error('Send failed')
   }
 
+  async function saveDraft(payload) {
+    const res = await apiFetch('/api/draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw new Error('Save draft failed')
+  }
+
   return {
     folders,
     messages,
@@ -146,5 +155,6 @@ export const useMailStore = defineStore('mail', () => {
     markRead,
     markFlagged,
     sendMessage,
+    saveDraft,
   }
 })

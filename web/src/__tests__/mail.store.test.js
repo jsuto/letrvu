@@ -229,3 +229,43 @@ describe('mail store — sendMessage', () => {
     await expect(store.sendMessage({ to: ['x@example.com'] })).resolves.not.toThrow()
   })
 })
+
+describe('mail store — saveDraft', () => {
+  it('resolves when server returns ok', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: true })
+    await expect(store.saveDraft({ to: ['x@example.com'], subject: 'draft' })).resolves.not.toThrow()
+  })
+
+  it('throws when server returns error', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: false })
+    await expect(store.saveDraft({ to: ['x@example.com'], subject: 'draft' })).rejects.toThrow()
+  })
+
+  it('posts to /api/draft', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.saveDraft({ to: ['x@example.com'], subject: 'my draft', text: 'hello' })
+    const [url, opts] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/draft')
+    expect(opts.method).toBe('POST')
+  })
+
+  it('sends the payload as JSON', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue({ ok: true })
+    const payload = { to: ['a@example.com'], subject: 'test', text: 'body' }
+    await store.saveDraft(payload)
+    const [, opts] = global.fetch.mock.calls[0]
+    expect(JSON.parse(opts.body)).toEqual(payload)
+  })
+
+  it('does not modify the messages list', async () => {
+    const store = useMailStore()
+    seedMessages(store)
+    global.fetch.mockResolvedValue({ ok: true })
+    await store.saveDraft({ subject: 'draft' })
+    expect(store.messages).toHaveLength(3)
+  })
+})

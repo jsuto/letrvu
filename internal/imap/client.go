@@ -701,6 +701,58 @@ func (c *Client) MarkRead(folder string, uid uint32, read bool) error {
 	}, nil).Close()
 }
 
+// SaveDraft appends a raw RFC 2822 message to the Drafts mailbox with
+// the \Draft and \Seen flags. The Drafts folder is discovered by special-use
+// attribute first, then by common name patterns; it falls back to "Drafts" if
+// nothing is found.
+func (c *Client) SaveDraft(msg []byte) error {
+	folder := c.findDraftsFolder()
+	if folder == "" {
+		folder = "Drafts"
+	}
+	opts := &goimap.AppendOptions{
+		Flags: []goimap.Flag{goimap.FlagDraft, goimap.FlagSeen},
+		Time:  time.Now(),
+	}
+	cmd := c.c.Append(folder, int64(len(msg)), opts)
+	if _, err := cmd.Write(msg); err != nil {
+		return fmt.Errorf("append write: %w", err)
+	}
+	if err := cmd.Close(); err != nil {
+		return fmt.Errorf("append close: %w", err)
+	}
+	if _, err := cmd.Wait(); err != nil {
+		return fmt.Errorf("append: %w", err)
+	}
+	return nil
+}
+
+// findDraftsFolder returns the name of the Drafts mailbox by inspecting the
+// \Drafts special-use attribute first, then falling back to common name
+// patterns. Returns "" if none is found.
+func (c *Client) findDraftsFolder() string {
+	mailboxes, err := c.c.List("", "*", nil).Collect()
+	if err != nil {
+		return ""
+	}
+	// First pass: look for the \Drafts special-use attribute.
+	for _, mb := range mailboxes {
+		for _, attr := range mb.Attrs {
+			if strings.EqualFold(string(attr), `\Drafts`) {
+				return mb.Mailbox
+			}
+		}
+	}
+	// Second pass: fall back to well-known names.
+	for _, mb := range mailboxes {
+		switch strings.ToLower(mb.Mailbox) {
+		case "drafts", "draft":
+			return mb.Mailbox
+		}
+	}
+	return ""
+}
+
 // bodyHasAttachments walks the body structure and returns true if any part
 // has a Content-Disposition of "attachment".
 func bodyHasAttachments(bs goimap.BodyStructure) bool {
