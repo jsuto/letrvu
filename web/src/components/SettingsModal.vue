@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useSettingsStore } from '../stores/settings'
 
 const settings = useSettingsStore()
@@ -87,6 +87,10 @@ async function save() {
     saving.value = false
   }
 }
+
+function onKeydown(e) { if (e.key === 'Escape' && visible.value) close() }
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 defineExpose({ open, close })
 </script>

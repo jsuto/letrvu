@@ -27,7 +27,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useMailStore } from '../stores/mail'
 
 const mail = useMailStore()
@@ -60,6 +60,10 @@ async function toggle(folder) {
     busy.value = null
   }
 }
+
+function onKeydown(e) { if (e.key === 'Escape' && visible.value) close() }
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 defineExpose({ open, close })
 </script>

@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useContactsStore } from '../stores/contacts'
 
 const contacts = useContactsStore()
@@ -92,6 +92,10 @@ async function save() {
     saving.value = false
   }
 }
+
+function onKeydown(e) { if (e.key === 'Escape' && visible.value) close() }
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 defineExpose({ open, close })
 </script>

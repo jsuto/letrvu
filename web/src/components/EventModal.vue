@@ -50,7 +50,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useCalendarStore } from '../stores/calendar'
 
 const emit = defineEmits(['saved', 'deleted'])
@@ -159,6 +159,10 @@ function dateStr(d) {
 function timeStr(d) {
   return d.toTimeString().slice(0, 5)
 }
+
+function onKeydown(e) { if (e.key === 'Escape' && visible.value) close() }
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 defineExpose({ open, close })
 </script>

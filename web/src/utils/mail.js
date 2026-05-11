@@ -9,6 +9,15 @@ export function extractEmail(addr) {
 }
 
 /**
+ * Returns true when the attachment can be previewed inline.
+ * Images (image/*) and PDFs (application/pdf) are supported.
+ */
+export function isPreviewable(att) {
+  const ct = att?.content_type ?? ''
+  return ct.startsWith('image/') || ct === 'application/pdf'
+}
+
+/**
  * Build the CC list for a Reply All.
  *
  * Collects every address from the original To + CC, then removes:

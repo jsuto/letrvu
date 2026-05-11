@@ -1,5 +1,49 @@
 import { describe, it, expect } from 'vitest'
-import { extractEmail, buildReplyAllCc } from '../utils/mail.js'
+import { extractEmail, buildReplyAllCc, isPreviewable } from '../utils/mail.js'
+
+// --- isPreviewable -----------------------------------------------------------
+
+describe('isPreviewable', () => {
+  it('returns true for image/jpeg', () => {
+    expect(isPreviewable({ content_type: 'image/jpeg' })).toBe(true)
+  })
+
+  it('returns true for image/png', () => {
+    expect(isPreviewable({ content_type: 'image/png' })).toBe(true)
+  })
+
+  it('returns true for image/gif', () => {
+    expect(isPreviewable({ content_type: 'image/gif' })).toBe(true)
+  })
+
+  it('returns true for image/webp', () => {
+    expect(isPreviewable({ content_type: 'image/webp' })).toBe(true)
+  })
+
+  it('returns true for application/pdf', () => {
+    expect(isPreviewable({ content_type: 'application/pdf' })).toBe(true)
+  })
+
+  it('returns false for application/zip', () => {
+    expect(isPreviewable({ content_type: 'application/zip' })).toBe(false)
+  })
+
+  it('returns false for text/plain', () => {
+    expect(isPreviewable({ content_type: 'text/plain' })).toBe(false)
+  })
+
+  it('returns false for application/octet-stream', () => {
+    expect(isPreviewable({ content_type: 'application/octet-stream' })).toBe(false)
+  })
+
+  it('returns false when content_type is missing', () => {
+    expect(isPreviewable({})).toBe(false)
+  })
+
+  it('returns false for null', () => {
+    expect(isPreviewable(null)).toBe(false)
+  })
+})
 
 // --- extractEmail ------------------------------------------------------------
 

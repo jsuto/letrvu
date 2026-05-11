@@ -39,7 +39,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, computed, watch } from 'vue'
+import { ref, reactive, nextTick, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import AddressInput from './AddressInput.vue'
@@ -206,6 +206,10 @@ async function send() {
     sending.value = false
   }
 }
+
+function onKeydown(e) { if (e.key === 'Escape' && visible.value) close() }
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 defineExpose({ open, close })
 </script>

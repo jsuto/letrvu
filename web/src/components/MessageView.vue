@@ -106,16 +106,44 @@
       <pre v-else class="body-text">{{ mail.currentMessage.text_body }}</pre>
       <div v-if="mail.currentMessage.attachments?.length" class="attachments">
         <p class="attachments-label">Attachments</p>
-        <a
+        <div
           v-for="att in mail.currentMessage.attachments"
           :key="att.index"
-          :href="attachmentUrl(att)"
-          download
           class="attachment"
         >
-          📎 {{ att.filename || 'attachment' }}
+          <span
+            class="att-name"
+            :class="{ 'att-previewable': isPreviewable(att) }"
+            @click="isPreviewable(att) && openPreview(att)"
+          >📎 {{ att.filename || 'attachment' }}</span>
           <span class="att-size">{{ formatSize(att.size) }}</span>
-        </a>
+          <a :href="attachmentUrl(att)" download class="att-download" title="Download">↓</a>
+        </div>
+      </div>
+
+      <!-- Attachment preview modal -->
+      <div v-if="previewAtt" class="preview-overlay" @click.self="previewAtt = null">
+        <div class="preview-modal">
+          <div class="preview-toolbar">
+            <span class="preview-title">{{ previewAtt.filename || 'attachment' }}</span>
+            <a :href="attachmentUrl(previewAtt)" download class="preview-download">Download</a>
+            <button @click="previewAtt = null" class="preview-close">✕</button>
+          </div>
+          <div class="preview-body">
+            <img
+              v-if="previewAtt.content_type?.startsWith('image/')"
+              :src="attachmentUrl(previewAtt)"
+              :alt="previewAtt.filename"
+              class="preview-image"
+            />
+            <iframe
+              v-else-if="previewAtt.content_type === 'application/pdf'"
+              :src="attachmentUrl(previewAtt)"
+              class="preview-pdf"
+              title="PDF preview"
+            />
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -129,7 +157,7 @@ import { useContactsStore } from '../stores/contacts'
 import { useCalendarStore } from '../stores/calendar'
 import { useSettingsStore } from '../stores/settings'
 import { useDarkMode } from '../composables/useDarkMode'
-import { extractEmail, buildReplyAllCc } from '../utils/mail.js'
+import { extractEmail, buildReplyAllCc, isPreviewable } from '../utils/mail.js'
 
 const mail = useMailStore()
 const contacts = useContactsStore()
@@ -154,6 +182,11 @@ const sourceOpen = ref(false)
 const sourceText = ref('')
 const sourceCopied = ref(false)
 const iframeEl = ref(null)
+const previewAtt = ref(null)
+
+function openPreview(att) {
+  previewAtt.value = att
+}
 
 // Placeholder: grey box with image icon, sized to replace the original image
 const PLACEHOLDER_SRC =
@@ -407,8 +440,19 @@ function onDocClick(e) {
   if (replyWrapEl.value && !replyWrapEl.value.contains(e.target)) replyMenuOpen.value = false
   if (forwardWrapEl.value && !forwardWrapEl.value.contains(e.target)) forwardMenuOpen.value = false
 }
-onMounted(() => document.addEventListener('click', onDocClick))
-onUnmounted(() => document.removeEventListener('click', onDocClick))
+function onKeydown(e) {
+  if (e.key !== 'Escape') return
+  if (previewAtt.value) { previewAtt.value = null; return }
+  if (sourceOpen.value) { sourceOpen.value = false; return }
+}
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onKeydown)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
+  document.removeEventListener('keydown', onKeydown)
+})
 
 // Reset invite state when message changes
 watch(() => mail.currentMessage?.uid, () => { inviteAdded.value = false })
@@ -811,6 +855,76 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
 }
 .attachment:hover { background: var(--color-bg); }
 .att-size { color: var(--color-text-muted); }
+.att-name { cursor: default; }
+.att-previewable { cursor: pointer; color: var(--color-teal); text-decoration: underline; }
+.att-previewable:hover { opacity: 0.8; }
+.att-download {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 0 2px;
+}
+.att-download:hover { color: var(--color-text); }
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview-modal {
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: 10px;
+  width: min(900px, 94vw);
+  height: min(700px, 90vh);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+}
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--color-border);
+  flex-shrink: 0;
+}
+.preview-title { font-size: 13px; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-download, .preview-close {
+  padding: 4px 12px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--color-text);
+}
+.preview-download:hover, .preview-close:hover { background: var(--color-bg); }
+.preview-body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: var(--color-bg);
+  border-radius: 0 0 10px 10px;
+}
+.preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.preview-pdf {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
 .source-btn {
   padding: 6px 10px;
   border: 0.5px solid var(--color-border);
