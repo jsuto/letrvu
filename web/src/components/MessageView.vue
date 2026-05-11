@@ -128,6 +128,7 @@ import { useMailStore } from '../stores/mail'
 import { useContactsStore } from '../stores/contacts'
 import { useCalendarStore } from '../stores/calendar'
 import { useSettingsStore } from '../stores/settings'
+import { useDarkMode } from '../composables/useDarkMode'
 import { extractEmail, buildReplyAllCc } from '../utils/mail.js'
 
 const mail = useMailStore()
@@ -135,6 +136,7 @@ const contacts = useContactsStore()
 const calendar = useCalendarStore()
 const settings = useSettingsStore()
 const compose = inject('compose')
+const { dark } = useDarkMode()
 
 const inviteAdding = ref(false)
 const inviteAdded = ref(false)
@@ -260,38 +262,54 @@ function resolveCIDs(html, inlineImages) {
 
 // Full processing pipeline: CID resolution → DOMPurify → image blocking → phishing detection.
 // blockImages controls whether remote images are replaced with placeholders.
-function processHtml(html, inlineImages, blockImages) {
+// isDark injects a low-specificity dark baseline so the srcdoc background
+// matches the app theme when the email itself doesn't set an explicit colour.
+function processHtml(html, inlineImages, blockImages, isDark = false) {
   const resolved = resolveCIDs(html, inlineImages)
   const sanitized = DOMPurify.sanitize(resolved, { WHOLE_DOCUMENT: true })
   const doc = new DOMParser().parseFromString(sanitized, 'text/html')
+  if (isDark) {
+    const style = doc.createElement('style')
+    // Element-level selectors are overridden by any email-specific inline styles
+    // or stylesheet rules that come later in the document.
+    style.textContent = 'body{background-color:#141412;color:#e0e0de}a:not([style*="color"]){color:#7ab3ef}'
+    doc.head.prepend(style)
+  }
   const foundImages = blockImages ? blockRemoteImages(doc) : false
   const foundPhishing = flagPhishingLinks(doc)
   return { html: doc.documentElement.outerHTML, hasRemoteImages: foundImages, phishingCount: foundPhishing }
+}
+
+function reprocessCurrentMessage() {
+  const msg = mail.currentMessage
+  if (!msg?.html_body) {
+    processedHtml.value = null
+    hasRemoteImages.value = false
+    phishingCount.value = 0
+    return
+  }
+  const result = processHtml(msg.html_body, msg.inline_images, true, dark.value)
+  processedHtml.value = result.html
+  hasRemoteImages.value = result.hasRemoteImages
+  phishingCount.value = result.phishingCount
 }
 
 watch(
   () => mail.currentMessage?.uid,
   () => {
     showRemoteImages.value = false
-    const msg = mail.currentMessage
-    if (!msg?.html_body) {
-      processedHtml.value = null
-      hasRemoteImages.value = false
-      phishingCount.value = 0
-      return
-    }
-    const result = processHtml(msg.html_body, msg.inline_images, true)
-    processedHtml.value = result.html
-    hasRemoteImages.value = result.hasRemoteImages
-    phishingCount.value = result.phishingCount
+    reprocessCurrentMessage()
   },
   { immediate: true }
 )
 
+// Re-inject dark/light baseline when the theme is toggled.
+watch(dark, reprocessCurrentMessage)
+
 const displayHtml = computed(() => {
   if (!showRemoteImages.value) return processedHtml.value
   const msg = mail.currentMessage
-  return processHtml(msg?.html_body ?? '', msg?.inline_images, false).html
+  return processHtml(msg?.html_body ?? '', msg?.inline_images, false, dark.value).html
 })
 
 // Resize the iframe to match its content height so the outer pane scrolls
@@ -758,7 +776,7 @@ h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
   min-height: 200px;
   border: 0.5px solid var(--color-border);
   border-radius: 8px;
-  background: white;
+  background: var(--color-bg);
   display: block;
 }
 .body-text {
