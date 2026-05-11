@@ -71,14 +71,17 @@ func main() {
 	}
 
 	cfg := api.ServerConfig{
-		IMAPHost:        envOr("IMAP_HOST", ""),
-		IMAPPort:        envInt("IMAP_PORT", 993),
-		SMTPHost:        envOr("SMTP_HOST", ""),
-		SMTPPort:        envInt("SMTP_PORT", 587),
-		SecureCookies:   envBool("SECURE_COOKIES", false),
-		TrustedProxy:    envCIDR("TRUSTED_PROXY"),
-		FolderCacheTTL:  envDuration("FOLDER_CACHE_TTL", 2*time.Minute),
-		InternalDomains: envDomains("INTERNAL_DOMAINS"),
+		IMAPHost:         envOr("IMAP_HOST", ""),
+		IMAPPort:         envInt("IMAP_PORT", 993),
+		SMTPHost:         envOr("SMTP_HOST", ""),
+		SMTPPort:         envInt("SMTP_PORT", 587),
+		SecureCookies:    envBool("SECURE_COOKIES", false),
+		TrustedProxy:     envCIDR("TRUSTED_PROXY"),
+		FolderCacheTTL:   envDuration("FOLDER_CACHE_TTL", 2*time.Minute),
+		InternalDomains:  envDomains("INTERNAL_DOMAINS"),
+		LoginMaxAttempts: envInt("LOGIN_MAX_ATTEMPTS", 5),
+		LoginWindow:      envDuration("LOGIN_WINDOW", time.Minute),
+		LoginLockout:     envDuration("LOGIN_LOCKOUT", 15*time.Minute),
 	}
 
 	handler := api.NewRouter(sessions, settingsStore, contactsStore, calendarStore, cfg)

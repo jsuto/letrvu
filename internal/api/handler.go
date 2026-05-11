@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -47,7 +48,10 @@ type ServerConfig struct {
 	// Messages whose From domain is not in this list are flagged as external
 	// in the UI — but only when Authentication-Results headers are present so
 	// we are not making judgements based on spoofable data.
-	InternalDomains []string `json:"-"`
+	InternalDomains    []string      `json:"-"`
+	LoginMaxAttempts   int           `json:"-"` // failures before lockout (default 5)
+	LoginWindow        time.Duration `json:"-"` // sliding window for counting failures (default 1m)
+	LoginLockout       time.Duration `json:"-"` // lockout duration after max failures (default 15m)
 }
 
 
@@ -58,6 +62,7 @@ type handler struct {
 	calendar     *calendar.Store
 	config       ServerConfig
 	folderCache  *folderCache
+	loginLimiter *loginLimiter
 }
 
 // clientIP returns the real client IP address. If TrustedProxy is configured
@@ -133,6 +138,17 @@ func imapConnect(sess *session.Session) (*imap.Client, error) {
 // login authenticates the user and sets a session cookie.
 // It dials IMAP to verify credentials before creating a session.
 func (h *handler) login(w http.ResponseWriter, r *http.Request) {
+	ip := h.clientIP(r)
+
+	// Reject the request immediately if the IP is currently locked out.
+	if blocked, remaining := h.loginLimiter.blocked(ip); blocked {
+		retryAfter := int(math.Ceil(remaining.Seconds()))
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+		log.Printf("audit: login_blocked ip=%s retry_after=%ds", ip, retryAfter)
+		writeJSON(w, http.StatusTooManyRequests, errorResp("too many failed login attempts, try again later"))
+		return
+	}
+
 	var body struct {
 		IMAPHost string `json:"imap_host"`
 		IMAPPort int    `json:"imap_port"`
@@ -155,11 +171,13 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	// Verify credentials by dialing IMAP before creating session.
 	c, err := imap.Connect(body.IMAPHost, body.IMAPPort, body.Username, body.Password)
 	if err != nil {
-		log.Printf("audit: login_failed user=%s ip=%s imap=%s", body.Username, h.clientIP(r), body.IMAPHost)
+		h.loginLimiter.recordFailure(ip)
+		log.Printf("audit: login_failed user=%s ip=%s imap=%s", body.Username, ip, body.IMAPHost)
 		writeJSON(w, http.StatusUnauthorized, errorResp("imap authentication failed"))
 		return
 	}
 	c.Close()
+	h.loginLimiter.recordSuccess(ip)
 
 	cookieVal, err := h.sessions.Create(body.IMAPHost, body.IMAPPort, body.SMTPHost, body.SMTPPort, body.Username, body.Password)
 	if err != nil {
@@ -173,7 +191,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("audit: login user=%s ip=%s imap=%s", body.Username, h.clientIP(r), body.IMAPHost)
+	log.Printf("audit: login user=%s ip=%s imap=%s", body.Username, ip, body.IMAPHost)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "letrvu_session",
