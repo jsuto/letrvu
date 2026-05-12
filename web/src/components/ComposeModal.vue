@@ -1,73 +1,119 @@
 <template>
-  <div v-if="visible" class="overlay" @click.self="close">
-    <div class="compose">
-      <div class="compose-header">
-        <span>New message</span>
-        <button @click="close" class="close">×</button>
+  <div
+    v-if="visible"
+    class="fixed inset-0 z-[100] flex items-end justify-end p-8 pointer-events-none"
+  >
+    <div class="pointer-events-auto w-[560px] max-h-[620px] flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
+
+      <!-- Header -->
+      <div class="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+        <span class="text-[13px] font-medium text-[var(--color-text)]">New message</span>
+        <button
+          @click="close"
+          class="flex h-7 w-7 items-center justify-center rounded-md text-lg text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
+        >×</button>
       </div>
-      <div class="fields">
-        <div class="from-row">
-          <span class="from-label">From</span>
-          <select v-model="form.fromIndex" class="from-select">
+
+      <!-- Address fields -->
+      <div class="shrink-0">
+        <div class="flex items-center border-b border-[var(--color-border)]">
+          <span class="shrink-0 px-4 py-2 text-[13px] text-[var(--color-text-muted)]">From</span>
+          <select
+            v-model="form.fromIndex"
+            class="flex-1 cursor-pointer bg-transparent py-2 pr-2 text-[13px] text-[var(--color-text)] outline-none"
+          >
             <option v-for="(opt, i) in fromOptions" :key="i" :value="i">{{ opt.label }}</option>
           </select>
         </div>
         <AddressInput v-model="form.to" placeholder="To" />
         <AddressInput v-model="form.cc" placeholder="CC" />
-        <input v-model="form.subject" type="text" placeholder="Subject" class="subject-input" />
+        <input
+          v-model="form.subject"
+          type="text"
+          placeholder="Subject"
+          class="block w-full border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-[13px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
+        />
       </div>
 
       <!-- Rich text toolbar -->
-      <div v-if="!plainTextMode" class="toolbar">
-        <button class="tb" :class="{ active: editor?.isActive('bold') }"
-          @mousedown.prevent="editor?.chain().focus().toggleBold().run()" title="Bold"><b>B</b></button>
-        <button class="tb" :class="{ active: editor?.isActive('italic') }"
-          @mousedown.prevent="editor?.chain().focus().toggleItalic().run()" title="Italic"><i>I</i></button>
-        <button class="tb" :class="{ active: editor?.isActive('underline') }"
-          @mousedown.prevent="editor?.chain().focus().toggleUnderline().run()" title="Underline"><u>U</u></button>
-        <button class="tb" :class="{ active: editor?.isActive('strike') }"
-          @mousedown.prevent="editor?.chain().focus().toggleStrike().run()" title="Strikethrough"><s>S</s></button>
-        <span class="tb-sep" />
-        <button class="tb" :class="{ active: editor?.isActive('link') }"
-          @mousedown.prevent="setLink()" title="Link">🔗</button>
-        <span class="tb-sep" />
-        <button class="tb" :class="{ active: editor?.isActive('bulletList') }"
-          @mousedown.prevent="editor?.chain().focus().toggleBulletList().run()" title="Bullet list">≡</button>
-        <button class="tb" :class="{ active: editor?.isActive('orderedList') }"
-          @mousedown.prevent="editor?.chain().focus().toggleOrderedList().run()" title="Ordered list">1.</button>
-        <button class="tb" :class="{ active: editor?.isActive('blockquote') }"
-          @mousedown.prevent="editor?.chain().focus().toggleBlockquote().run()" title="Blockquote">❝</button>
-        <span class="tb-sep" />
-        <button class="tb"
-          @mousedown.prevent="editor?.chain().focus().setHorizontalRule().run()" title="Horizontal rule">—</button>
+      <div
+        v-if="!plainTextMode"
+        class="flex shrink-0 flex-wrap items-center gap-0.5 border-b border-[var(--color-border)] px-2.5 py-1.5"
+      >
+        <template v-for="item in toolbarItems" :key="item.title ?? item.sep">
+          <span v-if="item.sep" class="mx-1 h-4 w-px shrink-0 bg-[var(--color-border)]" />
+          <button
+            v-else
+            @mousedown.prevent="item.action()"
+            :title="item.title"
+            :class="[
+              'min-w-[26px] rounded px-1.5 py-0.5 text-[13px] leading-snug transition-colors',
+              item.active?.()
+                ? 'bg-teal-light text-teal'
+                : 'text-[var(--color-text)] hover:bg-[var(--color-bg)]'
+            ]"
+            v-html="item.label"
+          />
+        </template>
       </div>
 
       <!-- Rich editor -->
-      <EditorContent v-if="!plainTextMode" :editor="editor" class="editor" />
+      <EditorContent v-if="!plainTextMode" :editor="editor" class="min-h-[200px] flex-1 overflow-y-auto" />
 
       <!-- Plain text fallback -->
-      <textarea v-else ref="textareaEl" v-model="form.plainBody" placeholder="Write your message…" class="plain-textarea" />
+      <textarea
+        v-else
+        ref="textareaEl"
+        v-model="form.plainBody"
+        placeholder="Write your message…"
+        class="min-h-[200px] flex-1 resize-none bg-[var(--color-surface)] px-4 py-3 text-[14px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
+      />
 
-      <div v-if="attachments.length" class="attachment-list">
-        <div v-for="(att, i) in attachments" :key="i" class="attachment-chip">
-          <span class="att-icon">📎</span>
-          <span class="att-name">{{ att.filename }}</span>
-          <button @click="removeAttachment(i)" class="att-remove" title="Remove">×</button>
+      <!-- Attachments -->
+      <div
+        v-if="attachments.length"
+        class="flex shrink-0 flex-wrap gap-1.5 border-t border-[var(--color-border)] px-4 py-2"
+      >
+        <div
+          v-for="(att, i) in attachments"
+          :key="i"
+          class="flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-0.5 text-[12px] text-[var(--color-text)]"
+        >
+          <span>📎</span>
+          <span class="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap">{{ att.filename }}</span>
+          <button
+            @click="removeAttachment(i)"
+            class="ml-0.5 text-[var(--color-text-muted)] transition-colors hover:text-red-600"
+            title="Remove"
+          >×</button>
         </div>
       </div>
-      <div class="compose-footer">
-        <button @click="send" :disabled="sending || savingDraft" class="send-btn">
-          {{ sending ? 'Sending…' : 'Send' }}
-        </button>
-        <button @click="saveDraftManual" :disabled="sending || savingDraft" class="draft-btn">
-          {{ savingDraft ? 'Saving…' : 'Save Draft' }}
-        </button>
-        <span v-if="draftSaved && !savingDraft" class="draft-status">Draft saved</span>
-        <button class="plain-toggle" @click="togglePlainText" :title="plainTextMode ? 'Switch to rich text' : 'Switch to plain text'">
-          {{ plainTextMode ? 'Rich text' : 'Plain text' }}
-        </button>
-        <p v-if="error" class="error">{{ error }}</p>
+
+      <!-- Footer -->
+      <div class="flex shrink-0 items-center gap-3 border-t border-[var(--color-border)] px-4 py-2.5">
+        <button
+          @click="send"
+          :disabled="sending || savingDraft"
+          class="rounded-md bg-teal px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-teal/90 disabled:cursor-not-allowed disabled:opacity-60"
+        >{{ sending ? 'Sending…' : 'Send' }}</button>
+
+        <button
+          @click="saveDraftManual"
+          :disabled="sending || savingDraft"
+          class="rounded-md border border-[var(--color-border)] px-4 py-2 text-[13px] font-medium text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
+        >{{ savingDraft ? 'Saving…' : 'Save Draft' }}</button>
+
+        <span v-if="draftSaved && !savingDraft" class="text-[12px] text-[var(--color-text-muted)]">Draft saved</span>
+
+        <button
+          @click="togglePlainText"
+          :title="plainTextMode ? 'Switch to rich text' : 'Switch to plain text'"
+          class="ml-auto text-[12px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+        >{{ plainTextMode ? 'Rich text' : 'Plain text' }}</button>
+
+        <p v-if="error" class="text-[12px] text-red-600">{{ error }}</p>
       </div>
+
     </div>
   </div>
 </template>
@@ -217,6 +263,22 @@ async function saveDraftManual() {
 
 const fromOptions = computed(() => settings.fromOptions)
 
+// Toolbar items — buttons and separators in one flat list, rendered with v-if in the template.
+const toolbarItems = computed(() => [
+  { label: '<b>B</b>',  title: 'Bold',           active: () => editor.value?.isActive('bold'),        action: () => editor.value?.chain().focus().toggleBold().run() },
+  { label: '<i>I</i>',  title: 'Italic',          active: () => editor.value?.isActive('italic'),      action: () => editor.value?.chain().focus().toggleItalic().run() },
+  { label: '<u>U</u>',  title: 'Underline',       active: () => editor.value?.isActive('underline'),   action: () => editor.value?.chain().focus().toggleUnderline().run() },
+  { label: '<s>S</s>',  title: 'Strikethrough',   active: () => editor.value?.isActive('strike'),      action: () => editor.value?.chain().focus().toggleStrike().run() },
+  { sep: 'a' },
+  { label: '🔗',        title: 'Link',             active: () => editor.value?.isActive('link'),        action: () => setLink() },
+  { sep: 'b' },
+  { label: '≡',         title: 'Bullet list',      active: () => editor.value?.isActive('bulletList'),  action: () => editor.value?.chain().focus().toggleBulletList().run() },
+  { label: '1.',        title: 'Ordered list',     active: () => editor.value?.isActive('orderedList'), action: () => editor.value?.chain().focus().toggleOrderedList().run() },
+  { label: '❝',         title: 'Blockquote',       active: () => editor.value?.isActive('blockquote'),  action: () => editor.value?.chain().focus().toggleBlockquote().run() },
+  { sep: 'c' },
+  { label: '—',         title: 'Horizontal rule',  active: null,                                        action: () => editor.value?.chain().focus().setHorizontalRule().run() },
+])
+
 // --- open() ---
 
 async function open(prefill = {}) {
@@ -323,198 +385,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 defineExpose({ open, close, visible })
 </script>
 
-<style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.2);
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
-  padding: 2rem;
-  z-index: 100;
-}
-.compose {
-  width: 560px;
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  max-height: 620px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-}
-.compose-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 0.5px solid var(--color-border);
-  font-size: 13px;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-.close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--color-text-muted); }
-.from-row {
-  display: flex;
-  align-items: center;
-  border-bottom: 0.5px solid var(--color-border);
-}
-.from-label {
-  padding: 8px 16px;
-  font-size: 13px;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-}
-.from-select {
-  flex: 1;
-  padding: 8px 8px 8px 0;
-  border: none;
-  font-size: 13px;
-  font-family: inherit;
-  background: transparent;
-  color: var(--color-text);
-  outline: none;
-  cursor: pointer;
-}
-.fields input, .subject-input {
-  display: block;
-  width: 100%;
-  padding: 8px 16px;
-  border: none;
-  border-bottom: 0.5px solid var(--color-border);
-  font-size: 13px;
-  outline: none;
-  box-sizing: border-box;
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-/* Toolbar */
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 5px 10px;
-  border-bottom: 0.5px solid var(--color-border);
-  flex-shrink: 0;
-  flex-wrap: wrap;
-}
-.tb {
-  padding: 3px 7px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--color-text);
-  line-height: 1.4;
-  min-width: 26px;
-}
-.tb:hover { background: var(--color-bg); }
-.tb.active { background: var(--color-teal-light); color: var(--color-teal); }
-.tb-sep { width: 0.5px; height: 16px; background: var(--color-border); margin: 0 4px; flex-shrink: 0; }
-
-/* Rich editor area */
-.editor {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 200px;
-  font-size: 14px;
-  font-family: inherit;
-  line-height: 1.6;
-}
-
-.plain-textarea {
-  flex: 1;
-  padding: 12px 16px;
-  border: none;
-  resize: none;
-  font-size: 14px;
-  font-family: inherit;
-  line-height: 1.6;
-  outline: none;
-  min-height: 200px;
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.attachment-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 16px;
-  border-top: 0.5px solid var(--color-border);
-  flex-shrink: 0;
-}
-.attachment-chip {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--color-bg);
-  border: 0.5px solid var(--color-border);
-  border-radius: 20px;
-  padding: 3px 8px 3px 6px;
-  font-size: 12px;
-  color: var(--color-text);
-}
-.att-icon { font-size: 13px; }
-.att-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.att-remove {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  color: var(--color-text-muted);
-  padding: 0 0 0 2px;
-}
-.att-remove:hover { color: #c0392b; }
-.compose-footer {
-  padding: 10px 16px;
-  border-top: 0.5px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-shrink: 0;
-}
-.send-btn {
-  padding: 8px 20px;
-  background: var(--color-teal);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.send-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.draft-btn {
-  padding: 8px 16px;
-  background: transparent;
-  color: var(--color-text-muted);
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.draft-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.draft-status { font-size: 12px; color: var(--color-text-muted); }
-.plain-toggle {
-  margin-left: auto;
-  background: none;
-  border: none;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 0;
-}
-.plain-toggle:hover { color: var(--color-text); }
-.error { font-size: 12px; color: #c0392b; }
-</style>
-
-<!-- ProseMirror styles — not scoped so they reach inside the editor shadow DOM -->
+<!-- ProseMirror styles — must be global (not scoped) to reach inside Tiptap's rendered HTML -->
 <style>
 .ProseMirror {
   padding: 12px 16px;

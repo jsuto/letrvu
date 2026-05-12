@@ -11,6 +11,7 @@
       <MessageView v-else ref="messageView" />
     </main>
     <ComposeModal ref="composeModal" />
+    <KeyboardShortcutsModal />
   </div>
 </template>
 
@@ -26,6 +27,7 @@ import MessageList from '../components/MessageList.vue'
 import MessageView from '../components/MessageView.vue'
 import ThreadView from '../components/ThreadView.vue'
 import ComposeModal from '../components/ComposeModal.vue'
+import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal.vue'
 
 const mail = useMailStore()
 const settings = useSettingsStore()

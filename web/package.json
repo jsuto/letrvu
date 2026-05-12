@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.3.0",
     "@tiptap/extension-link": "^3.23.1",
     "@tiptap/extension-placeholder": "^3.23.1",
     "@tiptap/extension-underline": "^3.23.1",
@@ -18,6 +19,7 @@
     "@tiptap/vue-3": "^3.23.1",
     "dompurify": "^3.4.2",
     "pinia": "^2.1.0",
+    "tailwindcss": "^4.3.0",
     "vue": "^3.4.0",
     "vue-router": "^4.3.0"
   },
