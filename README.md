@@ -168,7 +168,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Keyboard shortcuts (n/p next/prev, r reply, d delete, c compose)
 - [x] HTML compose (rich text editor)
 - [ ] Conversation / thread view
-- [ ] Unread count in browser tab title
+- [x] Unread count in browser tab title
 - [x] Desktop notifications (Browser Notification API + IMAP IDLE)
 - [ ] Mobile-responsive layout
 - [x] Mark as spam (move to Junk folder)

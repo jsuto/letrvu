@@ -18,6 +18,7 @@ import { ref, provide, onMounted, onUnmounted } from 'vue'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import { useMailEvents } from '../composables/useMailEvents'
+import { useTabTitle } from '../composables/useTabTitle'
 import FolderList from '../components/FolderList.vue'
 import MessageList from '../components/MessageList.vue'
 import MessageView from '../components/MessageView.vue'
@@ -32,6 +33,7 @@ const messageView = ref(null)
 provide('compose', composeModal)
 
 useMailEvents()
+useTabTitle()
 
 onMounted(async () => {
   await Promise.all([mail.fetchFolders(), settings.fetchSettings()])
