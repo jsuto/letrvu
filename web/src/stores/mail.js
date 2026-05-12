@@ -12,6 +12,8 @@ export const useMailStore = defineStore('mail', () => {
   const pageSize = 50
   const hasMore = ref(false)
   const selectedUids = ref(new Set())
+  // true when messages are cross-folder search results
+  const globalSearchMode = ref(false)
 
   async function fetchFolders() {
     const res = await fetch('/api/folders')
@@ -32,6 +34,7 @@ export const useMailStore = defineStore('mail', () => {
 
   async function fetchMessages(folder, p = 1) {
     currentFolder.value = folder
+    globalSearchMode.value = false
     page.value = p
     selectedUids.value = new Set()
     currentThread.value = null
@@ -52,11 +55,26 @@ export const useMailStore = defineStore('mail', () => {
 
   async function searchMessages(folder, query) {
     currentFolder.value = folder
+    globalSearchMode.value = false
     loading.value = true
     try {
       const res = await fetch(
         `/api/folders/${encodeURIComponent(folder)}/messages?q=${encodeURIComponent(query)}`,
       )
+      if (!res.ok) return
+      messages.value = await res.json()
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function searchAllFolders(query) {
+    globalSearchMode.value = true
+    currentThread.value = null
+    selectedUids.value = new Set()
+    loading.value = true
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
       if (!res.ok) return
       messages.value = await res.json()
     } finally {
@@ -302,7 +320,7 @@ export const useMailStore = defineStore('mail', () => {
     // knows what to show first. fetchMessage will be called per-message
     // inside ThreadView as each one is expanded.
     const toOpen = thread.messages.find(m => !m.read) ?? thread.messages[thread.messages.length - 1]
-    fetchMessage(currentFolder.value, toOpen.uid)
+    fetchMessage(toOpen.folder || currentFolder.value, toOpen.uid)
   }
 
   return {
@@ -312,12 +330,14 @@ export const useMailStore = defineStore('mail', () => {
     currentThread,
     currentMessage,
     currentFolder,
+    globalSearchMode,
     loading,
     page,
     hasMore,
     fetchFolders,
     fetchMessages,
     searchMessages,
+    searchAllFolders,
     fetchMessage,
     selectedUids,
     toggleSelect,

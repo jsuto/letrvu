@@ -12,11 +12,13 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jsuto/letrvu/internal/calendar"
 	"github.com/jsuto/letrvu/internal/contacts"
 	"github.com/jsuto/letrvu/internal/imap"
+	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
 	"github.com/jsuto/letrvu/internal/smtp"
@@ -59,9 +61,97 @@ type handler struct {
 	settings     *settings.Store
 	contacts     *contacts.Store
 	calendar     *calendar.Store
+	index        *index.Store
 	config       ServerConfig
 	folderCache  *folderCache
 	loginLimiter *loginLimiter // per source IP
+	// syncInProgress tracks which user@host pairs are currently being indexed
+	// in the background so we don't launch concurrent syncs.
+	syncInProgress syncSet
+}
+
+// syncSet is a concurrency-safe set used to prevent duplicate background index syncs.
+type syncSet struct{ m sync.Map }
+
+func (s *syncSet) tryAcquire(key string) bool {
+	_, loaded := s.m.LoadOrStore(key, struct{}{})
+	return !loaded
+}
+func (s *syncSet) release(key string) { s.m.Delete(key) }
+
+// syncIndexBackground performs an incremental sync of all IMAP folders into the
+// local message index. It is safe to call concurrently — duplicate calls for the
+// same user are silently dropped via syncInProgress.
+func (h *handler) syncIndexBackground(sess *session.Session) {
+	key := sess.Username + "@" + sess.IMAPHost
+	if !h.syncInProgress.tryAcquire(key) {
+		return
+	}
+	defer h.syncInProgress.release(key)
+
+	c, err := imapConnect(sess)
+	if err != nil {
+		return
+	}
+	defer c.Close()
+
+	folders, err := c.ListFolders()
+	if err != nil {
+		return
+	}
+
+	const batchSize = 100
+	for _, f := range folders {
+		allUIDs, uidValidity, err := c.ListAllUIDs(f.Name)
+		if err != nil {
+			continue
+		}
+
+		// If UID validity changed the server has renumbered all messages — wipe
+		// the stored index for this folder and re-sync from scratch.
+		if stored := h.index.UIDValidity(sess.Username, sess.IMAPHost, f.Name); stored != 0 && stored != uidValidity {
+			_ = h.index.DeleteFolder(sess.Username, sess.IMAPHost, f.Name)
+		}
+		h.index.SetUIDValidity(sess.Username, sess.IMAPHost, f.Name, uidValidity)
+
+		knownUIDs, err := h.index.KnownUIDs(sess.Username, sess.IMAPHost, f.Name)
+		if err != nil {
+			continue
+		}
+
+		// Collect UIDs that need to be fetched (new on server) and those that
+		// need to be removed (expunged on server).
+		serverSet := make(map[uint32]struct{}, len(allUIDs))
+		var toFetch []uint32
+		for _, uid := range allUIDs {
+			serverSet[uid] = struct{}{}
+			if _, known := knownUIDs[uid]; !known {
+				toFetch = append(toFetch, uid)
+			}
+		}
+		var toDelete []uint32
+		for uid := range knownUIDs {
+			if _, exists := serverSet[uid]; !exists {
+				toDelete = append(toDelete, uid)
+			}
+		}
+
+		if len(toDelete) > 0 {
+			_ = h.index.Delete(sess.Username, sess.IMAPHost, f.Name, toDelete)
+		}
+
+		for i := 0; i < len(toFetch); i += batchSize {
+			end := i + batchSize
+			if end > len(toFetch) {
+				end = len(toFetch)
+			}
+			msgs, err := c.FetchMessageSummaries(f.Name, toFetch[i:end])
+			if err != nil {
+				break
+			}
+			_ = h.index.Upsert(sess.Username, sess.IMAPHost, f.Name, msgs)
+		}
+	}
 }
 
 // clientIP returns the real client IP address. If TrustedProxy is configured
@@ -268,6 +358,25 @@ func (h *handler) refreshFolderCache(imapHost string, imapPort int, username, pa
 	h.fetchAndCacheFolders(imapHost, imapPort, username, password, key) //nolint:errcheck
 }
 
+func (h *handler) searchGlobal(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("missing q parameter"))
+		return
+	}
+
+	sess := h.sessionFrom(r)
+	msgs, err := h.index.Search(sess.Username, sess.IMAPHost, q)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	if msgs == nil {
+		msgs = []imap.Message{}
+	}
+	writeJSON(w, http.StatusOK, msgs)
+}
+
 func (h *handler) listMessages(w http.ResponseWriter, r *http.Request) {
 	folder, err := url.PathUnescape(r.PathValue("folder"))
 	if err != nil {
@@ -290,6 +399,8 @@ func (h *handler) listMessages(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 			return
 		}
+		// Opportunistically index search results.
+		go h.index.Upsert(sess.Username, sess.IMAPHost, folder, msgs)
 		writeJSON(w, http.StatusOK, msgs)
 		return
 	}
@@ -312,6 +423,8 @@ func (h *handler) listMessages(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	// Opportunistically index browsed messages.
+	go h.index.Upsert(sess.Username, sess.IMAPHost, folder, msgs)
 	writeJSON(w, http.StatusOK, msgs)
 }
 
@@ -397,6 +510,7 @@ func (h *handler) deleteMessage(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	go h.index.Delete(sess.Username, sess.IMAPHost, folder, []uint32{uint32(uidVal)})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -432,6 +546,7 @@ func (h *handler) markRead(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	go h.index.UpdateRead(sess.Username, sess.IMAPHost, folder, uint32(uidVal), body.Read)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -464,6 +579,7 @@ func (h *handler) markFlagged(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	go h.index.UpdateFlagged(sess.Username, sess.IMAPHost, folder, uint32(uidVal), body.Flagged)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -498,6 +614,7 @@ func (h *handler) moveMessage(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	go h.index.Delete(sess.Username, sess.IMAPHost, folder, []uint32{uint32(uidVal)})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -528,6 +645,7 @@ func (h *handler) moveMessages(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	go h.index.Delete(sess.Username, sess.IMAPHost, folder, body.UIDs)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -557,6 +675,7 @@ func (h *handler) markSpam(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	go h.index.Delete(sess.Username, sess.IMAPHost, folder, body.UIDs)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "dest": dest})
 }
 
@@ -584,6 +703,7 @@ func (h *handler) deleteMessages(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	go h.index.Delete(sess.Username, sess.IMAPHost, folder, body.UIDs)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -612,6 +732,11 @@ func (h *handler) markReadMessages(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	go func() {
+		for _, uid := range body.UIDs {
+			h.index.UpdateRead(sess.Username, sess.IMAPHost, folder, uid, body.Read)
+		}
+	}()
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -1013,6 +1138,11 @@ func (h *handler) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer cancel()
+
+	// Kick off a background full-index sync for this user session. The sync
+	// runs at most once concurrently per user so it is safe to call on every
+	// SSE reconnect.
+	go h.syncIndexBackground(sess)
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")

@@ -197,6 +197,8 @@ type Message struct {
 	Flagged        bool      `json:"flagged"`
 	HasAttachments bool      `json:"has_attachments"`
 	Size           uint32    `json:"size"`
+	// Folder is populated only in cross-folder search results.
+	Folder string `json:"folder,omitempty"`
 	// Threading headers — used by the frontend to group messages into threads.
 	MessageID  string `json:"message_id,omitempty"`
 	InReplyTo  string `json:"in_reply_to,omitempty"`
@@ -689,6 +691,87 @@ func (c *Client) DownloadAttachment(folder string, uid uint32, index int) (*Atta
 		}
 	}
 	return nil, nil, fmt.Errorf("attachment index %d not found", index)
+}
+
+// ListAllUIDs returns every UID present in folder along with the folder's
+// UID validity value. It is a cheap single-round-trip operation used by the
+// background index sync to detect new and deleted messages.
+func (c *Client) ListAllUIDs(folder string) (uids []uint32, uidValidity uint32, err error) {
+	selectData, err := c.c.Select(folder, nil).Wait()
+	if err != nil {
+		return nil, 0, fmt.Errorf("select %q: %w", folder, err)
+	}
+	uidValidity = selectData.UIDValidity
+
+	if selectData.NumMessages == 0 {
+		return []uint32{}, uidValidity, nil
+	}
+
+	searchData, err := c.c.UIDSearch(&goimap.SearchCriteria{}, nil).Wait()
+	if err != nil {
+		return nil, uidValidity, fmt.Errorf("uid search all in %q: %w", folder, err)
+	}
+	for _, uid := range searchData.AllUIDs() {
+		uids = append(uids, uint32(uid))
+	}
+	return uids, uidValidity, nil
+}
+
+// FetchMessageSummaries fetches metadata for the given UIDs in folder.
+// The folder must already be selected via a prior call, or Select is called
+// internally. Results are returned in arbitrary order.
+func (c *Client) FetchMessageSummaries(folder string, uids []uint32) ([]Message, error) {
+	if len(uids) == 0 {
+		return nil, nil
+	}
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return nil, fmt.Errorf("select %q: %w", folder, err)
+	}
+
+	var uidSet goimap.UIDSet
+	for _, uid := range uids {
+		uidSet.AddNum(goimap.UID(uid))
+	}
+
+	fetchOpts := &goimap.FetchOptions{
+		UID:           true,
+		Envelope:      true,
+		Flags:         true,
+		RFC822Size:    true,
+		BodyStructure: &goimap.FetchItemBodyStructure{Extended: true},
+	}
+	msgs, err := c.c.Fetch(uidSet, fetchOpts).Collect()
+	if err != nil {
+		return nil, fmt.Errorf("fetch summaries in %q: %w", folder, err)
+	}
+
+	result := make([]Message, 0, len(msgs))
+	for _, buf := range msgs {
+		msg := Message{
+			UID:  uint32(buf.UID),
+			Size: uint32(buf.RFC822Size),
+		}
+		if buf.Envelope != nil {
+			msg.Subject = buf.Envelope.Subject
+			msg.Date = buf.Envelope.Date
+			if len(buf.Envelope.From) > 0 {
+				msg.From = formatAddress(buf.Envelope.From[0])
+			}
+		}
+		for _, flag := range buf.Flags {
+			switch flag {
+			case goimap.FlagSeen:
+				msg.Read = true
+			case goimap.FlagFlagged:
+				msg.Flagged = true
+			}
+		}
+		if buf.BodyStructure != nil {
+			msg.HasAttachments = bodyHasAttachments(buf.BodyStructure)
+		}
+		result = append(result, msg)
+	}
+	return result, nil
 }
 
 // SearchMessages runs a server-side TEXT search in folder and returns matching

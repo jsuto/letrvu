@@ -19,6 +19,7 @@ import (
 	"github.com/jsuto/letrvu/internal/contacts"
 	"github.com/jsuto/letrvu/internal/db"
 	"github.com/jsuto/letrvu/internal/imap"
+	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
 	"github.com/jsuto/letrvu/internal/smtp"
@@ -63,6 +64,7 @@ func main() {
 	settingsStore := settings.NewStore(database)
 	contactsStore := contacts.NewStore(database)
 	calendarStore := calendar.NewStore(database)
+	indexStore := index.NewStore(database)
 
 	// Server-level IMAP/SMTP defaults (pre-fill login form via /api/config).
 	if strings.EqualFold(os.Getenv("LOG_LEVEL"), "debug") {
@@ -84,7 +86,7 @@ func main() {
 		LoginLockout:     envDuration("LOGIN_LOCKOUT", 15*time.Minute),
 	}
 
-	handler := api.NewRouter(sessions, settingsStore, contactsStore, calendarStore, cfg)
+	handler := api.NewRouter(sessions, settingsStore, contactsStore, calendarStore, indexStore, cfg)
 
 	log.Printf("letrvu listening on %s", *addr)
 	if err := http.ListenAndServe(*addr, handler); err != nil {

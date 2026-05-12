@@ -172,7 +172,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Desktop notifications (Browser Notification API + IMAP IDLE)
 - [ ] Mobile-responsive layout
 - [x] Mark as spam (move to Junk folder)
-- [ ] Cross-folder search
+- [X] Cross-folder search
 - [ ] Undo send (configurable delay before SMTP submission)
 - [ ] Vacation / autoresponder (Sieve)
 - [x] Contact groups / distribution lists

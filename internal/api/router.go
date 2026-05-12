@@ -5,18 +5,20 @@ import (
 
 	"github.com/jsuto/letrvu/internal/calendar"
 	"github.com/jsuto/letrvu/internal/contacts"
+	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
 )
 
 // NewRouter wires all HTTP routes and returns the root handler.
-func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsStore *contacts.Store, calendarStore *calendar.Store, cfg ServerConfig) http.Handler {
+func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsStore *contacts.Store, calendarStore *calendar.Store, indexStore *index.Store, cfg ServerConfig) http.Handler {
 	mux := http.NewServeMux()
 	h := &handler{
 		sessions:     sessions,
 		settings:     settingsStore,
 		contacts:     contactsStore,
 		calendar:     calendarStore,
+		index:        indexStore,
 		config:       cfg,
 		folderCache:  newFolderCache(cfg.FolderCacheTTL),
 		loginLimiter: newLoginLimiter(cfg.LoginMaxAttempts, cfg.LoginWindow, cfg.LoginLockout),
@@ -36,6 +38,9 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("DELETE /api/folders/{folder}", h.requireAuth(h.deleteFolder))
 	mux.HandleFunc("POST /api/folders/{folder}/subscribe", h.requireAuth(h.subscribeFolder))
 	mux.HandleFunc("DELETE /api/folders/{folder}/subscribe", h.requireAuth(h.unsubscribeFolder))
+
+	// Global search
+	mux.HandleFunc("GET /api/search", h.requireAuth(h.searchGlobal))
 
 	// Messages
 	mux.HandleFunc("GET /api/folders/{folder}/messages", h.requireAuth(h.listMessages))

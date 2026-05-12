@@ -6,7 +6,7 @@
     @confirm="doBulkDelete"
   />
     <div class="toolbar">
-      <span class="folder-name">{{ mail.currentFolder }}</span>
+      <span class="folder-name">{{ mail.globalSearchMode ? 'All folders' : mail.currentFolder }}</span>
       <form class="search-form" @submit.prevent="onSearch">
         <input
           v-model="query"
@@ -15,6 +15,12 @@
           class="search-input"
           @input="onSearchInput"
         />
+        <button
+          type="button"
+          :class="['scope-btn', { active: searchAllFolders }]"
+          @click="searchAllFolders = !searchAllFolders"
+          title="Search all folders"
+        >All</button>
       </form>
     </div>
 
@@ -70,6 +76,7 @@
             </span>
           </div>
           <div class="subject">{{ thread.latest.subject || '(no subject)' }}</div>
+          <div v-if="mail.globalSearchMode && thread.latest.folder" class="folder-badge">{{ thread.latest.folder }}</div>
         </div>
       </li>
     </ul>
@@ -90,6 +97,7 @@ const mail = useMailStore()
 const query = ref('')
 const confirmBulkDeleteVisible = ref(false)
 const searching = ref(false)
+const searchAllFolders = ref(false)
 const anchorIndex = ref(null)
 const bulkMoveOpen = ref(false)
 const bulkMoveWrapEl = ref(null)
@@ -203,8 +211,9 @@ function onRowClick(e, thread, i) {
     // Single-message thread — open directly in MessageView, no thread pane.
     mail.currentThread = null
     const msg = thread.messages[0]
-    mail.fetchMessage(mail.currentFolder, msg.uid)
-    if (!msg.read) mail.markRead(mail.currentFolder, msg.uid, true)
+    const folder = msg.folder || mail.currentFolder
+    mail.fetchMessage(folder, msg.uid)
+    if (!msg.read) mail.markRead(folder, msg.uid, true)
   } else {
     mail.openThread(thread)
   }
@@ -241,7 +250,11 @@ function onDragEnd() {
 function onSearch() {
   if (query.value.trim()) {
     searching.value = true
-    mail.searchMessages(mail.currentFolder, query.value.trim())
+    if (searchAllFolders.value) {
+      mail.searchAllFolders(query.value.trim())
+    } else {
+      mail.searchMessages(mail.currentFolder, query.value.trim())
+    }
   } else {
     searching.value = false
     mail.fetchMessages(mail.currentFolder)
@@ -280,9 +293,9 @@ function formatDate(dateStr) {
   gap: 8px;
 }
 .folder-name { font-size: 13px; font-weight: 500; white-space: nowrap; }
-.search-form { flex: 1; }
+.search-form { flex: 1; display: flex; gap: 4px; }
 .search-input {
-  width: 100%;
+  flex: 1;
   padding: 5px 8px;
   border: 0.5px solid var(--color-border);
   border-radius: 6px;
@@ -291,6 +304,36 @@ function formatDate(dateStr) {
   background: var(--color-bg);
 }
 .search-input:focus { border-color: var(--color-teal); }
+.scope-btn {
+  padding: 4px 8px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 11px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.scope-btn.active {
+  background: var(--color-teal);
+  color: white;
+  border-color: var(--color-teal);
+}
+.folder-badge {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 0.5px solid var(--color-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  display: inline-block;
+  margin-top: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .selection-bar {
   display: flex;

@@ -148,5 +148,37 @@ func Migrate(db *DB) error {
 	// Best-effort column additions for schema evolution (ignored if already exist).
 	_, _ = db.Exec(`ALTER TABLE calendar_events ADD COLUMN rrule TEXT NOT NULL DEFAULT ''`)
 
+	// Message index tables (best-effort; already exist on upgrade).
+	for _, s := range []string{
+		`CREATE TABLE IF NOT EXISTS message_index (
+			username        TEXT    NOT NULL,
+			imap_host       TEXT    NOT NULL,
+			folder          TEXT    NOT NULL,
+			uid             INTEGER NOT NULL,
+			subject         TEXT    NOT NULL DEFAULT '',
+			from_addr       TEXT    NOT NULL DEFAULT '',
+			date            TEXT    NOT NULL DEFAULT '',
+			read            INTEGER NOT NULL DEFAULT 0,
+			flagged         INTEGER NOT NULL DEFAULT 0,
+			has_attachments INTEGER NOT NULL DEFAULT 0,
+			size            INTEGER NOT NULL DEFAULT 0,
+			message_id      TEXT    NOT NULL DEFAULT '',
+			in_reply_to     TEXT    NOT NULL DEFAULT '',
+			refs            TEXT    NOT NULL DEFAULT '',
+			PRIMARY KEY (username, imap_host, folder, uid)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_index_search
+			ON message_index (username, imap_host, subject, from_addr)`,
+		`CREATE TABLE IF NOT EXISTS folder_index_state (
+			username     TEXT    NOT NULL,
+			imap_host    TEXT    NOT NULL,
+			folder       TEXT    NOT NULL,
+			uid_validity INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (username, imap_host, folder)
+		)`,
+	} {
+		_, _ = db.Exec(s)
+	}
+
 	return nil
 }
