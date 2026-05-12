@@ -383,3 +383,56 @@ func TestFormatAddress_NoName(t *testing.T) {
 		t.Errorf("formatAddress = %q, want %q", got, want)
 	}
 }
+
+// --- rawHeaders (threading) --------------------------------------------------
+
+func TestRawHeaders_ThreadingFields(t *testing.T) {
+	raw := []byte(
+		"Message-ID: <abc123@example.com>\r\n" +
+			"In-Reply-To: <parent@example.com>\r\n" +
+			"References: <root@example.com> <parent@example.com>\r\n" +
+			"\r\n",
+	)
+	h := rawHeaders(raw)
+
+	if got := strings.TrimSpace(h["message-id"][0]); got != "<abc123@example.com>" {
+		t.Errorf("message-id = %q, want %q", got, "<abc123@example.com>")
+	}
+	if got := strings.TrimSpace(h["in-reply-to"][0]); got != "<parent@example.com>" {
+		t.Errorf("in-reply-to = %q, want %q", got, "<parent@example.com>")
+	}
+	if got := strings.TrimSpace(h["references"][0]); got != "<root@example.com> <parent@example.com>" {
+		t.Errorf("references = %q, want %q", got, "<root@example.com> <parent@example.com>")
+	}
+}
+
+func TestRawHeaders_MissingThreadingFields(t *testing.T) {
+	raw := []byte("Subject: Hello\r\n\r\n")
+	h := rawHeaders(raw)
+	if len(h["in-reply-to"]) != 0 {
+		t.Errorf("expected no in-reply-to, got %v", h["in-reply-to"])
+	}
+	if len(h["references"]) != 0 {
+		t.Errorf("expected no references, got %v", h["references"])
+	}
+}
+
+func TestRawHeaders_FoldedReferences(t *testing.T) {
+	// RFC 2822 allows long header values to be folded across lines with LWSP.
+	raw := []byte(
+		"References: <root@example.com>\r\n" +
+			" <mid@example.com>\r\n" +
+			" <leaf@example.com>\r\n" +
+			"\r\n",
+	)
+	h := rawHeaders(raw)
+	if len(h["references"]) == 0 {
+		t.Fatal("expected references header, got none")
+	}
+	got := h["references"][0]
+	for _, id := range []string{"<root@example.com>", "<mid@example.com>", "<leaf@example.com>"} {
+		if !strings.Contains(got, id) {
+			t.Errorf("references missing %q; full value: %q", id, got)
+		}
+	}
+}

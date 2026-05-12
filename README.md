@@ -167,7 +167,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Bulk actions (select multiple messages → delete / move / mark read)
 - [x] Keyboard shortcuts (n/p next/prev, r reply, d delete, c compose)
 - [x] HTML compose (rich text editor)
-- [ ] Conversation / thread view
+- [x] Conversation / thread view
 - [x] Unread count in browser tab title
 - [x] Desktop notifications (Browser Notification API + IMAP IDLE)
 - [ ] Mobile-responsive layout

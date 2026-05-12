@@ -7,7 +7,8 @@
       <MessageList />
     </section>
     <main class="message-view-panel">
-      <MessageView ref="messageView" />
+      <ThreadView v-if="mail.currentThread" />
+      <MessageView v-else ref="messageView" />
     </main>
     <ComposeModal ref="composeModal" />
   </div>
@@ -22,6 +23,7 @@ import { useTabTitle } from '../composables/useTabTitle'
 import FolderList from '../components/FolderList.vue'
 import MessageList from '../components/MessageList.vue'
 import MessageView from '../components/MessageView.vue'
+import ThreadView from '../components/ThreadView.vue'
 import ComposeModal from '../components/ComposeModal.vue'
 
 const mail = useMailStore()

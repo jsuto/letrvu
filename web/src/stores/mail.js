@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { apiFetch } from '../api'
 
 export const useMailStore = defineStore('mail', () => {
@@ -34,6 +34,7 @@ export const useMailStore = defineStore('mail', () => {
     currentFolder.value = folder
     page.value = p
     selectedUids.value = new Set()
+    currentThread.value = null
     loading.value = true
     try {
       const res = await fetch(
@@ -223,9 +224,92 @@ export const useMailStore = defineStore('mail', () => {
     if (!res.ok) throw new Error('Save draft failed')
   }
 
+  // --- Thread grouping ---
+
+  // currentThread: the array of messages in the thread the user opened.
+  // null means no thread is open (single-message view or nothing selected).
+  const currentThread = ref(null)
+
+  // threads: messages grouped into conversation threads, sorted by the date
+  // of the most recent message (newest thread first).
+  //
+  // Threading algorithm:
+  //  1. Build a map of message_id → message.
+  //  2. For each message, walk its References chain to find the oldest
+  //     ancestor that is also present in the current page. That becomes the
+  //     thread root.
+  //  3. Group by root UID; sort threads by latest message date.
+  const threads = computed(() => {
+    const msgs = messages.value
+    if (!msgs.length) return []
+
+    // Index messages by message_id for O(1) ancestor lookup.
+    const byId = new Map()
+    for (const m of msgs) {
+      if (m.message_id) byId.set(m.message_id, m)
+    }
+
+    // Find the root of a message by walking References, then In-Reply-To.
+    // visited guards against circular chains (self-references, A→B→A, etc.).
+    function findRoot(msg, visited = new Set()) {
+      if (visited.has(msg.uid)) return msg
+      visited.add(msg.uid)
+      // Walk the References chain (oldest ancestor is first in the list).
+      if (msg.references) {
+        const refs = msg.references.trim().split(/\s+/)
+        for (const ref of refs) {
+          if (byId.has(ref)) return findRoot(byId.get(ref), visited)
+        }
+      }
+      if (msg.in_reply_to) {
+        const parent = byId.get(msg.in_reply_to)
+        if (parent) return findRoot(parent, visited)
+      }
+      return msg
+    }
+
+    // Group messages by their root UID.
+    const groups = new Map() // rootUid → Message[]
+    for (const m of msgs) {
+      const root = findRoot(m)
+      const key = root.uid
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(m)
+    }
+
+    // Build thread objects, sorted by latest message date descending.
+    const result = []
+    for (const [rootUid, threadMsgs] of groups) {
+      // Sort within the thread oldest→newest.
+      threadMsgs.sort((a, b) => new Date(a.date) - new Date(b.date))
+      const latest = threadMsgs[threadMsgs.length - 1]
+      const hasUnread = threadMsgs.some(m => !m.read)
+      result.push({
+        id: rootUid,
+        messages: threadMsgs,
+        latest,
+        hasUnread,
+        latestDate: latest.date,
+      })
+    }
+    result.sort((a, b) => new Date(b.latestDate) - new Date(a.latestDate))
+    return result
+  })
+
+  function openThread(thread) {
+    currentThread.value = thread
+    // Mark the latest unread message as the current message so MessageView
+    // knows what to show first. fetchMessage will be called per-message
+    // inside ThreadView as each one is expanded.
+    const toOpen = thread.messages.find(m => !m.read) ?? thread.messages[thread.messages.length - 1]
+    fetchMessage(currentFolder.value, toOpen.uid)
+  }
+
   return {
     folders,
     messages,
+    threads,
+    currentThread,
     currentMessage,
     currentFolder,
     loading,
@@ -251,6 +335,7 @@ export const useMailStore = defineStore('mail', () => {
     subscribeFolder,
     unsubscribeFolder,
     createFolder,
+    openThread,
     renameFolder,
     deleteFolder,
   }

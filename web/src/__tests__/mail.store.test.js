@@ -561,3 +561,148 @@ describe('mail store — deleteFolder', () => {
     await expect(store.deleteFolder('Archive')).rejects.toThrow()
   })
 })
+
+// ---------------------------------------------------------------------------
+// threads computed
+// ---------------------------------------------------------------------------
+
+function makeMsg(overrides) {
+  return {
+    uid: 0,
+    subject: 'Test',
+    from: 'sender@example.com',
+    date: new Date('2024-01-01T10:00:00Z').toISOString(),
+    read: true,
+    flagged: false,
+    has_attachments: false,
+    message_id: '',
+    in_reply_to: '',
+    references: '',
+    ...overrides,
+  }
+}
+
+describe('mail store — threads computed', () => {
+  it('wraps a single message in its own thread', () => {
+    const store = useMailStore()
+    store.messages = [makeMsg({ uid: 1, message_id: '<a@x>' })]
+    expect(store.threads).toHaveLength(1)
+    expect(store.threads[0].messages).toHaveLength(1)
+    expect(store.threads[0].id).toBe(1)
+  })
+
+  it('groups two messages linked by In-Reply-To into one thread', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '<a@x>', date: '2024-01-01T10:00:00Z' }),
+      makeMsg({ uid: 2, message_id: '<b@x>', in_reply_to: '<a@x>', date: '2024-01-01T11:00:00Z' }),
+    ]
+    expect(store.threads).toHaveLength(1)
+    expect(store.threads[0].messages).toHaveLength(2)
+  })
+
+  it('groups three messages linked via References into one thread', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '<a@x>', date: '2024-01-01T10:00:00Z' }),
+      makeMsg({ uid: 2, message_id: '<b@x>', references: '<a@x>', date: '2024-01-01T11:00:00Z' }),
+      makeMsg({ uid: 3, message_id: '<c@x>', references: '<a@x> <b@x>', date: '2024-01-01T12:00:00Z' }),
+    ]
+    expect(store.threads).toHaveLength(1)
+    expect(store.threads[0].messages).toHaveLength(3)
+  })
+
+  it('keeps two unrelated messages as separate threads', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '<a@x>', subject: 'Topic A', date: '2024-01-01T10:00:00Z' }),
+      makeMsg({ uid: 2, message_id: '<b@x>', subject: 'Topic B', date: '2024-01-01T11:00:00Z' }),
+    ]
+    expect(store.threads).toHaveLength(2)
+  })
+
+  it('does NOT group messages just because they share a subject', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '<a@x>', subject: 'Hello' }),
+      makeMsg({ uid: 2, message_id: '<b@x>', subject: 'Hello' }),
+    ]
+    expect(store.threads).toHaveLength(2)
+  })
+
+  it('sorts threads newest-first by latest message date', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '<a@x>', date: '2024-01-01T10:00:00Z' }),
+      makeMsg({ uid: 2, message_id: '<b@x>', date: '2024-01-03T10:00:00Z' }),
+      makeMsg({ uid: 3, message_id: '<c@x>', date: '2024-01-02T10:00:00Z' }),
+    ]
+    const ids = store.threads.map(t => t.id)
+    expect(ids).toEqual([2, 3, 1])
+  })
+
+  it('reports hasUnread true when any message in thread is unread', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '<a@x>', read: true, date: '2024-01-01T10:00:00Z' }),
+      makeMsg({ uid: 2, message_id: '<b@x>', in_reply_to: '<a@x>', read: false, date: '2024-01-01T11:00:00Z' }),
+    ]
+    expect(store.threads[0].hasUnread).toBe(true)
+  })
+
+  it('reports hasUnread false when all messages in thread are read', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '<a@x>', read: true, date: '2024-01-01T10:00:00Z' }),
+      makeMsg({ uid: 2, message_id: '<b@x>', in_reply_to: '<a@x>', read: true, date: '2024-01-01T11:00:00Z' }),
+    ]
+    expect(store.threads[0].hasUnread).toBe(false)
+  })
+
+  it('exposes the latest message as thread.latest', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '<a@x>', date: '2024-01-01T10:00:00Z' }),
+      makeMsg({ uid: 2, message_id: '<b@x>', in_reply_to: '<a@x>', date: '2024-01-01T12:00:00Z' }),
+      makeMsg({ uid: 3, message_id: '<c@x>', in_reply_to: '<b@x>', date: '2024-01-01T11:00:00Z' }),
+    ]
+    expect(store.threads[0].latest.uid).toBe(2)
+  })
+
+  it('returns an empty array when there are no messages', () => {
+    const store = useMailStore()
+    store.messages = []
+    expect(store.threads).toEqual([])
+  })
+
+  it('handles messages missing message_id gracefully', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '' }),
+      makeMsg({ uid: 2, message_id: '' }),
+    ]
+    // No crash; two separate threads since there are no IDs to link them.
+    expect(store.threads).toHaveLength(2)
+  })
+
+  it('does not infinitely recurse on a self-referencing message', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '<a@x>', references: '<a@x>' }),
+    ]
+    expect(() => store.threads).not.toThrow()
+    expect(store.threads).toHaveLength(1)
+  })
+
+  it('does not infinitely recurse on a circular reference chain', () => {
+    const store = useMailStore()
+    store.messages = [
+      makeMsg({ uid: 1, message_id: '<a@x>', in_reply_to: '<b@x>' }),
+      makeMsg({ uid: 2, message_id: '<b@x>', in_reply_to: '<a@x>' }),
+    ]
+    expect(() => store.threads).not.toThrow()
+    // Cycle is broken at the visited check; each message becomes its own root.
+    // The important thing is no crash and a finite result.
+    expect(store.threads.length).toBeGreaterThan(0)
+  })
+})

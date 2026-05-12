@@ -197,6 +197,10 @@ type Message struct {
 	Flagged        bool      `json:"flagged"`
 	HasAttachments bool      `json:"has_attachments"`
 	Size           uint32    `json:"size"`
+	// Threading headers — used by the frontend to group messages into threads.
+	MessageID  string `json:"message_id,omitempty"`
+	InReplyTo  string `json:"in_reply_to,omitempty"`
+	References string `json:"references,omitempty"`
 }
 
 // ListMessages returns message summaries for a folder, newest first.
@@ -249,6 +253,7 @@ func (c *Client) ListMessages(folder string, page, pageSize int) ([]Message, err
 		if buf.Envelope != nil {
 			msg.Subject = buf.Envelope.Subject
 			msg.Date = buf.Envelope.Date
+			msg.MessageID = buf.Envelope.MessageID
 			if len(buf.Envelope.From) > 0 {
 				msg.From = formatAddress(buf.Envelope.From[0])
 			}
@@ -266,7 +271,58 @@ func (c *Client) ListMessages(folder string, page, pageSize int) ([]Message, err
 		}
 		result = append(result, msg)
 	}
+
+	// Second pass: fetch threading headers (In-Reply-To, References) for the
+	// same sequence set. Done separately so a failure here does not affect the
+	// message listing — threading is best-effort.
+	c.enrichWithThreadHeaders(result, seqSet)
+
 	return result, nil
+}
+
+// enrichWithThreadHeaders fetches In-Reply-To and References headers for the
+// given messages in a single FETCH and populates the fields in-place.
+// Failures are silently ignored so the caller always gets the base list.
+func (c *Client) enrichWithThreadHeaders(msgs []Message, seqSet goimap.SeqSet) {
+	// Build a UID→index map for fast lookup.
+	byUID := make(map[uint32]int, len(msgs))
+	for i, m := range msgs {
+		byUID[m.UID] = i
+	}
+
+	threadFetch := &goimap.FetchOptions{
+		UID: true,
+		BodySection: []*goimap.FetchItemBodySection{
+			{
+				Peek:         true,
+				Specifier:    goimap.PartSpecifierHeader,
+				HeaderFields: []string{"MESSAGE-ID", "IN-REPLY-TO", "REFERENCES"},
+			},
+		},
+	}
+	fetched, err := c.c.Fetch(seqSet, threadFetch).Collect()
+	if err != nil {
+		debugf("enrichWithThreadHeaders: fetch failed (non-fatal): %v", err)
+		return
+	}
+	for _, buf := range fetched {
+		idx, ok := byUID[uint32(buf.UID)]
+		if !ok {
+			continue
+		}
+		for _, bodyBytes := range buf.BodySection {
+			rh := rawHeaders(bodyBytes)
+			if vals := rh["message-id"]; len(vals) > 0 {
+				msgs[idx].MessageID = strings.TrimSpace(vals[0])
+			}
+			if vals := rh["in-reply-to"]; len(vals) > 0 {
+				msgs[idx].InReplyTo = strings.TrimSpace(vals[0])
+			}
+			if vals := rh["references"]; len(vals) > 0 {
+				msgs[idx].References = strings.TrimSpace(vals[0])
+			}
+		}
+	}
 }
 
 // Attachment describes a message attachment.

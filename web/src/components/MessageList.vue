@@ -41,34 +41,35 @@
     <div v-else-if="!mail.messages.length" class="state">No messages</div>
     <ul v-else>
       <li
-        v-for="(msg, i) in mail.messages"
-        :key="msg.uid"
+        v-for="(thread, i) in mail.threads"
+        :key="thread.id"
         :class="{
-          unread: !msg.read,
-          active: mail.currentMessage?.uid === msg.uid,
-          selected: mail.selectedUids.has(msg.uid),
+          unread: thread.hasUnread,
+          active: isThreadActive(thread),
+          selected: isThreadSelected(thread),
         }"
         draggable="true"
-        @click="onRowClick($event, msg, i)"
-        @dragstart="onDragStart($event, msg)"
+        @click="onRowClick($event, thread, i)"
+        @dragstart="onDragStart($event, thread)"
         @dragend="onDragEnd"
       >
         <input
           type="checkbox"
           class="row-check"
-          :checked="mail.selectedUids.has(msg.uid)"
-          @click.stop="mail.toggleSelect(msg.uid)"
+          :checked="isThreadSelected(thread)"
+          @click.stop="toggleThreadSelect(thread)"
         />
         <div class="row-content">
           <div class="row-top">
-            <span class="from">{{ msg.from }}</span>
+            <span class="from">{{ threadSenders(thread) }}</span>
             <span class="row-icons">
-              <span v-if="msg.flagged" class="icon-flag" title="Flagged">★</span>
-              <span v-if="msg.has_attachments" class="icon-attach" title="Has attachments">📎</span>
-              <span class="date">{{ formatDate(msg.date) }}</span>
+              <span v-if="thread.messages.some(m => m.flagged)" class="icon-flag" title="Flagged">★</span>
+              <span v-if="thread.messages.some(m => m.has_attachments)" class="icon-attach" title="Has attachments">📎</span>
+              <span v-if="thread.messages.length > 1" class="thread-badge">{{ thread.messages.length }}</span>
+              <span class="date">{{ formatDate(thread.latestDate) }}</span>
             </span>
           </div>
-          <div class="subject">{{ msg.subject || '(no subject)' }}</div>
+          <div class="subject">{{ thread.latest.subject || '(no subject)' }}</div>
         </div>
       </li>
     </ul>
@@ -101,6 +102,40 @@ const otherFolders = computed(() =>
 const isJunkFolder = computed(() =>
   ['junk', 'junk email', 'spam'].includes(mail.currentFolder.toLowerCase())
 )
+
+// --- Thread helpers ---
+
+function isThreadActive(thread) {
+  if (mail.currentThread) return mail.currentThread.id === thread.id
+  return thread.messages.some(m => m.uid === mail.currentMessage?.uid)
+}
+
+function isThreadSelected(thread) {
+  return thread.messages.some(m => mail.selectedUids.has(m.uid))
+}
+
+function toggleThreadSelect(thread) {
+  const allSel = thread.messages.every(m => mail.selectedUids.has(m.uid))
+  thread.messages.forEach(m => {
+    if (allSel) {
+      const s = new Set(mail.selectedUids); s.delete(m.uid); mail.selectedUids = s
+    } else if (!mail.selectedUids.has(m.uid)) {
+      mail.toggleSelect(m.uid)
+    }
+  })
+}
+
+// Returns unique senders for the thread (up to 3).
+function threadSenders(thread) {
+  const seen = new Set()
+  const names = []
+  for (const m of thread.messages) {
+    const name = m.from?.replace(/<[^>]+>/, '').trim() || m.from || ''
+    if (!seen.has(name)) { seen.add(name); names.push(name) }
+    if (names.length === 3) break
+  }
+  return names.join(', ')
+}
 
 const allSelected = computed(() =>
   mail.messages.length > 0 && mail.messages.every(m => mail.selectedUids.has(m.uid))
@@ -146,37 +181,43 @@ function onDocClick(e) {
 onMounted(() => document.addEventListener('click', onDocClick))
 onUnmounted(() => document.removeEventListener('click', onDocClick))
 
-function onRowClick(e, msg, i) {
+function onRowClick(e, thread, i) {
   if (e.shiftKey && anchorIndex.value !== null) {
-    // Range-select from anchor to current row.
     const lo = Math.min(anchorIndex.value, i)
     const hi = Math.max(anchorIndex.value, i)
-    const uids = mail.messages.slice(lo, hi + 1).map(m => m.uid)
+    const uids = mail.threads.slice(lo, hi + 1).flatMap(t => t.messages.map(m => m.uid))
     mail.selectedUids = new Set(uids)
     return
   }
 
   if (e.metaKey || e.ctrlKey) {
-    // Toggle this message without affecting others; update anchor.
     anchorIndex.value = i
-    mail.toggleSelect(msg.uid)
+    toggleThreadSelect(thread)
     return
   }
 
-  // Plain click — open message and update anchor.
   anchorIndex.value = i
   mail.clearSelection()
-  mail.fetchMessage(mail.currentFolder, msg.uid)
-  if (!msg.read) mail.markRead(mail.currentFolder, msg.uid, true)
+
+  if (thread.messages.length === 1) {
+    // Single-message thread — open directly in MessageView, no thread pane.
+    mail.currentThread = null
+    const msg = thread.messages[0]
+    mail.fetchMessage(mail.currentFolder, msg.uid)
+    if (!msg.read) mail.markRead(mail.currentFolder, msg.uid, true)
+  } else {
+    mail.openThread(thread)
+  }
 }
 
 // --- Drag and drop ---
 
-function onDragStart(e, msg) {
-  // Determine which UIDs are being dragged.
-  const uids = mail.selectedUids.has(msg.uid)
-    ? [...mail.selectedUids]
-    : [msg.uid]
+function onDragStart(e, thread) {
+  // Determine which UIDs are being dragged — all messages in the thread,
+  // or all selected UIDs if the user has a selection.
+  const threadUids = thread.messages.map(m => m.uid)
+  const hasSelection = threadUids.some(uid => mail.selectedUids.has(uid))
+  const uids = hasSelection ? [...mail.selectedUids] : threadUids
 
   e.dataTransfer.effectAllowed = 'move'
   e.dataTransfer.setData('application/x-letrvu-uids', JSON.stringify(uids))
@@ -345,6 +386,15 @@ li.selected .row-check { opacity: 1; }
 .row-icons { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .icon-flag { color: #e67e22; font-size: 12px; }
 .icon-attach { font-size: 12px; }
+.thread-badge {
+  font-size: 10px;
+  background: var(--color-teal);
+  color: white;
+  border-radius: 8px;
+  padding: 1px 5px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
 .date { font-size: 11px; color: var(--color-text-muted); }
 .subject { font-size: 13px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
