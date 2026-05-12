@@ -105,17 +105,17 @@ func (h *handler) deleteContact(w http.ResponseWriter, r *http.Request) {
 func (h *handler) autocompleteContacts(w http.ResponseWriter, r *http.Request) {
 	prefix := strings.TrimSpace(r.URL.Query().Get("q"))
 	if prefix == "" {
-		writeJSON(w, http.StatusOK, []contacts.AutocompleteResult{})
+		writeJSON(w, http.StatusOK, []contacts.AutocompleteEntry{})
 		return
 	}
 	sess := h.sessionFrom(r)
-	results, err := h.contacts.Autocomplete(sess.Username, sess.IMAPHost, prefix)
+	results, err := h.contacts.AutocompleteAll(sess.Username, sess.IMAPHost, prefix)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
 	if results == nil {
-		results = []contacts.AutocompleteResult{}
+		results = []contacts.AutocompleteEntry{}
 	}
 	writeJSON(w, http.StatusOK, results)
 }

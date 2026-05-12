@@ -25,11 +25,13 @@
       <ul v-if="suggestions.length" class="suggestions">
         <li
           v-for="s in suggestions"
-          :key="s.contact_id + s.email"
+          :key="(s.type === 'group' ? 'g' + s.group_id : 'c' + s.contact_id) + s.email"
           @mousedown.prevent="selectSuggestion(s)"
         >
-          <span class="sug-name">{{ s.name || s.email }}</span>
-          <span v-if="s.name" class="sug-email">{{ s.email }}</span>
+          <span v-if="s.type === 'group'" class="sug-group-badge">Group</span>
+          <span class="sug-name">{{ s.name }}</span>
+          <span v-if="s.type === 'contact' && s.name" class="sug-email">{{ s.email }}</span>
+          <span v-if="s.type === 'group'" class="sug-email">{{ (s.emails || []).slice(0, 3).join(', ') }}{{ (s.emails || []).length > 3 ? '…' : '' }}</span>
         </li>
       </ul>
     </div>
@@ -103,8 +105,15 @@ function onInput() {
 }
 
 function selectSuggestion(s) {
-  const label = s.name ? `${s.name} <${s.email}>` : s.email
-  tokens.value.push(label)
+  if (s.type === 'group') {
+    // Expand all group members as individual tokens.
+    for (const email of s.emails || []) {
+      tokens.value.push(email)
+    }
+  } else {
+    const label = s.name ? `${s.name} <${s.email}>` : s.email
+    tokens.value.push(label)
+  }
   emitValue()
   inputVal.value = ''
   suggestions.value = []
@@ -182,5 +191,15 @@ input {
 }
 .suggestions li:hover { background: var(--color-teal-light); }
 .sug-name { font-weight: 500; }
-.sug-email { color: var(--color-text-muted); font-size: 12px; }
+.sug-email { color: var(--color-text-muted); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sug-group-badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--color-teal-light);
+  border: 0.5px solid var(--color-teal);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--color-teal);
+  flex-shrink: 0;
+}
 </style>

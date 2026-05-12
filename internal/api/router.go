@@ -70,6 +70,14 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("PUT /api/contacts/{id}", h.requireAuth(h.updateContact))
 	mux.HandleFunc("DELETE /api/contacts/{id}", h.requireAuth(h.deleteContact))
 
+	// Contact groups
+	mux.HandleFunc("GET /api/contact-groups", h.requireAuth(h.listGroups))
+	mux.HandleFunc("POST /api/contact-groups", h.requireAuth(h.createGroup))
+	mux.HandleFunc("PUT /api/contact-groups/{id}", h.requireAuth(h.updateGroup))
+	mux.HandleFunc("DELETE /api/contact-groups/{id}", h.requireAuth(h.deleteGroup))
+	mux.HandleFunc("POST /api/contact-groups/{id}/members", h.requireAuth(h.addGroupMember))
+	mux.HandleFunc("DELETE /api/contact-groups/{id}/members/{contact_id}", h.requireAuth(h.removeGroupMember))
+
 	// Calendar — specific paths before wildcard {id}
 	mux.HandleFunc("GET /api/calendar/events/export", h.requireAuth(h.exportCalendar))
 	mux.HandleFunc("POST /api/calendar/events/import", h.requireAuth(h.importCalendar))

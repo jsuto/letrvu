@@ -31,6 +31,31 @@ type AutocompleteResult struct {
 	Email     string `json:"email"`
 }
 
+// GroupMember is a contact that belongs to a group, with its primary email.
+type GroupMember struct {
+	ContactID int64  `json:"contact_id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+}
+
+// ContactGroup is a named distribution list of contacts.
+type ContactGroup struct {
+	ID      int64         `json:"id"`
+	Name    string        `json:"name"`
+	Members []GroupMember `json:"members"`
+}
+
+// AutocompleteEntry is a unified autocomplete hit covering contacts and groups.
+// Type is "contact" or "group".
+type AutocompleteEntry struct {
+	Type      string   `json:"type"`
+	ContactID int64    `json:"contact_id,omitempty"`
+	GroupID   int64    `json:"group_id,omitempty"`
+	Name      string   `json:"name"`
+	Email     string   `json:"email,omitempty"`
+	Emails    []string `json:"emails,omitempty"`
+}
+
 // Store is the address book data layer.
 type Store struct {
 	db *db.DB
@@ -223,6 +248,258 @@ func (s *Store) SaveFromMessage(owner, imapHost, name, email string) (*Contact, 
 		return existing, nil // already in address book
 	}
 	return s.Create(owner, imapHost, name, "", []ContactEmail{{Email: email}})
+}
+
+// ListGroups returns all contact groups for the owner.
+func (s *Store) ListGroups(owner, imapHost string) ([]ContactGroup, error) {
+	rows, err := s.db.Query(
+		s.db.Q(`SELECT id, name FROM contact_groups WHERE owner=? AND imap_host=? ORDER BY name`),
+		owner, imapHost,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var groups []ContactGroup
+	for rows.Next() {
+		var g ContactGroup
+		if err := rows.Scan(&g.ID, &g.Name); err != nil {
+			return nil, err
+		}
+		groups = append(groups, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range groups {
+		members, err := s.listGroupMembers(groups[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		groups[i].Members = members
+	}
+	return groups, nil
+}
+
+// GetGroup returns a single group by ID, verifying ownership.
+func (s *Store) GetGroup(id int64, owner, imapHost string) (*ContactGroup, error) {
+	var g ContactGroup
+	err := s.db.QueryRow(
+		s.db.Q(`SELECT id, name FROM contact_groups WHERE id=? AND owner=? AND imap_host=?`),
+		id, owner, imapHost,
+	).Scan(&g.ID, &g.Name)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	members, err := s.listGroupMembers(g.ID)
+	if err != nil {
+		return nil, err
+	}
+	g.Members = members
+	return &g, nil
+}
+
+// CreateGroup creates a new empty contact group.
+func (s *Store) CreateGroup(owner, imapHost, name string) (*ContactGroup, error) {
+	id, err := s.db.InsertReturningID(
+		`INSERT INTO contact_groups (owner, imap_host, name) VALUES (?, ?, ?)`,
+		owner, imapHost, name,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("insert group: %w", err)
+	}
+	return s.GetGroup(id, owner, imapHost)
+}
+
+// UpdateGroup renames a group.
+func (s *Store) UpdateGroup(id int64, owner, imapHost, name string) (*ContactGroup, error) {
+	res, err := s.db.Exec(
+		s.db.Q(`UPDATE contact_groups SET name=? WHERE id=? AND owner=? AND imap_host=?`),
+		name, id, owner, imapHost,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, nil
+	}
+	return s.GetGroup(id, owner, imapHost)
+}
+
+// DeleteGroup removes a group and all its memberships.
+func (s *Store) DeleteGroup(id int64, owner, imapHost string) error {
+	var dummy int64
+	err := s.db.QueryRow(
+		s.db.Q(`SELECT id FROM contact_groups WHERE id=? AND owner=? AND imap_host=?`),
+		id, owner, imapHost,
+	).Scan(&dummy)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(s.db.Q(`DELETE FROM contact_group_members WHERE group_id=?`), id); err != nil {
+		return err
+	}
+	_, err = s.db.Exec(s.db.Q(`DELETE FROM contact_groups WHERE id=?`), id)
+	return err
+}
+
+// AddGroupMember adds a contact to a group. Verifies the contact belongs to the same owner.
+func (s *Store) AddGroupMember(groupID, contactID int64, owner, imapHost string) error {
+	// Verify group ownership.
+	var gid int64
+	if err := s.db.QueryRow(
+		s.db.Q(`SELECT id FROM contact_groups WHERE id=? AND owner=? AND imap_host=?`),
+		groupID, owner, imapHost,
+	).Scan(&gid); err == sql.ErrNoRows {
+		return fmt.Errorf("group not found")
+	} else if err != nil {
+		return err
+	}
+	// Verify contact ownership.
+	var cid int64
+	if err := s.db.QueryRow(
+		s.db.Q(`SELECT id FROM contacts WHERE id=? AND owner=? AND imap_host=?`),
+		contactID, owner, imapHost,
+	).Scan(&cid); err == sql.ErrNoRows {
+		return fmt.Errorf("contact not found")
+	} else if err != nil {
+		return err
+	}
+	_, err := s.db.Exec(
+		s.db.Q(`INSERT INTO contact_group_members (group_id, contact_id) VALUES (?, ?) ON CONFLICT DO NOTHING`),
+		groupID, contactID,
+	)
+	return err
+}
+
+// RemoveGroupMember removes a contact from a group.
+func (s *Store) RemoveGroupMember(groupID, contactID int64, owner, imapHost string) error {
+	var gid int64
+	if err := s.db.QueryRow(
+		s.db.Q(`SELECT id FROM contact_groups WHERE id=? AND owner=? AND imap_host=?`),
+		groupID, owner, imapHost,
+	).Scan(&gid); err == sql.ErrNoRows {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	_, err := s.db.Exec(
+		s.db.Q(`DELETE FROM contact_group_members WHERE group_id=? AND contact_id=?`),
+		groupID, contactID,
+	)
+	return err
+}
+
+// AutocompleteAll returns up to 10 contacts and all groups matching prefix.
+func (s *Store) AutocompleteAll(owner, imapHost, prefix string) ([]AutocompleteEntry, error) {
+	like := strings.ToLower(prefix) + "%"
+
+	// Contacts
+	rows, err := s.db.Query(
+		s.db.Q(`SELECT c.id, c.name, ce.email
+			FROM contacts c
+			JOIN contact_emails ce ON ce.contact_id = c.id
+			WHERE c.owner=? AND c.imap_host=?
+			  AND (LOWER(c.name) LIKE ? OR LOWER(ce.email) LIKE ?)
+			ORDER BY c.name, ce.email
+			LIMIT 10`),
+		owner, imapHost, like, like,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []AutocompleteEntry
+	for rows.Next() {
+		var e AutocompleteEntry
+		e.Type = "contact"
+		if err := rows.Scan(&e.ContactID, &e.Name, &e.Email); err != nil {
+			return nil, err
+		}
+		results = append(results, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Groups — collect IDs first so we can close the cursor before running
+	// per-group member queries (avoids a second query on a busy connection).
+	grows, err := s.db.Query(
+		s.db.Q(`SELECT id, name FROM contact_groups
+			WHERE owner=? AND imap_host=? AND LOWER(name) LIKE ?
+			ORDER BY name
+			LIMIT 5`),
+		owner, imapHost, like,
+	)
+	if err != nil {
+		return nil, err
+	}
+	var groupEntries []AutocompleteEntry
+	for grows.Next() {
+		var g AutocompleteEntry
+		g.Type = "group"
+		if err := grows.Scan(&g.GroupID, &g.Name); err != nil {
+			grows.Close()
+			return nil, err
+		}
+		groupEntries = append(groupEntries, g)
+	}
+	if err := grows.Err(); err != nil {
+		grows.Close()
+		return nil, err
+	}
+	grows.Close()
+
+	for _, g := range groupEntries {
+		members, err := s.listGroupMembers(g.GroupID)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range members {
+			if m.Email != "" {
+				if m.Name != "" {
+					g.Emails = append(g.Emails, m.Name+" <"+m.Email+">")
+				} else {
+					g.Emails = append(g.Emails, m.Email)
+				}
+			}
+		}
+		results = append(results, g)
+	}
+	return results, nil
+}
+
+func (s *Store) listGroupMembers(groupID int64) ([]GroupMember, error) {
+	rows, err := s.db.Query(
+		s.db.Q(`SELECT c.id, c.name, MIN(ce.email)
+			FROM contact_group_members cgm
+			JOIN contacts c ON c.id = cgm.contact_id
+			JOIN contact_emails ce ON ce.contact_id = c.id
+			WHERE cgm.group_id=?
+			GROUP BY c.id, c.name
+			ORDER BY c.name`),
+		groupID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var members []GroupMember
+	for rows.Next() {
+		var m GroupMember
+		if err := rows.Scan(&m.ContactID, &m.Name, &m.Email); err != nil {
+			return nil, err
+		}
+		members = append(members, m)
+	}
+	return members, rows.Err()
 }
 
 func (s *Store) listEmails(contactID int64) ([]ContactEmail, error) {

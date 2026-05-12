@@ -114,6 +114,18 @@ func Migrate(db *DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_contacts_owner ON contacts (owner, imap_host)`,
 		`CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails (email)`,
+		`CREATE TABLE IF NOT EXISTS contact_groups (
+			id         ` + db.PK() + `,
+			owner      TEXT NOT NULL,
+			imap_host  TEXT NOT NULL,
+			name       TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE TABLE IF NOT EXISTS contact_group_members (
+			group_id   INTEGER NOT NULL,
+			contact_id INTEGER NOT NULL,
+			PRIMARY KEY (group_id, contact_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_contact_groups_owner ON contact_groups (owner, imap_host)`,
 		`CREATE TABLE IF NOT EXISTS calendar_events (
 			id          ` + db.PK() + `,
 			owner       TEXT NOT NULL,
