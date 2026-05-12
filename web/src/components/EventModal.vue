@@ -1,46 +1,58 @@
 <template>
-  <div v-if="visible" class="overlay" @click.self="close">
-    <div class="modal">
-      <div class="modal-header">
+  <div v-if="visible" class="fixed inset-0 bg-black/30 flex items-center justify-center z-[200]" @click.self="close">
+    <div class="w-[460px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl flex flex-col max-h-[90vh]">
+
+      <!-- Header -->
+      <div class="flex justify-between items-center px-4 py-3 border-b border-[var(--color-border)] text-sm font-medium">
         <span>{{ isEdit ? 'Edit event' : 'New event' }}</span>
-        <button @click="close" class="close">×</button>
+        <button @click="close" class="bg-none border-none text-lg cursor-pointer text-[var(--color-text-muted)]">×</button>
       </div>
-      <div class="modal-body">
-        <div class="field-group">
-          <label>Title</label>
-          <input v-model="form.title" type="text" placeholder="Event title" />
+
+      <!-- Body -->
+      <div class="px-4 py-4 overflow-y-auto flex-1 flex flex-col gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-xs text-[var(--color-text-muted)]">Title</label>
+          <input v-model="form.title" type="text" placeholder="Event title"
+            class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
         </div>
-        <div class="field-group">
-          <label class="all-day-label">
-            <input v-model="form.all_day" type="checkbox" />
+        <div class="flex flex-col gap-1">
+          <label class="flex items-center gap-1.5 text-sm text-[var(--color-text)] cursor-pointer">
+            <input v-model="form.all_day" type="checkbox" class="w-auto" />
             All-day event
           </label>
         </div>
-        <div class="field-row">
-          <div class="field-group">
-            <label>Start</label>
-            <input v-model="form.starts_date" type="date" />
-            <input v-if="!form.all_day" v-model="form.starts_time" type="time" class="time-input" />
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-[var(--color-text-muted)]">Start</label>
+            <input v-model="form.starts_date" type="date"
+              class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
+            <input v-if="!form.all_day" v-model="form.starts_time" type="time"
+              class="mt-1.5 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
           </div>
-          <div class="field-group">
-            <label>End</label>
-            <input v-model="form.ends_date" type="date" />
-            <input v-if="!form.all_day" v-model="form.ends_time" type="time" class="time-input" />
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-[var(--color-text-muted)]">End</label>
+            <input v-model="form.ends_date" type="date"
+              class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
+            <input v-if="!form.all_day" v-model="form.ends_time" type="time"
+              class="mt-1.5 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
           </div>
         </div>
-        <div class="field-group">
-          <label>Location</label>
-          <input v-model="form.location" type="text" placeholder="Optional location" />
+        <div class="flex flex-col gap-1">
+          <label class="text-xs text-[var(--color-text-muted)]">Location</label>
+          <input v-model="form.location" type="text" placeholder="Optional location"
+            class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
         </div>
-        <div class="field-group">
-          <label>Description</label>
-          <textarea v-model="form.description" rows="3" placeholder="Optional description" />
+        <div class="flex flex-col gap-1">
+          <label class="text-xs text-[var(--color-text-muted)]">Description</label>
+          <textarea v-model="form.description" rows="3" placeholder="Optional description"
+            class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border resize-y focus:border-teal" />
         </div>
 
         <!-- Recurrence -->
-        <div class="field-group">
-          <label>Repeat</label>
-          <select v-model="form.rrule_freq" @change="onFreqChange">
+        <div class="flex flex-col gap-1">
+          <label class="text-xs text-[var(--color-text-muted)]">Repeat</label>
+          <select v-model="form.rrule_freq" @change="onFreqChange"
+            class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] text-[var(--color-text)] w-full box-border focus:border-teal">
             <option value="">Does not repeat</option>
             <option value="DAILY">Daily</option>
             <option value="WEEKLY">Weekly</option>
@@ -49,57 +61,64 @@
           </select>
         </div>
         <template v-if="form.rrule_freq">
-          <div class="field-group interval-row">
-            <label>Every</label>
-            <div class="interval-wrap">
-              <input v-model.number="form.rrule_interval" type="number" min="1" max="99" class="interval-input" />
-              <span>{{ freqLabel }}</span>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-[var(--color-text-muted)] mb-1">Every</label>
+            <div class="flex items-center gap-2">
+              <input v-model.number="form.rrule_interval" type="number" min="1" max="99"
+                class="w-14 text-center px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal" />
+              <span class="text-sm text-[var(--color-text)]">{{ freqLabel }}</span>
             </div>
           </div>
-          <div v-if="form.rrule_freq === 'WEEKLY'" class="field-group">
-            <label>On</label>
-            <div class="byday-row">
+          <div v-if="form.rrule_freq === 'WEEKLY'" class="flex flex-col gap-1">
+            <label class="text-xs text-[var(--color-text-muted)]">On</label>
+            <div class="flex gap-1 flex-wrap">
               <button
                 v-for="d in weekdays"
                 :key="d.code"
                 type="button"
-                :class="['day-btn', { active: form.rrule_byday.includes(d.code) }]"
+                :class="[
+                  'px-2 py-1 text-xs border rounded cursor-pointer',
+                  form.rrule_byday.includes(d.code)
+                    ? 'bg-teal text-white border-teal'
+                    : 'bg-[var(--color-surface)] text-[var(--color-text)] border-[var(--color-border)]',
+                ]"
                 @click="toggleDay(d.code)"
               >{{ d.label }}</button>
             </div>
           </div>
-          <div class="field-group">
-            <label>Ends</label>
-            <div class="ends-row">
-              <label class="radio-label">
-                <input type="radio" v-model="form.rrule_end" value="never" /> Never
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-[var(--color-text-muted)]">Ends</label>
+            <div class="flex flex-col gap-1.5">
+              <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" v-model="form.rrule_end" value="never" class="w-auto" /> Never
               </label>
-              <label class="radio-label">
-                <input type="radio" v-model="form.rrule_end" value="count" />
+              <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" v-model="form.rrule_end" value="count" class="w-auto" />
                 After
                 <input
                   v-model.number="form.rrule_count"
                   type="number" min="1" max="999"
-                  class="count-input"
+                  class="w-14 text-center px-1.5 py-1 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal"
                   @focus="form.rrule_end = 'count'"
                 />
                 occurrence{{ form.rrule_count === 1 ? '' : 's' }}
               </label>
-              <label class="radio-label">
-                <input type="radio" v-model="form.rrule_end" value="until" />
+              <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" v-model="form.rrule_end" value="until" class="w-auto" />
                 On
                 <input
                   type="date"
                   v-model="form.rrule_until"
-                  class="until-input"
+                  class="flex-1 px-1.5 py-1 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal"
                   @focus="form.rrule_end = 'until'"
                 />
               </label>
             </div>
           </div>
-          <div v-if="isEdit" class="recur-notice">Editing changes all occurrences.</div>
+          <div v-if="isEdit" class="text-[11px] text-[var(--color-text-muted)] bg-[var(--color-teal-light)] border border-teal rounded px-2 py-1">Editing changes all occurrences.</div>
         </template>
       </div>
+
       <ConfirmDialog
         :visible="confirmDeleteVisible"
         message="Delete this event?"
@@ -107,11 +126,16 @@
         @cancel="confirmDeleteVisible = false"
         @update:visible="confirmDeleteVisible = $event"
       />
-      <div class="modal-footer">
-        <button v-if="isEdit" class="delete-btn" @click="confirmDeleteVisible = true">Delete</button>
-        <span class="spacer" />
-        <p v-if="error" class="error">{{ error }}</p>
-        <button @click="save" :disabled="saving" class="save-btn">
+
+      <!-- Footer -->
+      <div class="px-4 py-2.5 border-t border-[var(--color-border)] flex items-center gap-2.5">
+        <button v-if="isEdit"
+          class="px-3.5 py-2 bg-none border border-red-200 rounded-md text-sm text-red-600 cursor-pointer"
+          @click="confirmDeleteVisible = true">Delete</button>
+        <span class="flex-1" />
+        <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
+        <button @click="save" :disabled="saving"
+          class="px-5 py-2 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
           {{ saving ? 'Saving…' : 'Save' }}
         </button>
       </div>
@@ -316,145 +340,3 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 defineExpose({ open, close })
 </script>
-
-<style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-}
-.modal {
-  width: 460px;
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  max-height: 90vh;
-}
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 0.5px solid var(--color-border);
-  font-size: 13px;
-  font-weight: 500;
-}
-.close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--color-text-muted); }
-.modal-body { padding: 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px; }
-.field-group { display: flex; flex-direction: column; gap: 4px; }
-.field-group label {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-.all-day-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--color-text);
-  cursor: pointer;
-}
-.all-day-label input[type="checkbox"] { width: auto; }
-input[type="text"], input[type="date"], input[type="time"], textarea {
-  padding: 7px 10px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  outline: none;
-  width: 100%;
-  box-sizing: border-box;
-}
-input:focus, textarea:focus { border-color: var(--color-teal); }
-textarea { resize: vertical; }
-.field-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.time-input { margin-top: 6px; }
-.modal-footer {
-  padding: 10px 16px;
-  border-top: 0.5px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.spacer { flex: 1; }
-.save-btn {
-  padding: 8px 20px;
-  background: var(--color-teal);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.delete-btn {
-  padding: 8px 14px;
-  background: none;
-  border: 0.5px solid #f5c6c6;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #c0392b;
-  cursor: pointer;
-}
-.error { font-size: 12px; color: #c0392b; }
-
-select {
-  padding: 7px 10px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  outline: none;
-  background: var(--color-surface);
-  color: var(--color-text);
-  width: 100%;
-  box-sizing: border-box;
-}
-select:focus { border-color: var(--color-teal); }
-.interval-row label { margin-bottom: 4px; }
-.interval-wrap { display: flex; align-items: center; gap: 8px; }
-.interval-input { width: 56px; text-align: center; }
-.byday-row { display: flex; gap: 4px; flex-wrap: wrap; }
-.day-btn {
-  padding: 4px 8px;
-  font-size: 12px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 5px;
-  background: var(--color-surface);
-  cursor: pointer;
-  color: var(--color-text);
-}
-.day-btn.active {
-  background: var(--color-teal);
-  color: white;
-  border-color: var(--color-teal);
-}
-.ends-row { display: flex; flex-direction: column; gap: 6px; }
-.radio-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.radio-label input[type="radio"] { width: auto; }
-.count-input { width: 56px; text-align: center; padding: 4px 6px; }
-.until-input { flex: 1; padding: 4px 6px; }
-.recur-notice {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  background: var(--color-teal-light);
-  border: 0.5px solid var(--color-teal);
-  border-radius: 5px;
-  padding: 4px 8px;
-}
-</style>

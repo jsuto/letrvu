@@ -1,23 +1,30 @@
 <template>
-  <div v-if="visible" class="overlay" @click.self="close">
-    <div class="modal">
-      <div class="modal-header">
+  <div v-if="visible" class="fixed inset-0 bg-black/30 z-[100] flex items-center justify-center" @click.self="close">
+    <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl w-[480px] flex flex-col shadow-xl max-h-[90vh] overflow-y-auto">
+
+      <!-- Header -->
+      <div class="flex justify-between items-center px-4 py-3 border-b border-[var(--color-border)] text-sm font-medium sticky top-0 bg-[var(--color-surface)] z-[1]">
         <span>Settings</span>
-        <button @click="close" class="close">×</button>
+        <button @click="close" class="bg-none border-none text-lg cursor-pointer text-[var(--color-text-muted)]">×</button>
       </div>
-      <div class="modal-body">
-        <label>
+
+      <!-- Body -->
+      <div class="px-4 py-4 flex flex-col gap-3.5">
+        <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
           Display name
-          <input v-model="form.display_name" type="text" placeholder="Your Name" />
+          <input v-model="form.display_name" type="text" placeholder="Your Name"
+            class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal" />
         </label>
-        <label>
+        <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
           Signature
-          <textarea v-model="form.signature" placeholder="Your name&#10;your@email.com" />
+          <textarea v-model="form.signature" placeholder="Your name&#10;your@email.com"
+            class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none resize-y min-h-[100px] leading-relaxed focus:border-teal" />
         </label>
 
-        <label>
+        <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
           Poll interval
-          <select v-model.number="form.poll_interval" class="poll-select">
+          <select v-model.number="form.poll_interval"
+            class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal">
             <option :value="0">Off (IMAP IDLE only)</option>
             <option :value="60">1 minute</option>
             <option :value="120">2 minutes</option>
@@ -26,24 +33,27 @@
           </select>
         </label>
 
-        <div class="section-title">Notifications</div>
-        <div class="notif-row">
-          <span class="notif-label">Desktop notifications</span>
+        <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Notifications</div>
+        <div class="flex items-center gap-2.5 text-sm">
+          <span class="text-[var(--color-text)] flex-1">Desktop notifications</span>
           <template v-if="notifPermission === 'denied'">
-            <span class="notif-status blocked">Blocked — enable in browser settings</span>
+            <span class="text-xs text-[var(--color-text-muted)]">Blocked — enable in browser settings</span>
           </template>
           <template v-else-if="settings.notificationsEnabled && notifPermission === 'granted'">
-            <span class="notif-status on">On ✓</span>
-            <button @click="disableNotifications" class="notif-btn">Disable</button>
+            <span class="text-xs text-teal font-medium">On ✓</span>
+            <button @click="disableNotifications"
+              class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] whitespace-nowrap hover:border-teal hover:text-teal">Disable</button>
           </template>
           <template v-else>
-            <button @click="enableNotifications" class="notif-btn">Enable</button>
+            <button @click="enableNotifications"
+              class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] whitespace-nowrap hover:border-teal hover:text-teal">Enable</button>
           </template>
         </div>
 
-        <div class="notif-row" style="margin-top:4px">
-          <span class="notif-label">Event reminders</span>
-          <select v-model.number="form.calendar_reminder_minutes" class="poll-select" style="width:auto">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm text-[var(--color-text)] flex-1">Event reminders</span>
+          <select v-model.number="form.calendar_reminder_minutes"
+            class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal w-auto">
             <option :value="0">Off</option>
             <option :value="5">5 minutes before</option>
             <option :value="10">10 minutes before</option>
@@ -53,21 +63,28 @@
           </select>
         </div>
 
-        <div class="section-title">Identities (From: addresses)</div>
-        <div class="identity-list">
-          <div v-for="(id, i) in form.identities" :key="i" class="identity-row">
-            <input v-model="id.name" type="text" placeholder="Name" class="id-name" />
-            <input v-model="id.email" type="email" placeholder="email@example.com" class="id-email" />
-            <button @click="removeIdentity(i)" class="remove-btn" title="Remove">×</button>
+        <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Identities (From: addresses)</div>
+        <div class="flex flex-col gap-2">
+          <div v-for="(id, i) in form.identities" :key="i" class="flex gap-1.5 items-center">
+            <input v-model="id.name" type="text" placeholder="Name"
+              class="flex-1 px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal" />
+            <input v-model="id.email" type="email" placeholder="email@example.com"
+              class="flex-[1.5] px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal" />
+            <button @click="removeIdentity(i)"
+              class="bg-none border-none text-base cursor-pointer text-[var(--color-text-muted)] px-1.5 py-1 shrink-0 rounded hover:bg-[var(--color-teal-light)]">×</button>
           </div>
-          <button @click="addIdentity" class="add-btn">+ Add identity</button>
+          <button @click="addIdentity"
+            class="bg-none border border-dashed border-[var(--color-border)] rounded-md px-3 py-1.5 text-xs cursor-pointer text-[var(--color-text-muted)] text-left hover:border-teal hover:text-teal">+ Add identity</button>
         </div>
       </div>
-      <div class="modal-footer">
-        <button @click="save" :disabled="saving" class="save-btn">
+
+      <!-- Footer -->
+      <div class="px-4 py-3 border-t border-[var(--color-border)] flex items-center gap-4 sticky bottom-0 bg-[var(--color-surface)]">
+        <button @click="save" :disabled="saving"
+          class="px-5 py-1.5 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
           {{ saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save' }}
         </button>
-        <p v-if="error" class="error">{{ error }}</p>
+        <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
       </div>
     </div>
   </div>
@@ -150,164 +167,3 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 defineExpose({ open, close })
 </script>
-
-<style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.modal {
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
-  width: 480px;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-  max-height: 90vh;
-  overflow-y: auto;
-}
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 0.5px solid var(--color-border);
-  font-size: 13px;
-  font-weight: 500;
-  position: sticky;
-  top: 0;
-  background: var(--color-surface);
-  z-index: 1;
-}
-.close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--color-text-muted); }
-.modal-body {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-input, textarea {
-  padding: 8px 10px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  font-family: inherit;
-  background: var(--color-bg);
-  color: var(--color-text);
-  outline: none;
-}
-input:focus, textarea:focus, select:focus { border-color: var(--color-teal); }
-.poll-select {
-  padding: 8px 10px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  font-family: inherit;
-  background: var(--color-bg);
-  color: var(--color-text);
-  outline: none;
-}
-textarea {
-  resize: vertical;
-  min-height: 100px;
-  line-height: 1.6;
-}
-.section-title {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  font-weight: 500;
-  padding-top: 4px;
-  border-top: 0.5px solid var(--color-border);
-  margin-top: 4px;
-}
-.identity-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.identity-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-.id-name { flex: 1; }
-.id-email { flex: 1.5; }
-.remove-btn {
-  background: none;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  padding: 4px 6px;
-  flex-shrink: 0;
-  border-radius: 4px;
-}
-.remove-btn:hover { background: var(--color-teal-light); }
-.add-btn {
-  background: none;
-  border: 0.5px dashed var(--color-border);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  text-align: left;
-}
-.add-btn:hover { border-color: var(--color-teal); color: var(--color-teal); }
-.modal-footer {
-  padding: 12px 16px;
-  border-top: 0.5px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  position: sticky;
-  bottom: 0;
-  background: var(--color-surface);
-}
-.save-btn {
-  padding: 7px 20px;
-  background: var(--color-teal);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.error { font-size: 12px; color: #c0392b; }
-.notif-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-}
-.notif-label { color: var(--color-text); flex: 1; }
-.notif-status { font-size: 12px; }
-.notif-status.on { color: var(--color-teal); font-weight: 500; }
-.notif-status.blocked { color: var(--color-text-muted); }
-.notif-btn {
-  padding: 5px 12px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--color-text);
-  white-space: nowrap;
-}
-.notif-btn:hover { border-color: var(--color-teal); color: var(--color-teal); }
-</style>

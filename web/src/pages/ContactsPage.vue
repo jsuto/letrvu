@@ -1,159 +1,166 @@
 <template>
-  <div class="contacts-layout">
+  <div class="grid h-screen overflow-hidden bg-[var(--color-bg)]" style="grid-template-columns: 200px 260px 1fr">
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="border-r border-[var(--color-border)] overflow-y-auto">
       <FolderList />
     </aside>
 
     <!-- Contact/Group list panel -->
-    <div class="contact-list-panel">
-      <div class="panel-header">
-        <div class="tab-row">
-          <button :class="{ active: view === 'contacts' }" @click="view = 'contacts'">Contacts</button>
-          <button :class="{ active: view === 'groups' }" @click="view = 'groups'">Groups</button>
+    <div class="border-r border-[var(--color-border)] flex flex-col overflow-hidden">
+      <div class="flex items-center justify-between px-3.5 py-2 border-b border-[var(--color-border)] gap-2 shrink-0">
+        <div class="flex gap-0.5">
+          <button
+            :class="['px-2.5 py-1 text-xs border rounded cursor-pointer', view === 'contacts' ? 'bg-[var(--color-teal-light)] text-teal border-teal' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border-[var(--color-border)]']"
+            @click="view = 'contacts'"
+          >Contacts</button>
+          <button
+            :class="['px-2.5 py-1 text-xs border rounded cursor-pointer', view === 'groups' ? 'bg-[var(--color-teal-light)] text-teal border-teal' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border-[var(--color-border)]']"
+            @click="view = 'groups'"
+          >Groups</button>
         </div>
-        <div class="panel-actions" v-if="view === 'contacts'">
-          <label class="import-btn" title="Import vCard (.vcf)">
-            Import
-            <input type="file" accept=".vcf" @change="importVCard" hidden />
-          </label>
-          <a :href="exportUrl" download="contacts.vcf" class="export-btn">Export</a>
-          <button class="new-btn" @click="contactModal?.open()">+ New</button>
-        </div>
-        <div class="panel-actions" v-else>
-          <button class="new-btn" @click="openNewGroup">+ New</button>
+        <div class="flex gap-1.5 items-center">
+          <template v-if="view === 'contacts'">
+            <label class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)]" title="Import vCard (.vcf)">
+              Import
+              <input type="file" accept=".vcf" @change="importVCard" hidden />
+            </label>
+            <a :href="exportUrl" download="contacts.vcf" class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] no-underline">Export</a>
+          </template>
+          <button class="px-2.5 py-1.5 text-xs bg-teal text-white border-none border-teal rounded-md cursor-pointer"
+            @click="view === 'contacts' ? contactModal?.open() : openNewGroup()">+ New</button>
         </div>
       </div>
 
       <!-- Contacts list -->
       <template v-if="view === 'contacts'">
-        <div v-if="contacts.loading" class="empty-state">Loading…</div>
-        <div v-else-if="contacts.contacts.length === 0" class="empty-state">No contacts yet.</div>
-        <ul v-else class="contact-list">
+        <div v-if="contacts.loading" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">Loading…</div>
+        <div v-else-if="contacts.contacts.length === 0" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">No contacts yet.</div>
+        <ul v-else class="list-none flex-1 overflow-y-auto">
           <li
             v-for="c in contacts.contacts"
             :key="c.id"
-            :class="{ active: selected?.id === c.id }"
+            :class="['flex items-center px-3.5 py-2 cursor-pointer border-b border-[var(--color-border)] hover:bg-[var(--color-teal-light)]', selected?.id === c.id ? 'bg-[var(--color-teal-light)]' : '']"
             @click="selected = c"
           >
-            <div class="c-info">
-              <span class="c-name">{{ c.name || c.emails?.[0]?.email || '—' }}</span>
-              <span class="c-email">{{ c.emails?.[0]?.email }}</span>
+            <div class="flex flex-col flex-1 min-w-0">
+              <span class="text-sm font-medium">{{ c.name || c.emails?.[0]?.email || '—' }}</span>
+              <span class="text-[11px] text-[var(--color-text-muted)]">{{ c.emails?.[0]?.email }}</span>
             </div>
-            <button class="c-delete" title="Delete" @click.stop="confirmDelete(c)">✕</button>
+            <button class="bg-none border-none cursor-pointer text-[var(--color-text-muted)] text-xs px-1.5 py-1 rounded opacity-0 shrink-0 hover:bg-[#fde8e8] hover:text-red-600 [li:hover_&]:opacity-100" title="Delete" @click.stop="confirmDelete(c)">✕</button>
           </li>
         </ul>
       </template>
 
       <!-- Groups list -->
       <template v-else>
-        <div v-if="contacts.loading" class="empty-state">Loading…</div>
-        <div v-else-if="contacts.groups.length === 0" class="empty-state">No groups yet.</div>
-        <ul v-else class="contact-list">
+        <div v-if="contacts.loading" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">Loading…</div>
+        <div v-else-if="contacts.groups.length === 0" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">No groups yet.</div>
+        <ul v-else class="list-none flex-1 overflow-y-auto">
           <li
             v-for="g in contacts.groups"
             :key="g.id"
-            :class="{ active: selectedGroup?.id === g.id }"
+            :class="['flex items-center px-3.5 py-2 cursor-pointer border-b border-[var(--color-border)] hover:bg-[var(--color-teal-light)]', selectedGroup?.id === g.id ? 'bg-[var(--color-teal-light)]' : '']"
             @click="selectedGroup = g"
           >
-            <div class="c-info">
-              <span class="c-name">{{ g.name }}</span>
-              <span class="c-email">{{ g.members?.length ?? 0 }} member{{ g.members?.length === 1 ? '' : 's' }}</span>
+            <div class="flex flex-col flex-1 min-w-0">
+              <span class="text-sm font-medium">{{ g.name }}</span>
+              <span class="text-[11px] text-[var(--color-text-muted)]">{{ g.members?.length ?? 0 }} member{{ g.members?.length === 1 ? '' : 's' }}</span>
             </div>
-            <button class="c-delete" title="Delete" @click.stop="confirmDeleteGroup(g)">✕</button>
+            <button class="bg-none border-none cursor-pointer text-[var(--color-text-muted)] text-xs px-1.5 py-1 rounded opacity-0 shrink-0 hover:bg-[#fde8e8] hover:text-red-600 [li:hover_&]:opacity-100" title="Delete" @click.stop="confirmDeleteGroup(g)">✕</button>
           </li>
         </ul>
       </template>
     </div>
 
     <!-- Contact detail panel -->
-    <div class="contact-detail-panel" v-if="view === 'contacts'">
-      <div v-if="!selected" class="empty-state">Select a contact</div>
-      <div v-else class="contact-detail">
-        <div class="detail-header">
-          <h2>{{ selected.name || selected.emails?.[0]?.email || '—' }}</h2>
-          <div class="detail-actions">
-            <button @click="contactModal?.open(selected)">Edit</button>
-            <button class="danger" @click="confirmDelete(selected)">Delete</button>
+    <div class="overflow-y-auto p-8" v-if="view === 'contacts'">
+      <div v-if="!selected" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">Select a contact</div>
+      <div v-else>
+        <div class="flex items-start justify-between mb-4 gap-3">
+          <h2 class="text-xl font-medium">{{ selected.name || selected.emails?.[0]?.email || '—' }}</h2>
+          <div class="flex gap-2 shrink-0">
+            <button class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]" @click="contactModal?.open(selected)">Edit</button>
+            <button class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]" @click="confirmDelete(selected)">Delete</button>
           </div>
         </div>
-        <div v-if="selected.notes" class="detail-notes">{{ selected.notes }}</div>
-        <ul class="email-list">
-          <li v-for="e in selected.emails" :key="e.id">
-            <span class="email-addr">{{ e.email }}</span>
-            <span v-if="e.label" class="email-label">{{ e.label }}</span>
+        <div v-if="selected.notes" class="text-sm text-[var(--color-text-muted)] mb-4 whitespace-pre-wrap">{{ selected.notes }}</div>
+        <ul class="list-none">
+          <li v-for="e in selected.emails" :key="e.id" class="flex items-center gap-2 py-1.5 border-b border-[var(--color-border)] text-sm">
+            <span>{{ e.email }}</span>
+            <span v-if="e.label" class="text-[11px] bg-[var(--color-teal-light)] border border-teal rounded px-1.5 py-px text-teal">{{ e.label }}</span>
           </li>
         </ul>
       </div>
     </div>
 
     <!-- Group detail panel -->
-    <div class="contact-detail-panel" v-else>
-      <div v-if="!selectedGroup" class="empty-state">Select a group</div>
-      <div v-else class="contact-detail">
-        <div class="detail-header">
-          <div class="group-name-row">
-            <h2 v-if="!editingGroupName">{{ selectedGroup.name }}</h2>
+    <div class="overflow-y-auto p-8" v-else>
+      <div v-if="!selectedGroup" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">Select a group</div>
+      <div v-else>
+        <div class="flex items-start justify-between mb-4 gap-3">
+          <div class="flex-1 min-w-0">
+            <h2 v-if="!editingGroupName" class="text-xl font-medium">{{ selectedGroup.name }}</h2>
             <input
               v-else
               ref="groupNameInput"
               v-model="groupNameDraft"
-              class="group-name-input"
+              class="text-xl font-medium border-none border-b-2 border-teal bg-transparent outline-none w-full py-0.5"
               @keydown.enter="saveGroupName"
               @keydown.escape="editingGroupName = false"
             />
           </div>
-          <div class="detail-actions">
-            <button v-if="!editingGroupName" @click="startEditGroupName">Rename</button>
-            <button v-else @click="saveGroupName">Save</button>
-            <button class="danger" @click="confirmDeleteGroup(selectedGroup)">Delete</button>
+          <div class="flex gap-2 shrink-0">
+            <button v-if="!editingGroupName" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]" @click="startEditGroupName">Rename</button>
+            <button v-else class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]" @click="saveGroupName">Save</button>
+            <button class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]" @click="confirmDeleteGroup(selectedGroup)">Delete</button>
           </div>
         </div>
 
         <!-- Add member search -->
-        <div class="add-member-row">
-          <div class="add-member-wrap">
-            <div class="add-member-input-row">
+        <div class="mb-4">
+          <div class="relative">
+            <div class="flex gap-1.5">
               <input
                 v-model="memberSearch"
                 placeholder="Search contacts or type an email address…"
-                class="member-search-input"
+                class="flex-1 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm outline-none min-w-0 focus:border-teal"
                 @input="onMemberSearch"
                 @keydown.enter.prevent="addFirstSuggestion"
                 @keydown.escape="memberSuggestions = []"
                 autocomplete="off"
               />
               <button
-                class="add-member-btn"
+                class="px-3.5 py-1.5 text-sm border border-teal rounded-md bg-teal text-white cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-default"
                 :disabled="!memberSuggestions.length && !isRawEmail"
                 @click="addFirstSuggestion"
               >Add</button>
             </div>
-            <div v-if="memberSearch && !memberSuggestions.length && !isRawEmail" class="member-hint">
+            <div v-if="memberSearch && !memberSuggestions.length && !isRawEmail" class="text-xs text-[var(--color-text-muted)] mt-1">
               No matching contacts. Type a full email address to add directly.
             </div>
-            <ul v-if="memberSuggestions.length" class="member-suggestions">
+            <ul v-if="memberSuggestions.length" class="absolute top-[calc(100%+4px)] left-0 right-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 z-50 shadow-lg">
               <li
                 v-for="c in memberSuggestions"
                 :key="c.id"
+                class="px-3 py-1.5 cursor-pointer text-sm flex gap-2 items-center hover:bg-[var(--color-teal-light)]"
                 @mousedown.prevent="addMember(c)"
               >
-                <span class="sug-name">{{ c.name || c.emails?.[0]?.email }}</span>
-                <span class="sug-email">{{ c.emails?.[0]?.email }}</span>
+                <span class="font-medium">{{ c.name || c.emails?.[0]?.email }}</span>
+                <span class="text-[var(--color-text-muted)] text-xs">{{ c.emails?.[0]?.email }}</span>
               </li>
             </ul>
           </div>
         </div>
 
         <!-- Member list -->
-        <div v-if="!selectedGroup.members?.length" class="empty-members">No members yet.</div>
-        <ul v-else class="member-list">
-          <li v-for="m in selectedGroup.members" :key="m.contact_id">
-            <div class="m-info">
-              <span class="m-name">{{ m.name || m.email }}</span>
-              <span class="m-email">{{ m.email }}</span>
+        <div v-if="!selectedGroup.members?.length" class="text-sm text-[var(--color-text-muted)] py-2">No members yet.</div>
+        <ul v-else class="list-none">
+          <li v-for="m in selectedGroup.members" :key="m.contact_id" class="flex items-center py-2 border-b border-[var(--color-border)] hover:[&_.m-remove]:opacity-100">
+            <div class="flex flex-col flex-1 min-w-0">
+              <span class="text-sm font-medium">{{ m.name || m.email }}</span>
+              <span class="text-[11px] text-[var(--color-text-muted)]">{{ m.email }}</span>
             </div>
-            <button class="m-remove" title="Remove" @click="removeMember(m.contact_id)">✕</button>
+            <button class="m-remove bg-none border-none cursor-pointer text-[var(--color-text-muted)] text-xs px-1.5 py-1 rounded opacity-0 shrink-0 hover:bg-[#fde8e8] hover:text-red-600" title="Remove" @click="removeMember(m.contact_id)">✕</button>
           </li>
         </ul>
       </div>
@@ -304,259 +311,3 @@ async function removeMember(contactId) {
   selectedGroup.value = g
 }
 </script>
-
-<style scoped>
-.contacts-layout {
-  display: grid;
-  grid-template-columns: 200px 260px 1fr;
-  height: 100vh;
-  overflow: hidden;
-  background: var(--color-bg);
-}
-.sidebar {
-  border-right: 0.5px solid var(--color-border);
-  overflow-y: auto;
-}
-.contact-list-panel {
-  border-right: 0.5px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
-  border-bottom: 0.5px solid var(--color-border);
-  gap: 8px;
-  flex-shrink: 0;
-}
-.tab-row {
-  display: flex;
-  gap: 2px;
-}
-.tab-row button {
-  padding: 4px 10px;
-  font-size: 12px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 5px;
-  cursor: pointer;
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-}
-.tab-row button.active {
-  background: var(--color-teal-light);
-  color: var(--color-teal);
-  border-color: var(--color-teal);
-}
-.panel-actions { display: flex; gap: 6px; align-items: center; }
-.new-btn, .export-btn, .import-btn {
-  padding: 5px 10px;
-  font-size: 12px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  cursor: pointer;
-  background: var(--color-surface);
-  color: var(--color-text);
-  text-decoration: none;
-}
-.new-btn { background: var(--color-teal); color: white; border-color: var(--color-teal); }
-.contact-list {
-  list-style: none;
-  flex: 1;
-  overflow-y: auto;
-}
-.contact-list li {
-  display: flex;
-  align-items: center;
-  padding: 8px 14px;
-  cursor: pointer;
-  border-bottom: 0.5px solid var(--color-border);
-}
-.contact-list li:hover, .contact-list li.active { background: var(--color-teal-light); }
-.c-info {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
-.c-name { font-size: 13px; font-weight: 500; }
-.c-email { font-size: 11px; color: var(--color-text-muted); }
-.c-delete {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  opacity: 0;
-  flex-shrink: 0;
-}
-.contact-list li:hover .c-delete { opacity: 1; }
-.c-delete:hover { background: #fde8e8; color: #c0392b; }
-.contact-detail-panel { overflow-y: auto; padding: 2rem; }
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--color-text-muted);
-  font-size: 13px;
-}
-.detail-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-  gap: 12px;
-}
-.group-name-row { flex: 1; min-width: 0; }
-h2 { font-size: 20px; font-weight: 500; }
-.group-name-input {
-  font-size: 20px;
-  font-weight: 500;
-  border: none;
-  border-bottom: 1.5px solid var(--color-teal);
-  background: transparent;
-  outline: none;
-  width: 100%;
-  padding: 2px 0;
-}
-.detail-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.detail-actions button {
-  padding: 6px 14px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  font-size: 13px;
-  cursor: pointer;
-}
-.detail-actions button:hover { background: var(--color-bg); }
-.detail-actions button.danger { color: #c0392b; border-color: #f5c6c6; }
-.detail-notes {
-  font-size: 13px;
-  color: var(--color-text-muted);
-  margin-bottom: 1rem;
-  white-space: pre-wrap;
-}
-.email-list { list-style: none; }
-.email-list li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 0.5px solid var(--color-border);
-  font-size: 13px;
-}
-.email-label {
-  font-size: 11px;
-  background: var(--color-teal-light);
-  border: 0.5px solid var(--color-teal);
-  border-radius: 4px;
-  padding: 1px 6px;
-  color: var(--color-teal);
-}
-
-/* Groups */
-.add-member-row {
-  margin-bottom: 1rem;
-}
-.add-member-wrap {
-  position: relative;
-}
-.add-member-input-row {
-  display: flex;
-  gap: 6px;
-}
-.member-search-input {
-  flex: 1;
-  padding: 7px 10px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  font-size: 13px;
-  outline: none;
-  min-width: 0;
-}
-.member-search-input:focus { border-color: var(--color-teal); }
-.add-member-btn {
-  padding: 7px 14px;
-  font-size: 13px;
-  border: 0.5px solid var(--color-teal);
-  border-radius: 6px;
-  background: var(--color-teal);
-  color: white;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.add-member-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.member-hint {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  margin-top: 4px;
-}
-.member-hint a { color: var(--color-teal); }
-.member-suggestions {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-  z-index: 50;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-.member-suggestions li {
-  padding: 6px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.member-suggestions li:hover { background: var(--color-teal-light); }
-.sug-name { font-weight: 500; }
-.sug-email { color: var(--color-text-muted); font-size: 12px; }
-.empty-members {
-  font-size: 13px;
-  color: var(--color-text-muted);
-  padding: 8px 0;
-}
-.member-list { list-style: none; }
-.member-list li {
-  display: flex;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 0.5px solid var(--color-border);
-}
-.m-info {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
-.m-name { font-size: 13px; font-weight: 500; }
-.m-email { font-size: 11px; color: var(--color-text-muted); }
-.m-remove {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  opacity: 0;
-  flex-shrink: 0;
-}
-.member-list li:hover .m-remove { opacity: 1; }
-.m-remove:hover { background: #fde8e8; color: #c0392b; }
-</style>

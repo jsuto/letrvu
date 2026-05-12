@@ -1,29 +1,36 @@
 <template>
-  <div class="calendar-layout">
-    <aside class="sidebar">
+  <div class="grid h-screen overflow-hidden bg-[var(--color-bg)]" style="grid-template-columns: 200px 1fr">
+    <aside class="border-r border-[var(--color-border)] overflow-y-auto">
       <FolderList />
     </aside>
 
-    <div class="calendar-panel">
+    <div class="flex flex-col overflow-hidden">
       <!-- Toolbar -->
-      <div class="toolbar">
-        <div class="toolbar-left">
-          <button class="nav-btn" @click="prev">‹</button>
-          <button class="nav-btn" @click="next">›</button>
-          <button class="today-btn" @click="goToday">Today</button>
-          <span class="period-label">{{ periodLabel }}</span>
+      <div class="flex items-center justify-between px-4 py-2.5 border-b border-[var(--color-border)] shrink-0 gap-2">
+        <div class="flex items-center gap-2">
+          <button class="bg-none border border-[var(--color-border)] rounded-md text-base cursor-pointer px-2.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-teal-light)]" @click="prev">‹</button>
+          <button class="bg-none border border-[var(--color-border)] rounded-md text-base cursor-pointer px-2.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-teal-light)]" @click="next">›</button>
+          <button class="px-3 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-teal-light)]" @click="goToday">Today</button>
+          <span class="text-sm font-medium">{{ periodLabel }}</span>
         </div>
-        <div class="toolbar-right">
-          <label class="import-btn" title="Import .ics">
+        <div class="flex items-center gap-2">
+          <label class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-teal-light)]" title="Import .ics">
             Import
             <input type="file" accept=".ics" @change="importIcs" hidden />
           </label>
-          <a href="/api/calendar/events/export" download="calendar.ics" class="export-btn">Export</a>
-          <div class="view-toggle">
-            <button :class="{ active: view === 'month' }" @click="view = 'month'">Month</button>
-            <button :class="{ active: view === 'week' }" @click="view = 'week'">Week</button>
+          <a href="/api/calendar/events/export" download="calendar.ics"
+            class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] no-underline hover:bg-[var(--color-teal-light)]">Export</a>
+          <div class="flex border border-[var(--color-border)] rounded-md overflow-hidden">
+            <button
+              :class="['px-3 py-1.5 text-xs border-none cursor-pointer', view === 'month' ? 'bg-teal text-white' : 'bg-[var(--color-surface)] text-[var(--color-text)]']"
+              @click="view = 'month'"
+            >Month</button>
+            <button
+              :class="['px-3 py-1.5 text-xs border-none cursor-pointer', view === 'week' ? 'bg-teal text-white' : 'bg-[var(--color-surface)] text-[var(--color-text)]']"
+              @click="view = 'week'"
+            >Week</button>
           </div>
-          <button class="new-btn" @click="eventModal?.open(null, new Date())">+ New</button>
+          <button class="px-3 py-1.5 text-xs bg-teal text-white border-none rounded-md cursor-pointer" @click="eventModal?.open(null, new Date())">+ New</button>
         </div>
       </div>
 
@@ -161,90 +168,3 @@ function fmt(d) {
   return d.toLocaleString('default', { month: 'short', day: 'numeric' })
 }
 </script>
-
-<style scoped>
-.calendar-layout {
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  height: 100vh;
-  overflow: hidden;
-  background: var(--color-bg);
-}
-.sidebar {
-  border-right: 0.5px solid var(--color-border);
-  overflow-y: auto;
-}
-.calendar-panel {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  border-bottom: 0.5px solid var(--color-border);
-  flex-shrink: 0;
-  gap: 8px;
-}
-.toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 8px; }
-.nav-btn {
-  background: none;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 2px 10px;
-  color: var(--color-text);
-}
-.nav-btn:hover { background: var(--color-teal-light); }
-.today-btn {
-  padding: 5px 12px;
-  font-size: 12px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  cursor: pointer;
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-.today-btn:hover { background: var(--color-teal-light); }
-.period-label { font-size: 14px; font-weight: 500; }
-.view-toggle {
-  display: flex;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  overflow: hidden;
-}
-.view-toggle button {
-  padding: 5px 12px;
-  font-size: 12px;
-  border: none;
-  background: var(--color-surface);
-  cursor: pointer;
-  color: var(--color-text);
-}
-.view-toggle button.active {
-  background: var(--color-teal);
-  color: white;
-}
-.new-btn {
-  padding: 5px 12px;
-  font-size: 12px;
-  background: var(--color-teal);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.import-btn, .export-btn {
-  padding: 5px 10px;
-  font-size: 12px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  cursor: pointer;
-  background: var(--color-surface);
-  color: var(--color-text);
-  text-decoration: none;
-}
-</style>

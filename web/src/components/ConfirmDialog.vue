@@ -1,13 +1,22 @@
 <template>
-  <div v-if="visible" class="confirm-overlay" @click.self="cancel">
-    <div class="confirm-modal" role="alertdialog" aria-modal="true">
-      <p class="confirm-message">{{ message }}</p>
-      <p v-if="warning" class="confirm-warn">{{ warning }}</p>
-      <div class="confirm-actions">
-        <button @click="cancel" class="cancel-btn">Cancel</button>
-        <button @click="confirm" :disabled="busy" class="delete-btn">
-          {{ busy ? 'Deleting…' : confirmLabel }}
-        </button>
+  <div
+    v-if="visible"
+    class="fixed inset-0 bg-black/35 flex items-center justify-center z-[200]"
+    @click.self="cancel"
+  >
+    <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-[340px] shadow-2xl">
+      <p class="text-sm mb-2 text-[var(--color-text)]">{{ message }}</p>
+      <p v-if="warning" class="text-xs text-red-600 m-0">{{ warning }}</p>
+      <div class="flex justify-end gap-2 mt-5">
+        <button
+          @click="cancel"
+          class="px-4 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-[var(--color-text)] hover:bg-[var(--color-bg)]"
+        >Cancel</button>
+        <button
+          @click="confirm"
+          :disabled="busy"
+          class="px-4 py-1.5 bg-red-600 text-white border-none rounded-md text-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+        >{{ busy ? 'Deleting…' : confirmLabel }}</button>
       </div>
     </div>
   </div>
@@ -44,46 +53,3 @@ function onKeydown(e) {
 onMounted(() => document.addEventListener('keydown', onKeydown, true))
 onUnmounted(() => document.removeEventListener('keydown', onKeydown, true))
 </script>
-
-<style scoped>
-.confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-}
-.confirm-modal {
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
-  padding: 24px;
-  width: 340px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-}
-.confirm-message { font-size: 14px; margin: 0 0 8px; color: var(--color-text); }
-.confirm-warn { font-size: 12px; color: #c0392b; margin: 0; }
-.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
-.cancel-btn {
-  padding: 7px 16px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--color-text);
-}
-.cancel-btn:hover { background: var(--color-bg); }
-.delete-btn {
-  padding: 7px 16px;
-  background: #c0392b;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.delete-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-</style>

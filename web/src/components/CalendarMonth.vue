@@ -1,27 +1,35 @@
 <template>
-  <div class="month-view">
+  <div class="flex flex-col flex-1 overflow-hidden">
     <!-- Day-of-week headers -->
-    <div class="dow-header">
-      <span v-for="d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']" :key="d">{{ d }}</span>
+    <div class="grid grid-cols-7 border-b border-[var(--color-border)]">
+      <span
+        v-for="d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']"
+        :key="d"
+        class="py-1.5 text-center text-[11px] font-medium text-[var(--color-text-muted)]"
+      >{{ d }}</span>
     </div>
     <!-- 6-week grid -->
-    <div class="grid">
+    <div class="grid grid-cols-7 flex-1 overflow-hidden" style="grid-template-rows: repeat(6, 1fr)">
       <div
         v-for="cell in cells"
         :key="cell.iso"
-        class="cell"
-        :class="{
-          'other-month': !cell.inMonth,
-          'today': cell.isToday,
-        }"
+        :class="[
+          'border-r border-b border-[var(--color-border)] p-1 overflow-hidden cursor-pointer min-h-0 hover:bg-[var(--color-teal-light)]',
+          !cell.inMonth ? 'opacity-40' : '',
+        ]"
         @click="emit('day-click', cell.date)"
       >
-        <span class="day-num">{{ cell.day }}</span>
-        <div class="events">
+        <span
+          :class="[
+            'text-xs font-medium mb-0.5 inline-flex w-[22px] h-[22px] items-center justify-center',
+            cell.isToday ? 'bg-teal text-white rounded-full' : '',
+          ]"
+        >{{ cell.day }}</span>
+        <div class="flex flex-col gap-px overflow-hidden">
           <div
             v-for="ev in cell.events"
             :key="ev.id"
-            class="event-chip"
+            class="bg-teal text-white rounded-sm px-1 py-px text-[11px] whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer hover:opacity-85"
             :title="ev.title"
             @click.stop="emit('event-click', ev)"
           >
@@ -85,69 +93,3 @@ function formatTime(iso) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 </script>
-
-<style scoped>
-.month-view { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
-.dow-header {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  border-bottom: 0.5px solid var(--color-border);
-}
-.dow-header span {
-  padding: 6px;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-text-muted);
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: repeat(6, 1fr);
-  flex: 1;
-  overflow: hidden;
-}
-.cell {
-  border-right: 0.5px solid var(--color-border);
-  border-bottom: 0.5px solid var(--color-border);
-  padding: 4px;
-  overflow: hidden;
-  cursor: pointer;
-  min-height: 0;
-}
-.cell:hover { background: var(--color-teal-light); }
-.cell.other-month { opacity: 0.4; }
-.cell.today .day-num {
-  background: var(--color-teal);
-  color: white;
-  border-radius: 50%;
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.day-num {
-  font-size: 12px;
-  font-weight: 500;
-  margin-bottom: 2px;
-  display: inline-flex;
-  width: 22px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-}
-.events { display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
-.event-chip {
-  background: var(--color-teal);
-  color: white;
-  border-radius: 3px;
-  padding: 1px 4px;
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-.event-chip:hover { opacity: 0.85; }
-</style>

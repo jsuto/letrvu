@@ -1,68 +1,79 @@
 <template>
-  <div class="thread-view">
-    <div class="thread-header">
-      <button class="back-btn" @click="mail.currentThread = null" title="Back to message">←</button>
-      <h2 class="thread-subject">{{ thread.latest.subject || '(no subject)' }}</h2>
-      <span class="thread-count">{{ thread.messages.length }} messages</span>
+  <div class="h-full overflow-y-auto">
+    <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-[var(--color-border)] sticky top-0 bg-[var(--color-bg)] z-[1]">
+      <button
+        class="bg-none border border-[var(--color-border)] rounded-md px-2.5 py-1 text-sm cursor-pointer text-[var(--color-text-muted)] shrink-0 hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+        @click="mail.currentThread = null"
+        title="Back to message"
+      >←</button>
+      <h2 class="text-[15px] font-semibold flex-1 m-0 overflow-hidden text-ellipsis whitespace-nowrap">{{ thread.latest.subject || '(no subject)' }}</h2>
+      <span class="text-xs text-[var(--color-text-muted)] shrink-0">{{ thread.messages.length }} messages</span>
     </div>
 
-    <div class="thread-list">
+    <div class="px-5 py-3 flex flex-col gap-2">
       <div
         v-for="msg in thread.messages"
         :key="msg.uid"
-        class="thread-item"
-        :class="{ expanded: expandedUids.has(msg.uid), unread: !msg.read }"
+        :class="['border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] overflow-hidden', expandedUids.has(msg.uid) ? 'shadow-sm' : '']"
       >
         <!-- Collapsed header — always visible -->
-        <div class="item-header" @click="toggle(msg)">
-          <span class="item-from">{{ msg.from }}</span>
-          <span class="item-icons">
-            <span v-if="msg.flagged" class="icon-flag">★</span>
-            <span v-if="msg.has_attachments" class="icon-attach">📎</span>
+        <div
+          class="flex items-center gap-2 px-3.5 py-2.5 cursor-pointer select-none hover:bg-[var(--color-bg)]"
+          @click="toggle(msg)"
+        >
+          <span :class="['text-sm flex-1 overflow-hidden text-ellipsis whitespace-nowrap', !msg.read ? 'font-bold text-[var(--color-text)]' : '']">{{ msg.from }}</span>
+          <span class="flex gap-1 shrink-0">
+            <span v-if="msg.flagged" class="text-orange-400 text-xs">★</span>
+            <span v-if="msg.has_attachments" class="text-xs">📎</span>
           </span>
-          <span class="item-date">{{ formatDate(msg.date) }}</span>
-          <span class="item-chevron">{{ expandedUids.has(msg.uid) ? '▾' : '▸' }}</span>
+          <span class="text-[11px] text-[var(--color-text-muted)] shrink-0">{{ formatDate(msg.date) }}</span>
+          <span class="text-[11px] text-[var(--color-text-muted)] shrink-0 w-3.5">{{ expandedUids.has(msg.uid) ? '▾' : '▸' }}</span>
         </div>
 
         <!-- Expanded body -->
-        <div v-if="expandedUids.has(msg.uid)" class="item-body">
-          <div v-if="loadingUids.has(msg.uid)" class="item-loading">Loading…</div>
+        <div v-if="expandedUids.has(msg.uid)" class="border-t border-[var(--color-border)]">
+          <div v-if="loadingUids.has(msg.uid)" class="px-3.5 py-4 text-sm text-[var(--color-text-muted)]">Loading…</div>
           <template v-else-if="fullMessages[msg.uid]">
-            <div class="item-meta">
+            <div class="px-3.5 pt-2 text-xs text-[var(--color-text-muted)]">
               <span v-if="fullMessages[msg.uid].to?.length">
                 <strong>To:</strong> {{ fullMessages[msg.uid].to.join(', ') }}
               </span>
             </div>
 
             <!-- Auth / phishing banners reused from MessageView -->
-            <div v-if="authFailed(msg.uid)" class="auth-banner">
+            <div v-if="authFailed(msg.uid)" class="mx-3.5 my-2 px-3 py-2 bg-[#fff4e5] rounded-md text-xs text-[#856404]">
               ⚠ Authentication failed — this message may be spoofed.
             </div>
 
             <iframe
               v-if="fullMessages[msg.uid].html_body"
               :ref="el => setIframe(el, msg.uid)"
-              class="body-frame"
+              class="block w-full border-none min-h-[60px]"
               sandbox="allow-popups allow-same-origin"
               :srcdoc="processedHtml(msg.uid)"
               :title="`Message from ${msg.from}`"
               @load="resizeIframe(msg.uid)"
             />
-            <pre v-else class="body-text">{{ fullMessages[msg.uid].text_body }}</pre>
+            <pre v-else class="px-3.5 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words m-0">{{ fullMessages[msg.uid].text_body }}</pre>
 
-            <div v-if="fullMessages[msg.uid].attachments?.length" class="attachments">
-              <p class="att-label">Attachments</p>
-              <div v-for="att in fullMessages[msg.uid].attachments" :key="att.index" class="attachment">
-                <span class="att-name">📎 {{ att.filename || 'attachment' }}</span>
-                <a :href="attachmentUrl(msg.uid, att)" download class="att-download">↓</a>
+            <div v-if="fullMessages[msg.uid].attachments?.length" class="px-3.5 py-2 border-t border-[var(--color-border)]">
+              <p class="text-[11px] text-[var(--color-text-muted)] mb-1.5">Attachments</p>
+              <div v-for="att in fullMessages[msg.uid].attachments" :key="att.index" class="flex items-center gap-2 text-xs">
+                <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">📎 {{ att.filename || 'attachment' }}</span>
+                <a :href="attachmentUrl(msg.uid, att)" download class="text-teal no-underline">↓</a>
               </div>
             </div>
 
-            <div class="item-actions">
-              <button @click="reply(msg)">Reply</button>
-              <button @click="replyAll(msg)">Reply All</button>
-              <button v-if="!isJunkFolder" @click="spam(msg)">Spam</button>
-              <button @click="requestDelete(msg)" class="danger">Delete</button>
+            <div class="flex gap-2 px-3.5 py-2.5 border-t border-[var(--color-border)]">
+              <button
+                v-for="(action, idx) in messageActions(msg)"
+                :key="idx"
+                :class="[
+                  'px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] hover:bg-[var(--color-bg)]',
+                  action.danger ? 'text-red-600 border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600' : '',
+                ]"
+                @click="action.handler(msg)"
+              >{{ action.label }}</button>
             </div>
           </template>
         </div>
@@ -105,6 +116,16 @@ const iframeRefs = ref({})
 const isJunkFolder = computed(() =>
   ['junk', 'junk email', 'spam'].includes(mail.currentFolder.toLowerCase())
 )
+
+function messageActions(msg) {
+  const actions = [
+    { label: 'Reply', handler: reply },
+    { label: 'Reply All', handler: replyAll },
+  ]
+  if (!isJunkFolder.value) actions.push({ label: 'Spam', handler: spam })
+  actions.push({ label: 'Delete', handler: requestDelete, danger: true })
+  return actions
+}
 
 // Auto-expand the latest unread or latest message when the thread changes
 import { watch } from 'vue'
@@ -265,125 +286,3 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleString()
 }
 </script>
-
-<style scoped>
-.thread-view { height: 100%; overflow-y: auto; }
-
-.thread-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 20px;
-  border-bottom: 0.5px solid var(--color-border);
-  position: sticky;
-  top: 0;
-  background: var(--color-bg);
-  z-index: 1;
-}
-.back-btn {
-  background: none;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 14px;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-}
-.back-btn:hover { background: var(--color-surface); color: var(--color-text); }
-.thread-subject {
-  font-size: 15px;
-  font-weight: 600;
-  flex: 1;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.thread-count {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-}
-
-.thread-list { padding: 12px 20px; display: flex; flex-direction: column; gap: 8px; }
-
-.thread-item {
-  border: 0.5px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
-  overflow: hidden;
-}
-.thread-item.expanded { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-
-.item-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  cursor: pointer;
-  user-select: none;
-}
-.item-header:hover { background: var(--color-bg); }
-.item-from { font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.thread-item.unread .item-from { font-weight: 700; color: var(--color-text); }
-.item-icons { display: flex; gap: 4px; flex-shrink: 0; }
-.icon-flag { color: #e67e22; font-size: 12px; }
-.icon-attach { font-size: 12px; }
-.item-date { font-size: 11px; color: var(--color-text-muted); flex-shrink: 0; }
-.item-chevron { font-size: 11px; color: var(--color-text-muted); flex-shrink: 0; width: 14px; }
-
-.item-body { border-top: 0.5px solid var(--color-border); }
-.item-loading { padding: 16px; font-size: 13px; color: var(--color-text-muted); }
-.item-meta { padding: 8px 14px 0; font-size: 12px; color: var(--color-text-muted); }
-
-.auth-banner {
-  margin: 8px 14px;
-  padding: 8px 12px;
-  background: #fff3cd;
-  border-radius: 6px;
-  font-size: 12px;
-  color: #856404;
-}
-
-.body-frame {
-  display: block;
-  width: 100%;
-  border: none;
-  min-height: 60px;
-}
-.body-text {
-  padding: 12px 14px;
-  font-size: 13px;
-  font-family: inherit;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-}
-
-.attachments { padding: 8px 14px; border-top: 0.5px solid var(--color-border); }
-.att-label { font-size: 11px; color: var(--color-text-muted); margin: 0 0 6px; }
-.attachment { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-.att-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.att-download { color: var(--color-teal); text-decoration: none; }
-
-.item-actions {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 0.5px solid var(--color-border);
-}
-.item-actions button {
-  padding: 5px 12px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--color-text);
-}
-.item-actions button:hover { background: var(--color-bg); }
-.item-actions button.danger { color: #c0392b; border-color: #f5c6c6; }
-.item-actions button.danger:hover { background: #c0392b; color: white; border-color: #c0392b; }
-</style>

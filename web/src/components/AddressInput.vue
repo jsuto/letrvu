@@ -1,19 +1,23 @@
 <template>
-  <div class="address-input" @click="focusInput">
+  <div
+    class="flex flex-wrap gap-1 px-4 py-1 border-b border-[var(--color-border)] cursor-text min-h-9 items-center"
+    @click="focusInput"
+  >
     <span
       v-for="(token, i) in tokens"
       :key="i"
-      class="token"
+      class="inline-flex items-center gap-1 bg-[var(--color-teal-light)] border border-teal rounded px-1.5 py-0.5 text-xs"
     >
       {{ token }}
-      <button type="button" class="token-remove" @click.stop="removeToken(i)">×</button>
+      <button type="button" class="bg-none border-none cursor-pointer text-sm leading-none text-[var(--color-text-muted)] p-0" @click.stop="removeToken(i)">×</button>
     </span>
-    <div class="input-wrap">
+    <div class="relative flex-1 min-w-[80px]">
       <input
         ref="inputEl"
         v-model="inputVal"
         type="text"
         :placeholder="tokens.length === 0 ? placeholder : ''"
+        class="w-full border-none outline-none text-sm bg-transparent py-0.5"
         @keydown.enter.prevent="commitInput"
         @keydown.tab.prevent="commitInput"
         @keydown.backspace="onBackspace"
@@ -22,16 +26,17 @@
         @blur="onBlur"
         autocomplete="off"
       />
-      <ul v-if="suggestions.length" class="suggestions">
+      <ul v-if="suggestions.length" class="absolute top-[calc(100%+4px)] left-0 right-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 z-[100] shadow-lg">
         <li
           v-for="s in suggestions"
           :key="(s.type === 'group' ? 'g' + s.group_id : 'c' + s.contact_id) + s.email"
+          class="px-3 py-1.5 cursor-pointer text-sm flex gap-2 items-center hover:bg-[var(--color-teal-light)]"
           @mousedown.prevent="selectSuggestion(s)"
         >
-          <span v-if="s.type === 'group'" class="sug-group-badge">Group</span>
-          <span class="sug-name">{{ s.name }}</span>
-          <span v-if="s.type === 'contact' && s.name" class="sug-email">{{ s.email }}</span>
-          <span v-if="s.type === 'group'" class="sug-email">{{ (s.emails || []).slice(0, 3).join(', ') }}{{ (s.emails || []).length > 3 ? '…' : '' }}</span>
+          <span v-if="s.type === 'group'" class="text-[10px] font-semibold bg-[var(--color-teal-light)] border border-teal rounded px-1 py-px text-teal shrink-0">Group</span>
+          <span class="font-medium">{{ s.name }}</span>
+          <span v-if="s.type === 'contact' && s.name" class="text-[var(--color-text-muted)] text-xs flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{{ s.email }}</span>
+          <span v-if="s.type === 'group'" class="text-[var(--color-text-muted)] text-xs flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{{ (s.emails || []).slice(0, 3).join(', ') }}{{ (s.emails || []).length > 3 ? '…' : '' }}</span>
         </li>
       </ul>
     </div>
@@ -123,83 +128,3 @@ function focusInput() {
   inputEl.value?.focus()
 }
 </script>
-
-<style scoped>
-.address-input {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px 16px;
-  border-bottom: 0.5px solid var(--color-border);
-  cursor: text;
-  min-height: 36px;
-  align-items: center;
-}
-.token {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--color-teal-light);
-  border: 0.5px solid var(--color-teal);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 12px;
-}
-.token-remove {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  color: var(--color-text-muted);
-  padding: 0;
-}
-.input-wrap {
-  position: relative;
-  flex: 1;
-  min-width: 80px;
-}
-input {
-  width: 100%;
-  border: none;
-  outline: none;
-  font-size: 13px;
-  background: transparent;
-  padding: 2px 0;
-}
-.suggestions {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-  z-index: 100;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-.suggestions li {
-  padding: 6px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.suggestions li:hover { background: var(--color-teal-light); }
-.sug-name { font-weight: 500; }
-.sug-email { color: var(--color-text-muted); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sug-group-badge {
-  font-size: 10px;
-  font-weight: 600;
-  background: var(--color-teal-light);
-  border: 0.5px solid var(--color-teal);
-  border-radius: 3px;
-  padding: 1px 5px;
-  color: var(--color-teal);
-  flex-shrink: 0;
-}
-</style>

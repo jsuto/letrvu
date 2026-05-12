@@ -1,32 +1,39 @@
 <template>
-  <div class="login-page">
-    <div class="login-card">
-      <img src="/assets/letrvu-logo-stacked.svg" alt="letrvu" class="logo" />
+  <div class="min-h-screen flex items-center justify-center bg-[var(--color-bg)]">
+    <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-8 py-10 w-full max-w-[400px]">
+      <img src="/assets/letrvu-logo-stacked.svg" alt="letrvu" class="block mx-auto mb-8 h-20" />
       <form @submit.prevent="handleLogin">
-        <div class="field-group">
-          <label>IMAP server</label>
-          <div class="row">
-            <input v-model="form.imapHost" type="text" placeholder="mail.example.com" required />
-            <input v-model.number="form.imapPort" type="number" placeholder="993" class="port" />
+        <div class="mb-4">
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">IMAP server</label>
+          <div class="flex gap-2">
+            <input v-model="form.imapHost" type="text" placeholder="mail.example.com" required
+              class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+            <input v-model.number="form.imapPort" type="number" placeholder="993"
+              class="w-20 shrink-0 px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
           </div>
         </div>
-        <div class="field-group">
-          <label>SMTP server</label>
-          <div class="row">
-            <input v-model="form.smtpHost" type="text" placeholder="smtp.example.com" required />
-            <input v-model.number="form.smtpPort" type="number" placeholder="587" class="port" />
+        <div class="mb-4">
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">SMTP server</label>
+          <div class="flex gap-2">
+            <input v-model="form.smtpHost" type="text" placeholder="smtp.example.com" required
+              class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+            <input v-model.number="form.smtpPort" type="number" placeholder="587"
+              class="w-20 shrink-0 px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
           </div>
         </div>
-        <div class="field-group">
-          <label>Email address</label>
-          <input v-model="form.username" type="email" placeholder="you@example.com" required />
+        <div class="mb-4">
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">Email address</label>
+          <input v-model="form.username" type="email" placeholder="you@example.com" required
+            class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
         </div>
-        <div class="field-group">
-          <label>Password</label>
-          <input v-model="form.password" type="password" placeholder="••••••••" required />
+        <div class="mb-4">
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">Password</label>
+          <input v-model="form.password" type="password" placeholder="••••••••" required
+            class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
         </div>
-        <p v-if="error" class="error">{{ error }}</p>
-        <button type="submit" :disabled="loading" class="submit">
+        <p v-if="error" class="text-xs text-red-600 mt-2">{{ error }}</p>
+        <button type="submit" :disabled="loading"
+          class="w-full mt-5 py-2.5 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
           {{ loading ? 'Connecting…' : 'Sign in' }}
         </button>
       </form>
@@ -79,76 +86,3 @@ async function handleLogin() {
   }
 }
 </script>
-
-<style scoped>
-.login-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg);
-}
-.login-card {
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 12px;
-  padding: 2.5rem 2rem;
-  width: 100%;
-  max-width: 400px;
-}
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
-  height: 80px;
-}
-.field-group {
-  margin-bottom: 1rem;
-}
-.field-group label {
-  display: block;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  margin-bottom: 4px;
-}
-.row {
-  display: flex;
-  gap: 8px;
-}
-.port {
-  width: 80px;
-  flex-shrink: 0;
-}
-input {
-  width: 100%;
-  padding: 8px 10px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-  background: var(--color-surface);
-}
-input:focus {
-  border-color: var(--color-teal);
-}
-.submit {
-  width: 100%;
-  margin-top: 1.25rem;
-  padding: 10px;
-  background: var(--color-teal);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.error {
-  font-size: 12px;
-  color: #c0392b;
-  margin-top: 8px;
-}
-</style>

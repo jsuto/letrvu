@@ -1,97 +1,97 @@
 <template>
-  <div class="message-view">
-  <ConfirmDialog
-    v-model:visible="confirmDeleteVisible"
-    :message="`Delete &quot;${mail.currentMessage?.subject || '(no subject)'}&quot;?`"
-    @confirm="doDelete"
-  />
-    <div v-if="!mail.currentMessage" class="empty-state">
+  <div class="h-full overflow-y-auto">
+    <ConfirmDialog
+      v-model:visible="confirmDeleteVisible"
+      :message="`Delete &quot;${mail.currentMessage?.subject || '(no subject)'}&quot;?`"
+      @confirm="doDelete"
+    />
+    <div v-if="!mail.currentMessage" class="h-full flex items-center justify-center text-[var(--color-text-muted)] text-sm">
       <p>Select a message to read</p>
     </div>
-    <div v-else class="message">
-      <div class="header">
-        <h2>{{ mail.currentMessage.subject || '(no subject)' }}</h2>
-        <div class="meta">
-          <span class="from">{{ mail.currentMessage.from }}</span>
-          <span v-if="isExternal" class="external-badge" title="Sender is outside your organisation — authentication passed">External</span>
-          <span v-else-if="isUnverified" class="unverified-badge" title="Sender appears to be outside your organisation — no authentication results available">Unverified</span>
-          <button class="save-contact-btn" title="Save to address book" @click="saveContact">+</button>
-          <span class="date">{{ formatDate(mail.currentMessage.date) }}</span>
+    <div v-else class="px-8 py-8 max-w-[80%] mx-auto">
+      <div class="mb-6">
+        <h2 class="text-lg font-medium mb-2">{{ mail.currentMessage.subject || '(no subject)' }}</h2>
+        <div class="text-sm text-[var(--color-text-muted)] mb-4 flex gap-4 items-center">
+          <span>{{ mail.currentMessage.from }}</span>
+          <span v-if="isExternal" class="inline-block px-1.5 py-px rounded text-[11px] font-medium tracking-wide whitespace-nowrap bg-[#fff4e5] border border-[#e09030] text-[#7a4000]" title="Sender is outside your organisation — authentication passed">External</span>
+          <span v-else-if="isUnverified" class="inline-block px-1.5 py-px rounded text-[11px] font-medium tracking-wide whitespace-nowrap bg-[#f2f2f2] border border-[#b0b0b0] text-[#555]" title="Sender appears to be outside your organisation — no authentication results available">Unverified</span>
+          <button class="bg-none border border-[var(--color-border)] rounded px-1.5 py-px cursor-pointer text-sm font-semibold text-teal hover:bg-[var(--color-teal-light)]" title="Save to address book" @click="saveContact">+</button>
+          <span>{{ formatDate(mail.currentMessage.date) }}</span>
         </div>
-        <div class="actions">
-          <button v-if="isDraftsFolder" @click="editDraft" class="edit-draft-btn">Edit Draft</button>
-          <div v-if="!isDraftsFolder" class="reply-wrap" ref="replyWrapEl">
-            <button @click="replyMenuOpen = !replyMenuOpen">Reply ▾</button>
-            <ul v-if="replyMenuOpen" class="reply-dropdown">
-              <li @click="reply">Reply</li>
-              <li @click="replyAll">Reply All</li>
+        <div class="flex gap-2 flex-wrap">
+          <button v-if="isDraftsFolder" @click="editDraft"
+            class="px-3.5 py-1.5 border border-teal rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-teal font-medium">Edit Draft</button>
+          <div v-if="!isDraftsFolder" class="relative" ref="replyWrapEl">
+            <button @click="replyMenuOpen = !replyMenuOpen" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Reply ▾</button>
+            <ul v-if="replyMenuOpen" class="absolute top-[calc(100%+4px)] left-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 min-w-[160px] z-50 shadow-lg">
+              <li @click="reply" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">Reply</li>
+              <li @click="replyAll" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">Reply All</li>
             </ul>
           </div>
-          <div v-if="!isDraftsFolder" class="forward-wrap" ref="forwardWrapEl">
-            <button @click="forwardMenuOpen = !forwardMenuOpen">Forward ▾</button>
-            <ul v-if="forwardMenuOpen" class="forward-dropdown">
-              <li @click="forwardInline">Inline</li>
-              <li @click="forwardAsAttachment">As .eml attachment</li>
+          <div v-if="!isDraftsFolder" class="relative" ref="forwardWrapEl">
+            <button @click="forwardMenuOpen = !forwardMenuOpen" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Forward ▾</button>
+            <ul v-if="forwardMenuOpen" class="absolute top-[calc(100%+4px)] left-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 min-w-[160px] z-50 shadow-lg">
+              <li @click="forwardInline" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">Inline</li>
+              <li @click="forwardAsAttachment" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">As .eml attachment</li>
             </ul>
           </div>
           <button
-            :class="{ active: mail.currentMessage.flagged }"
+            :class="['px-3.5 py-1.5 border rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]', mail.currentMessage.flagged ? 'text-orange-400 border-[#f5c6a0] bg-[#fef9ec]' : 'border-[var(--color-border)]']"
             :title="mail.currentMessage.flagged ? 'Unflag' : 'Flag as important'"
             @click="toggleFlagged"
           >{{ mail.currentMessage.flagged ? '★' : '☆' }} Flag</button>
           <button
             :title="mail.currentMessage.read ? 'Mark as unread' : 'Mark as read'"
             @click="toggleRead"
+            class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]"
           >{{ mail.currentMessage.read ? 'Mark unread' : 'Mark read' }}</button>
-          <div class="move-wrap" ref="moveWrapEl">
-            <button @click="moveOpen = !moveOpen">Move to…</button>
-            <ul v-if="moveOpen" class="move-dropdown">
-              <li
-                v-for="f in otherFolders"
-                :key="f.name"
-                @click="moveTo(f.name)"
-              >{{ f.name }}</li>
+          <div class="relative" ref="moveWrapEl">
+            <button @click="moveOpen = !moveOpen" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Move to…</button>
+            <ul v-if="moveOpen" class="absolute top-[calc(100%+4px)] left-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 min-w-[160px] max-h-[260px] overflow-y-auto z-50 shadow-lg">
+              <li v-for="f in otherFolders" :key="f.name" @click="moveTo(f.name)" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">{{ f.name }}</li>
             </ul>
           </div>
-          <button v-if="!isJunkFolder" @click="spam" title="Move to Junk">Spam</button>
-          <button @click="confirmDeleteVisible = true" class="danger">Delete</button>
-          <button @click="viewSource" title="View message source" class="source-btn">&lt;/&gt;</button>
+          <button v-if="!isJunkFolder" @click="spam" title="Move to Junk" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Spam</button>
+          <button @click="confirmDeleteVisible = true" class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]">Delete</button>
+          <button @click="viewSource" title="View message source" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs font-mono cursor-pointer text-[var(--color-text-muted)] ml-auto hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]">&lt;/&gt;</button>
         </div>
       </div>
 
       <!-- Message source modal -->
-      <div v-if="sourceOpen" class="source-overlay" @click.self="sourceOpen = false">
-        <div class="source-modal">
-          <div class="source-toolbar">
-            <span class="source-title">Message source</span>
-            <button @click="copySource" class="source-copy">{{ sourceCopied ? 'Copied!' : 'Copy' }}</button>
-            <button @click="sourceOpen = false" class="source-close">✕</button>
+      <div v-if="sourceOpen" class="fixed inset-0 bg-black/45 z-[200] flex items-center justify-center" @click.self="sourceOpen = false">
+        <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl flex flex-col shadow-2xl" style="width: min(860px, 92vw); height: min(640px, 85vh)">
+          <div class="flex items-center gap-2 px-3.5 py-2.5 border-b border-[var(--color-border)] shrink-0">
+            <span class="text-sm font-medium flex-1">Message source</span>
+            <button @click="copySource" class="px-3 py-1 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:bg-[var(--color-bg)]">{{ sourceCopied ? 'Copied!' : 'Copy' }}</button>
+            <button @click="sourceOpen = false" class="px-3 py-1 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:bg-[var(--color-bg)]">✕</button>
           </div>
-          <pre class="source-body">{{ sourceText }}</pre>
+          <pre class="flex-1 overflow-auto m-0 px-4 py-3.5 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all text-[var(--color-text)]">{{ sourceText }}</pre>
         </div>
       </div>
 
       <!-- Calendar invite banner -->
-      <div v-if="mail.currentMessage.ical_invite" class="invite-banner">
+      <div v-if="mail.currentMessage.ical_invite" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[var(--color-teal-light)] border border-teal">
         <span>📅 This message contains a calendar invite.</span>
-        <button @click="addToCalendar" :disabled="inviteAdding" class="invite-btn">
+        <button @click="addToCalendar" :disabled="inviteAdding"
+          class="px-3.5 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed ml-auto">
           {{ inviteAdded ? 'Added ✓' : inviteAdding ? 'Adding…' : 'Add to calendar' }}
         </button>
       </div>
 
       <!-- Remote image blocking banner -->
-      <div v-if="hasRemoteImages && !showRemoteImages" class="remote-images-banner">
+      <div v-if="hasRemoteImages && !showRemoteImages" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fef9ec] border border-[#e6b84a] text-[#7a5800]">
         <span>🛡 Remote images blocked to protect your privacy.</span>
-        <button @click="showRemoteImages = true" class="show-images-btn">Show images</button>
+        <button @click="showRemoteImages = true"
+          class="px-3.5 py-1.5 bg-[#e6b84a] text-[#3a2800] border-none rounded-md text-xs cursor-pointer whitespace-nowrap ml-auto hover:bg-[#d4a830]">Show images</button>
       </div>
 
       <!-- Email authentication failure banner (SPF/DKIM/DMARC) -->
-      <div v-if="authFailed" class="auth-banner">
+      <div v-if="authFailed" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fff4e5] border border-[#e09030] text-[#7a4000]">
         <span>⚠ Authentication failed — this message did not pass {{ authFailedMethods }} checks and may be spoofed or forged.</span>
       </div>
 
       <!-- Phishing link warning banner -->
-      <div v-if="phishingCount > 0" class="phishing-banner">
+      <div v-if="phishingCount > 0" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fdf0f0] border border-[#e07070] text-[#7a1a1a]">
         <span>⚠ {{ phishingCount }} misleading {{ phishingCount === 1 ? 'link' : 'links' }} detected — the visible text shows a different domain than the actual destination.</span>
       </div>
 
@@ -103,49 +103,49 @@
       <iframe
         v-if="mail.currentMessage.html_body"
         ref="iframeEl"
-        class="body-frame"
+        class="w-full min-h-[200px] border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] block"
         sandbox="allow-popups allow-same-origin"
         :srcdoc="displayHtml"
         title="Message body"
         @load="resizeIframe"
       />
-      <pre v-else class="body-text">{{ mail.currentMessage.text_body }}</pre>
-      <div v-if="mail.currentMessage.attachments?.length" class="attachments">
-        <p class="attachments-label">Attachments</p>
+      <pre v-else class="whitespace-pre-wrap text-sm leading-7 text-[var(--color-text)]">{{ mail.currentMessage.text_body }}</pre>
+
+      <div v-if="mail.currentMessage.attachments?.length" class="mt-6 border-t border-[var(--color-border)] pt-4">
+        <p class="text-xs text-[var(--color-text-muted)] mb-2">Attachments</p>
         <div
           v-for="att in mail.currentMessage.attachments"
           :key="att.index"
-          class="attachment"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] mr-2 mb-1.5 hover:bg-[var(--color-bg)]"
         >
           <span
-            class="att-name"
-            :class="{ 'att-previewable': isPreviewable(att) }"
+            :class="['cursor-default', isPreviewable(att) ? 'cursor-pointer text-teal underline hover:opacity-80' : '']"
             @click="isPreviewable(att) && openPreview(att)"
           >📎 {{ att.filename || 'attachment' }}</span>
-          <span class="att-size">{{ formatSize(att.size) }}</span>
-          <a :href="attachmentUrl(att)" download class="att-download" title="Download">↓</a>
+          <span class="text-[var(--color-text-muted)]">{{ formatSize(att.size) }}</span>
+          <a :href="attachmentUrl(att)" download class="text-[var(--color-text-muted)] no-underline text-sm px-0.5 hover:text-[var(--color-text)]" title="Download">↓</a>
         </div>
       </div>
 
       <!-- Attachment preview modal -->
-      <div v-if="previewAtt" class="preview-overlay" @click.self="previewAtt = null">
-        <div class="preview-modal">
-          <div class="preview-toolbar">
-            <span class="preview-title">{{ previewAtt.filename || 'attachment' }}</span>
-            <a :href="attachmentUrl(previewAtt)" download class="preview-download">Download</a>
-            <button @click="previewAtt = null" class="preview-close">✕</button>
+      <div v-if="previewAtt" class="fixed inset-0 bg-black/65 z-[200] flex items-center justify-center" @click.self="previewAtt = null">
+        <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl flex flex-col shadow-2xl" style="width: min(900px, 94vw); height: min(700px, 90vh)">
+          <div class="flex items-center gap-2 px-3.5 py-2.5 border-b border-[var(--color-border)] shrink-0">
+            <span class="text-sm font-medium flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{{ previewAtt.filename || 'attachment' }}</span>
+            <a :href="attachmentUrl(previewAtt)" download class="px-3 py-1 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer no-underline text-[var(--color-text)] hover:bg-[var(--color-bg)]">Download</a>
+            <button @click="previewAtt = null" class="px-3 py-1 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:bg-[var(--color-bg)]">✕</button>
           </div>
-          <div class="preview-body">
+          <div class="flex-1 overflow-auto flex items-center justify-center p-3 bg-[var(--color-bg)] rounded-b-xl">
             <img
               v-if="previewAtt.content_type?.startsWith('image/')"
               :src="attachmentUrl(previewAtt)"
               :alt="previewAtt.filename"
-              class="preview-image"
+              class="max-w-full max-h-full object-contain rounded"
             />
             <iframe
               v-else-if="previewAtt.content_type === 'application/pdf'"
               :src="attachmentUrl(previewAtt)"
-              class="preview-pdf"
+              class="w-full h-full border-none"
               title="PDF preview"
             />
           </div>
@@ -696,310 +696,3 @@ async function saveContact() {
   }
 }
 </script>
-
-<style scoped>
-.message-view { height: 100%; overflow-y: auto; }
-.empty-state {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted);
-  font-size: 13px;
-}
-.message { padding: 2rem; max-width: 80%; margin: 0 auto; }
-.header { margin-bottom: 1.5rem; }
-h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
-.meta { font-size: 13px; color: var(--color-text-muted); margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; }
-.external-badge,
-.unverified-badge {
-  display: inline-block;
-  padding: 1px 7px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-}
-.external-badge {
-  background: #fff4e5;
-  border: 0.5px solid #e09030;
-  color: #7a4000;
-}
-.unverified-badge {
-  background: #f2f2f2;
-  border: 0.5px solid #b0b0b0;
-  color: #555;
-}
-.save-contact-btn {
-  background: none;
-  border: 0.5px solid var(--color-border);
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
-  padding: 1px 6px;
-  color: var(--color-teal);
-}
-.save-contact-btn:hover { background: var(--color-teal-light); }
-.actions { display: flex; gap: 8px; }
-.actions button {
-  padding: 6px 14px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  font-size: 13px;
-  cursor: pointer;
-}
-.actions button:hover { background: var(--color-bg); }
-.actions button.danger { color: #c0392b; border-color: #f5c6c6; }
-.edit-draft-btn { color: var(--color-teal); border-color: var(--color-teal) !important; font-weight: 500; }
-.actions button.active { color: #e67e22; border-color: #f5c6a0; background: #fef9ec; }
-.move-wrap, .reply-wrap, .forward-wrap { position: relative; }
-.move-dropdown, .reply-dropdown, .forward-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-  min-width: 160px;
-  max-height: 260px;
-  overflow-y: auto;
-  z-index: 50;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-.move-dropdown li, .reply-dropdown li, .forward-dropdown li {
-  padding: 6px 14px;
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.move-dropdown li:hover, .reply-dropdown li:hover, .forward-dropdown li:hover { background: var(--color-teal-light); }
-.invite-banner, .remote-images-banner, .phishing-banner, .auth-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  margin-bottom: 1rem;
-}
-.invite-banner {
-  background: var(--color-teal-light);
-  border: 0.5px solid var(--color-teal);
-}
-.remote-images-banner {
-  background: #fef9ec;
-  border: 0.5px solid #e6b84a;
-  color: #7a5800;
-}
-.phishing-banner {
-  background: #fdf0f0;
-  border: 0.5px solid #e07070;
-  color: #7a1a1a;
-}
-.auth-banner {
-  background: #fff4e5;
-  border: 0.5px solid #e09030;
-  color: #7a4000;
-}
-.show-images-btn {
-  padding: 5px 14px;
-  background: #e6b84a;
-  color: #3a2800;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  margin-left: auto;
-}
-.show-images-btn:hover { background: #d4a830; }
-.invite-btn {
-  padding: 5px 14px;
-  background: var(--color-teal);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.invite-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.body-frame {
-  width: 100%;
-  min-height: 200px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg);
-  display: block;
-}
-.body-text {
-  white-space: pre-wrap;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--color-text);
-}
-.attachments {
-  margin-top: 1.5rem;
-  border-top: 0.5px solid var(--color-border);
-  padding-top: 1rem;
-}
-.attachments-label {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  margin-bottom: 0.5rem;
-}
-.attachment {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 12px;
-  text-decoration: none;
-  color: var(--color-text);
-  margin-right: 8px;
-  margin-bottom: 6px;
-}
-.attachment:hover { background: var(--color-bg); }
-.att-size { color: var(--color-text-muted); }
-.att-name { cursor: default; }
-.att-previewable { cursor: pointer; color: var(--color-teal); text-decoration: underline; }
-.att-previewable:hover { opacity: 0.8; }
-.att-download {
-  color: var(--color-text-muted);
-  text-decoration: none;
-  font-size: 14px;
-  padding: 0 2px;
-}
-.att-download:hover { color: var(--color-text); }
-.preview-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.65);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.preview-modal {
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
-  width: min(900px, 94vw);
-  height: min(700px, 90vh);
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-}
-.preview-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 0.5px solid var(--color-border);
-  flex-shrink: 0;
-}
-.preview-title { font-size: 13px; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.preview-download, .preview-close {
-  padding: 4px 12px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  font-size: 12px;
-  cursor: pointer;
-  text-decoration: none;
-  color: var(--color-text);
-}
-.preview-download:hover, .preview-close:hover { background: var(--color-bg); }
-.preview-body {
-  flex: 1;
-  overflow: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-  background: var(--color-bg);
-  border-radius: 0 0 10px 10px;
-}
-.preview-image {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: 4px;
-}
-.preview-pdf {
-  width: 100%;
-  height: 100%;
-  border: none;
-}
-.source-btn {
-  padding: 6px 10px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  font-size: 12px;
-  font-family: monospace;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  margin-left: auto;
-}
-.source-btn:hover { background: var(--color-bg); color: var(--color-text); }
-.source-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.source-modal {
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
-  width: min(860px, 92vw);
-  height: min(640px, 85vh);
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-}
-.source-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 0.5px solid var(--color-border);
-  flex-shrink: 0;
-}
-.source-title { font-size: 13px; font-weight: 500; flex: 1; }
-.source-copy, .source-close {
-  padding: 4px 12px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  font-size: 12px;
-  cursor: pointer;
-}
-.source-copy:hover, .source-close:hover { background: var(--color-bg); }
-.source-body {
-  flex: 1;
-  overflow: auto;
-  margin: 0;
-  padding: 14px 16px;
-  font-family: monospace;
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--color-text);
-}
-</style>

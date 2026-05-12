@@ -1,37 +1,70 @@
 <template>
-  <nav class="folder-list">
-    <div class="logo-row">
-      <img src="/assets/letrvu-logo-horizontal.svg" alt="letrvu" class="logo" />
+  <nav class="flex flex-col h-full py-4 px-3">
+    <div class="mb-5">
+      <img src="/assets/letrvu-logo-horizontal.svg" alt="letrvu" class="h-7" />
     </div>
-    <button class="compose-btn" @click="compose?.open()">Compose</button>
-    <RouterLink to="/contacts" class="nav-link">Contacts</RouterLink>
-    <RouterLink to="/calendar" class="nav-link">Calendar</RouterLink>
-    <ul v-if="visibleFolders.length">
+    <button
+      class="w-full py-2 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer mb-4 hover:opacity-90"
+      @click="compose?.open()"
+    >Compose</button>
+    <RouterLink
+      to="/contacts"
+      class="block px-2 py-1.5 rounded-md text-sm text-[var(--color-text)] no-underline mb-2 hover:bg-[var(--color-teal-light)]"
+      active-class="!bg-[var(--color-teal-light)] font-medium"
+    >Contacts</RouterLink>
+    <RouterLink
+      to="/calendar"
+      class="block px-2 py-1.5 rounded-md text-sm text-[var(--color-text)] no-underline mb-2 hover:bg-[var(--color-teal-light)]"
+      active-class="!bg-[var(--color-teal-light)] font-medium"
+    >Calendar</RouterLink>
+    <ul v-if="visibleFolders.length" class="list-none flex-1 overflow-y-auto">
       <li
         v-for="folder in visibleFolders"
         :key="folder.name"
-        :class="{
-          active: mail.currentFolder === folder.name,
-          'drop-target': dragOver === folder.name,
-          'has-unseen': folder.unseen > 0,
-        }"
+        :class="[
+          'flex justify-between items-center px-2 py-1.5 rounded-md cursor-pointer text-sm text-[var(--color-text)] hover:bg-[var(--color-teal-light)]',
+          mail.currentFolder === folder.name ? 'bg-[var(--color-teal-light)] font-medium' : '',
+          dragOver === folder.name ? '!bg-teal !text-white' : '',
+          folder.unseen > 0 ? 'font-semibold' : '',
+        ]"
         @click="openFolder(folder.name)"
         @dragover.prevent="dragOver = folder.name"
         @dragleave="dragOver = null"
         @drop.prevent="onDrop($event, folder.name)"
       >
         {{ folder.name }}
-        <span v-if="folder.unseen" class="badge">{{ folder.unseen }}</span>
+        <span
+          v-if="folder.unseen"
+          :class="[
+            'text-[11px] px-1.5 py-px rounded-full',
+            dragOver === folder.name
+              ? 'bg-white text-teal'
+              : 'bg-teal text-white',
+          ]"
+        >{{ folder.unseen }}</span>
       </li>
     </ul>
-    <p v-else class="empty">Loading folders…</p>
-    <button class="manage-btn" @click="manageFoldersModal?.open()">Manage folders</button>
-    <div class="bottom">
-      <button class="icon-btn" :title="dark ? 'Switch to light mode' : 'Switch to dark mode'" @click="toggleDark">
-        {{ dark ? '☀️' : '🌙' }}
-      </button>
-      <button class="icon-btn" title="Settings" @click="settingsModal?.open()">⚙</button>
-      <button class="icon-btn logout" title="Sign out" @click="handleLogout">Sign out</button>
+    <p v-else class="text-xs text-[var(--color-text-muted)] px-2 flex-1">Loading folders…</p>
+    <button
+      class="w-full py-1.5 px-2 bg-none border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text-muted)] cursor-pointer mb-2 text-left hover:bg-[var(--color-teal-light)] hover:text-[var(--color-text)]"
+      @click="manageFoldersModal?.open()"
+    >Manage folders</button>
+    <div class="flex items-center justify-between pt-3 border-t border-[var(--color-border)] mt-3">
+      <button
+        class="bg-none border-none cursor-pointer text-sm text-[var(--color-text-muted)] px-1.5 py-1 rounded hover:bg-[var(--color-teal-light)]"
+        :title="dark ? 'Switch to light mode' : 'Switch to dark mode'"
+        @click="toggleDark"
+      >{{ dark ? '☀️' : '🌙' }}</button>
+      <button
+        class="bg-none border-none cursor-pointer text-sm text-[var(--color-text-muted)] px-1.5 py-1 rounded hover:bg-[var(--color-teal-light)]"
+        title="Settings"
+        @click="settingsModal?.open()"
+      >⚙</button>
+      <button
+        class="bg-none border-none cursor-pointer text-sm text-[var(--color-text-muted)] px-1.5 py-1 rounded hover:bg-[var(--color-teal-light)]"
+        title="Sign out"
+        @click="handleLogout"
+      >Sign out</button>
     </div>
   </nav>
   <SettingsModal ref="settingsModal" />
@@ -87,109 +120,3 @@ async function handleLogout() {
   router.push('/login')
 }
 </script>
-
-<style scoped>
-.folder-list {
-  padding: 1rem 0.75rem;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-.logo-row {
-  margin-bottom: 1.25rem;
-}
-.logo {
-  height: 28px;
-}
-.nav-link {
-  display: block;
-  padding: 6px 8px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--color-text);
-  text-decoration: none;
-  margin-bottom: 0.5rem;
-}
-.nav-link:hover { background: var(--color-teal-light); }
-.nav-link.router-link-active { background: var(--color-teal-light); font-weight: 500; }
-.compose-btn {
-  width: 100%;
-  padding: 8px;
-  background: var(--color-teal);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  margin-bottom: 1rem;
-}
-ul {
-  list-style: none;
-  flex: 1;
-  overflow-y: auto;
-}
-li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--color-text);
-}
-li:hover { background: var(--color-teal-light); }
-li.active { background: var(--color-teal-light); font-weight: 500; }
-li.has-unseen { font-weight: 600; }
-li.drop-target {
-  background: var(--color-teal);
-  color: white;
-}
-li.drop-target .badge { background: white; color: var(--color-teal); }
-.badge {
-  font-size: 11px;
-  background: var(--color-teal);
-  color: white;
-  padding: 1px 6px;
-  border-radius: 10px;
-}
-.empty {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  padding: 8px;
-  flex: 1;
-}
-.manage-btn {
-  width: 100%;
-  padding: 5px 8px;
-  background: none;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  margin-bottom: 0.5rem;
-  text-align: left;
-}
-.manage-btn:hover { background: var(--color-teal-light); color: var(--color-text); }
-.bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 0.75rem;
-  border-top: 0.5px solid var(--color-border);
-  margin-top: 0.75rem;
-}
-.icon-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--color-text-muted);
-  padding: 4px 6px;
-  border-radius: 5px;
-}
-.icon-btn:hover { background: var(--color-teal-light); }
-.logout { color: var(--color-text-muted); }
-</style>

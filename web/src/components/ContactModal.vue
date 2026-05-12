@@ -1,32 +1,47 @@
 <template>
-  <div v-if="visible" class="overlay" @click.self="close">
-    <div class="modal">
-      <div class="modal-header">
+  <div v-if="visible" class="fixed inset-0 bg-black/30 flex items-center justify-center z-[200]" @click.self="close">
+    <div class="w-[480px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl flex flex-col max-h-[90vh]">
+
+      <!-- Header -->
+      <div class="flex justify-between items-center px-4 py-3 border-b border-[var(--color-border)] text-sm font-medium">
         <span>{{ isEdit ? 'Edit contact' : 'New contact' }}</span>
-        <button @click="close" class="close">×</button>
+        <button @click="close" class="bg-none border-none text-lg cursor-pointer text-[var(--color-text-muted)]">×</button>
       </div>
-      <div class="modal-body">
-        <div class="field-group">
-          <label>Name</label>
-          <input v-model="form.name" type="text" placeholder="Full name" />
+
+      <!-- Body -->
+      <div class="px-4 py-4 overflow-y-auto flex-1">
+        <div class="mb-4">
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">Name</label>
+          <input v-model="form.name" type="text" placeholder="Full name"
+            class="w-full px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none box-border focus:border-teal" />
         </div>
-        <div class="field-group">
-          <label>Email addresses</label>
-          <div v-for="(e, i) in form.emails" :key="i" class="email-row">
-            <input v-model="e.email" type="email" placeholder="email@example.com" />
-            <input v-model="e.label" type="text" placeholder="Label (e.g. work)" class="label-input" />
-            <button type="button" class="remove-btn" @click="removeEmail(i)">×</button>
+        <div class="mb-4">
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">Email addresses</label>
+          <div v-for="(e, i) in form.emails" :key="i" class="flex gap-1.5 mb-1.5 items-center">
+            <input v-model="e.email" type="email" placeholder="email@example.com"
+              class="flex-1 min-w-0 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal" />
+            <input v-model="e.label" type="text" placeholder="Label (e.g. work)"
+              class="w-[110px] shrink-0 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal" />
+            <button type="button"
+              class="bg-none border border-[var(--color-border)] rounded-md cursor-pointer text-base text-[var(--color-text-muted)] px-2 py-0"
+              @click="removeEmail(i)">×</button>
           </div>
-          <button type="button" class="add-email-btn" @click="addEmail">+ Add email</button>
+          <button type="button"
+            class="bg-none border-none cursor-pointer text-xs text-teal p-0"
+            @click="addEmail">+ Add email</button>
         </div>
-        <div class="field-group">
-          <label>Notes</label>
-          <textarea v-model="form.notes" placeholder="Optional notes…" rows="3" />
+        <div class="mb-4">
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">Notes</label>
+          <textarea v-model="form.notes" placeholder="Optional notes…" rows="3"
+            class="w-full px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none box-border resize-y focus:border-teal" />
         </div>
       </div>
-      <div class="modal-footer">
-        <p v-if="error" class="error">{{ error }}</p>
-        <button @click="save" :disabled="saving" class="save-btn">
+
+      <!-- Footer -->
+      <div class="px-4 py-2.5 border-t border-[var(--color-border)] flex items-center justify-end gap-4">
+        <p v-if="error" class="text-xs text-red-600 flex-1">{{ error }}</p>
+        <button @click="save" :disabled="saving"
+          class="px-5 py-2 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
           {{ saving ? 'Saving…' : 'Save' }}
         </button>
       </div>
@@ -99,109 +114,3 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 defineExpose({ open, close })
 </script>
-
-<style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-}
-.modal {
-  width: 480px;
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  max-height: 90vh;
-}
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 0.5px solid var(--color-border);
-  font-size: 13px;
-  font-weight: 500;
-}
-.close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--color-text-muted); }
-.modal-body {
-  padding: 16px;
-  overflow-y: auto;
-  flex: 1;
-}
-.field-group { margin-bottom: 1rem; }
-.field-group label {
-  display: block;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  margin-bottom: 4px;
-}
-input[type="text"], input[type="email"], textarea {
-  width: 100%;
-  padding: 7px 10px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  outline: none;
-  box-sizing: border-box;
-}
-input:focus, textarea:focus { border-color: var(--color-teal); }
-textarea { resize: vertical; }
-.email-row {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
-  align-items: center;
-}
-.email-row input[type="email"] {
-  flex: 1;
-  min-width: 0;
-  width: auto;
-}
-.label-input {
-  flex: 0 0 110px;
-  width: auto;
-}
-.remove-btn {
-  background: none;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 16px;
-  color: var(--color-text-muted);
-  padding: 0 8px;
-}
-.add-email-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--color-teal);
-  padding: 0;
-}
-.modal-footer {
-  padding: 10px 16px;
-  border-top: 0.5px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 1rem;
-}
-.save-btn {
-  padding: 8px 20px;
-  background: var(--color-teal);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.error { font-size: 12px; color: #c0392b; flex: 1; }
-</style>

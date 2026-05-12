@@ -1,15 +1,19 @@
 <template>
-  <div v-if="visible" class="overlay" @click.self="close">
-    <div class="modal">
-      <div class="modal-header">
+  <div v-if="visible" class="fixed inset-0 bg-black/30 flex items-center justify-center z-[100]" @click.self="close">
+    <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl w-[440px] max-h-[75vh] flex flex-col shadow-xl">
+
+      <!-- Header -->
+      <div class="flex justify-between items-center px-4 py-3 border-b border-[var(--color-border)] text-sm font-medium shrink-0">
         <span>Manage folders</span>
-        <button @click="close" class="close">×</button>
+        <button @click="close" class="bg-none border-none text-lg cursor-pointer text-[var(--color-text-muted)]">×</button>
       </div>
-      <div class="modal-body">
+
+      <!-- Body -->
+      <div class="overflow-y-auto px-4 py-3 flex-1">
 
         <!-- Create new folder -->
-        <div class="create-row">
-          <select v-model="newParent" class="parent-select" title="Parent folder">
+        <div class="flex gap-2 mb-3 flex-wrap">
+          <select v-model="newParent" class="px-2 py-1.5 border border-[var(--color-border)] rounded-md text-xs bg-[var(--color-bg)] text-[var(--color-text)] outline-none max-w-[140px] focus:border-teal">
             <option value="">— Top level —</option>
             <option v-for="f in mail.folders" :key="f.name" :value="f.name">{{ f.name }}</option>
           </select>
@@ -17,39 +21,46 @@
             v-model="newName"
             type="text"
             placeholder="New folder name…"
-            class="create-input"
+            class="flex-1 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal"
             @keydown.enter="create"
           />
-          <button @click="create" :disabled="!newName.trim() || !!busy" class="create-btn">Create</button>
+          <button @click="create" :disabled="!newName.trim() || !!busy"
+            class="px-3.5 py-1.5 bg-teal text-white border-none rounded-md text-sm cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">Create</button>
         </div>
 
-        <p v-if="error" class="error">{{ error }}</p>
+        <p v-if="error" class="text-xs text-red-600 mb-2.5">{{ error }}</p>
 
-        <ul class="folder-list">
-          <li v-for="folder in mail.folders" :key="folder.name" class="folder-row">
+        <ul class="list-none m-0 p-0">
+          <li v-for="folder in mail.folders" :key="folder.name"
+            class="flex items-center justify-between py-1.5 border-b border-[var(--color-border)] gap-2 last:border-b-0">
 
             <!-- Normal view -->
             <template v-if="renamingFolder !== folder.name">
               <span
-                class="folder-name"
+                class="text-sm flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
                 :style="{ paddingLeft: folderDepth(folder) * 14 + 'px' }"
               >{{ folderBasename(folder) }}</span>
-              <div class="row-actions">
+              <div class="flex gap-1 items-center shrink-0">
                 <button
-                  class="toggle-btn"
-                  :class="{ subscribed: folder.subscribed }"
+                  :class="[
+                    'px-3 py-1 rounded text-xs cursor-pointer border min-w-[90px]',
+                    folder.subscribed
+                      ? 'bg-[var(--color-teal-light)] border-teal text-teal font-medium'
+                      : 'bg-transparent border-[var(--color-border)] text-[var(--color-text-muted)]',
+                    busy === folder.name ? 'opacity-50 cursor-not-allowed' : '',
+                  ]"
                   :disabled="busy === folder.name"
                   @click="toggle(folder)"
                   :title="folder.subscribed ? 'Unsubscribe (hide from sidebar)' : 'Subscribe (show in sidebar)'"
                 >{{ busy === folder.name ? '…' : folder.subscribed ? 'Subscribed' : 'Subscribe' }}</button>
                 <button
-                  class="icon-btn"
+                  class="px-1.5 py-1 border border-[var(--color-border)] rounded text-sm bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Rename"
                   :disabled="!!busy"
                   @click="startRename(folder.name)"
                 >✎</button>
                 <button
-                  class="icon-btn danger"
+                  class="px-1.5 py-1 border border-[var(--color-border)] rounded text-sm bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-red-600 hover:border-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Delete folder"
                   :disabled="!!busy"
                   @click="confirmDelete(folder.name)"
@@ -61,17 +72,16 @@
             <template v-else>
               <input
                 v-model="renameValue"
-                class="rename-input"
+                class="flex-1 px-2 py-1.5 border border-teal rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none"
                 @keydown.enter="commitRename"
                 @keydown.escape="cancelRename"
                 ref="renameInputEl"
               />
-              <div class="row-actions">
-                <button class="icon-btn" title="Save" :disabled="!renameValue.trim()" @click="commitRename">✓</button>
-                <button class="icon-btn" title="Cancel" @click="cancelRename">✕</button>
+              <div class="flex gap-1 items-center">
+                <button class="px-1.5 py-1 border border-[var(--color-border)] rounded text-sm bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)] disabled:opacity-40" title="Save" :disabled="!renameValue.trim()" @click="commitRename">✓</button>
+                <button class="px-1.5 py-1 border border-[var(--color-border)] rounded text-sm bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]" title="Cancel" @click="cancelRename">✕</button>
               </div>
             </template>
-
           </li>
         </ul>
       </div>
@@ -240,140 +250,3 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 defineExpose({ open, close })
 </script>
-
-<style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-.modal {
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
-  width: 440px;
-  max-height: 75vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
-}
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 0.5px solid var(--color-border);
-  font-size: 13px;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-.close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--color-text-muted); }
-.modal-body {
-  overflow-y: auto;
-  padding: 12px 16px;
-  flex: 1;
-}
-.create-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-.parent-select {
-  padding: 7px 8px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 12px;
-  font-family: inherit;
-  background: var(--color-bg);
-  color: var(--color-text);
-  outline: none;
-  max-width: 140px;
-}
-.parent-select:focus { border-color: var(--color-teal); }
-.create-input {
-  flex: 1;
-  padding: 7px 10px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  font-family: inherit;
-  background: var(--color-bg);
-  color: var(--color-text);
-  outline: none;
-}
-.create-input:focus { border-color: var(--color-teal); }
-.create-btn {
-  padding: 7px 14px;
-  background: var(--color-teal);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.folder-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.folder-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 7px 0;
-  border-bottom: 0.5px solid var(--color-border);
-  gap: 8px;
-}
-.folder-row:last-child { border-bottom: none; }
-.folder-name { font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
-.toggle-btn {
-  padding: 4px 12px;
-  border-radius: 5px;
-  font-size: 12px;
-  cursor: pointer;
-  border: 0.5px solid var(--color-border);
-  background: transparent;
-  color: var(--color-text-muted);
-  min-width: 90px;
-}
-.toggle-btn.subscribed {
-  background: var(--color-teal-light);
-  border-color: var(--color-teal);
-  color: var(--color-teal);
-  font-weight: 500;
-}
-.toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.icon-btn {
-  padding: 4px 7px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 5px;
-  background: transparent;
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--color-text-muted);
-}
-.icon-btn:hover { background: var(--color-bg); color: var(--color-text); }
-.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.icon-btn.danger:hover { color: #c0392b; border-color: #f5c6c6; }
-.rename-input {
-  flex: 1;
-  padding: 5px 8px;
-  border: 0.5px solid var(--color-teal);
-  border-radius: 6px;
-  font-size: 13px;
-  font-family: inherit;
-  background: var(--color-bg);
-  color: var(--color-text);
-  outline: none;
-}
-.error { font-size: 12px; color: #c0392b; margin-bottom: 10px; }
-
-</style>
