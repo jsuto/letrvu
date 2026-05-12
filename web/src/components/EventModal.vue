@@ -36,9 +36,79 @@
           <label>Description</label>
           <textarea v-model="form.description" rows="3" placeholder="Optional description" />
         </div>
+
+        <!-- Recurrence -->
+        <div class="field-group">
+          <label>Repeat</label>
+          <select v-model="form.rrule_freq" @change="onFreqChange">
+            <option value="">Does not repeat</option>
+            <option value="DAILY">Daily</option>
+            <option value="WEEKLY">Weekly</option>
+            <option value="MONTHLY">Monthly</option>
+            <option value="YEARLY">Yearly</option>
+          </select>
+        </div>
+        <template v-if="form.rrule_freq">
+          <div class="field-group interval-row">
+            <label>Every</label>
+            <div class="interval-wrap">
+              <input v-model.number="form.rrule_interval" type="number" min="1" max="99" class="interval-input" />
+              <span>{{ freqLabel }}</span>
+            </div>
+          </div>
+          <div v-if="form.rrule_freq === 'WEEKLY'" class="field-group">
+            <label>On</label>
+            <div class="byday-row">
+              <button
+                v-for="d in weekdays"
+                :key="d.code"
+                type="button"
+                :class="['day-btn', { active: form.rrule_byday.includes(d.code) }]"
+                @click="toggleDay(d.code)"
+              >{{ d.label }}</button>
+            </div>
+          </div>
+          <div class="field-group">
+            <label>Ends</label>
+            <div class="ends-row">
+              <label class="radio-label">
+                <input type="radio" v-model="form.rrule_end" value="never" /> Never
+              </label>
+              <label class="radio-label">
+                <input type="radio" v-model="form.rrule_end" value="count" />
+                After
+                <input
+                  v-model.number="form.rrule_count"
+                  type="number" min="1" max="999"
+                  class="count-input"
+                  @focus="form.rrule_end = 'count'"
+                />
+                occurrence{{ form.rrule_count === 1 ? '' : 's' }}
+              </label>
+              <label class="radio-label">
+                <input type="radio" v-model="form.rrule_end" value="until" />
+                On
+                <input
+                  type="date"
+                  v-model="form.rrule_until"
+                  class="until-input"
+                  @focus="form.rrule_end = 'until'"
+                />
+              </label>
+            </div>
+          </div>
+          <div v-if="isEdit" class="recur-notice">Editing changes all occurrences.</div>
+        </template>
       </div>
+      <ConfirmDialog
+        :visible="confirmDeleteVisible"
+        message="Delete this event?"
+        @confirm="doDelete"
+        @cancel="confirmDeleteVisible = false"
+        @update:visible="confirmDeleteVisible = $event"
+      />
       <div class="modal-footer">
-        <button v-if="isEdit" class="delete-btn" @click="remove">Delete</button>
+        <button v-if="isEdit" class="delete-btn" @click="confirmDeleteVisible = true">Delete</button>
         <span class="spacer" />
         <p v-if="error" class="error">{{ error }}</p>
         <button @click="save" :disabled="saving" class="save-btn">
@@ -52,6 +122,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useCalendarStore } from '../stores/calendar'
+import ConfirmDialog from './ConfirmDialog.vue'
 
 const emit = defineEmits(['saved', 'deleted'])
 const cal = useCalendarStore()
@@ -60,7 +131,19 @@ const visible = ref(false)
 const saving = ref(false)
 const error = ref('')
 const editId = ref(null)
+const confirmDeleteVisible = ref(false)
 const isEdit = computed(() => editId.value !== null)
+
+const weekdays = [
+  { code: 'MO', label: 'Mo' }, { code: 'TU', label: 'Tu' }, { code: 'WE', label: 'We' },
+  { code: 'TH', label: 'Th' }, { code: 'FR', label: 'Fr' }, { code: 'SA', label: 'Sa' },
+  { code: 'SU', label: 'Su' },
+]
+
+const freqLabel = computed(() => {
+  const map = { DAILY: 'day(s)', WEEKLY: 'week(s)', MONTHLY: 'month(s)', YEARLY: 'year(s)' }
+  return map[form.rrule_freq] ?? ''
+})
 
 const form = reactive({
   title: '',
@@ -71,6 +154,12 @@ const form = reactive({
   ends_time: '10:00',
   location: '',
   description: '',
+  rrule_freq: '',
+  rrule_interval: 1,
+  rrule_byday: [],
+  rrule_end: 'never',
+  rrule_count: 10,
+  rrule_until: '',
 })
 
 function open(event = null, defaultDate = null) {
@@ -88,6 +177,7 @@ function open(event = null, defaultDate = null) {
     form.ends_time = timeStr(e)
     form.location = event.location
     form.description = event.description
+    parseRrule(event.rrule || '')
   } else {
     const d = defaultDate ?? new Date()
     form.title = ''
@@ -98,8 +188,67 @@ function open(event = null, defaultDate = null) {
     form.ends_time = '10:00'
     form.location = ''
     form.description = ''
+    parseRrule('')
   }
   visible.value = true
+}
+
+function onFreqChange() {
+  // When switching to weekly, default to the day of the event's start.
+  if (form.rrule_freq === 'WEEKLY' && form.rrule_byday.length === 0) {
+    const codes = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA']
+    const d = form.starts_date ? new Date(form.starts_date + 'T12:00:00') : new Date()
+    form.rrule_byday = [codes[d.getDay()]]
+  }
+}
+
+function toggleDay(code) {
+  const i = form.rrule_byday.indexOf(code)
+  if (i >= 0) {
+    if (form.rrule_byday.length > 1) form.rrule_byday.splice(i, 1) // keep at least one
+  } else {
+    form.rrule_byday.push(code)
+  }
+}
+
+function buildRrule() {
+  if (!form.rrule_freq) return ''
+  const parts = [`FREQ=${form.rrule_freq}`]
+  if (form.rrule_interval > 1) parts.push(`INTERVAL=${form.rrule_interval}`)
+  if (form.rrule_freq === 'WEEKLY' && form.rrule_byday.length > 0) {
+    // Sort in weekday order
+    const order = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']
+    const sorted = [...form.rrule_byday].sort((a, b) => order.indexOf(a) - order.indexOf(b))
+    parts.push(`BYDAY=${sorted.join(',')}`)
+  }
+  if (form.rrule_end === 'count' && form.rrule_count > 0) {
+    parts.push(`COUNT=${form.rrule_count}`)
+  } else if (form.rrule_end === 'until' && form.rrule_until) {
+    const d = new Date(form.rrule_until + 'T00:00:00Z')
+    parts.push(`UNTIL=${d.toISOString().replace(/[-:.]/g, '').slice(0, 15)}Z`)
+  }
+  return parts.join(';')
+}
+
+function parseRrule(rrule) {
+  if (!rrule) {
+    form.rrule_freq = ''; form.rrule_interval = 1; form.rrule_byday = []
+    form.rrule_end = 'never'; form.rrule_count = 10; form.rrule_until = ''
+    return
+  }
+  const params = Object.fromEntries(rrule.split(';').map(p => p.split('=')))
+  form.rrule_freq = params.FREQ || ''
+  form.rrule_interval = parseInt(params.INTERVAL || '1')
+  form.rrule_byday = params.BYDAY ? params.BYDAY.split(',') : []
+  if (params.COUNT) {
+    form.rrule_end = 'count'; form.rrule_count = parseInt(params.COUNT)
+  } else if (params.UNTIL) {
+    form.rrule_end = 'until'
+    const s = params.UNTIL.replace('Z', '')
+    form.rrule_until = `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`
+  } else {
+    form.rrule_end = 'never'; form.rrule_count = 10; form.rrule_until = ''
+  }
 }
 
 function close() {
@@ -129,8 +278,8 @@ async function save() {
   }
 }
 
-async function remove() {
-  if (!confirm('Delete this event?')) return
+async function doDelete() {
+  confirmDeleteVisible.value = false
   await cal.deleteEvent(editId.value)
   emit('deleted')
   close()
@@ -150,6 +299,7 @@ function buildPayload() {
     all_day: form.all_day,
     starts_at,
     ends_at,
+    rrule: buildRrule(),
   }
 }
 
@@ -257,4 +407,54 @@ textarea { resize: vertical; }
   cursor: pointer;
 }
 .error { font-size: 12px; color: #c0392b; }
+
+select {
+  padding: 7px 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  background: var(--color-surface);
+  color: var(--color-text);
+  width: 100%;
+  box-sizing: border-box;
+}
+select:focus { border-color: var(--color-teal); }
+.interval-row label { margin-bottom: 4px; }
+.interval-wrap { display: flex; align-items: center; gap: 8px; }
+.interval-input { width: 56px; text-align: center; }
+.byday-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.day-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-surface);
+  cursor: pointer;
+  color: var(--color-text);
+}
+.day-btn.active {
+  background: var(--color-teal);
+  color: white;
+  border-color: var(--color-teal);
+}
+.ends-row { display: flex; flex-direction: column; gap: 6px; }
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.radio-label input[type="radio"] { width: auto; }
+.count-input { width: 56px; text-align: center; padding: 4px 6px; }
+.until-input { flex: 1; padding: 4px 6px; }
+.recur-notice {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: var(--color-teal-light);
+  border: 0.5px solid var(--color-teal);
+  border-radius: 5px;
+  padding: 4px 8px;
+}
 </style>

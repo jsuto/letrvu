@@ -41,6 +41,18 @@
           </template>
         </div>
 
+        <div class="notif-row" style="margin-top:4px">
+          <span class="notif-label">Event reminders</span>
+          <select v-model.number="form.calendar_reminder_minutes" class="poll-select" style="width:auto">
+            <option :value="0">Off</option>
+            <option :value="5">5 minutes before</option>
+            <option :value="10">10 minutes before</option>
+            <option :value="15">15 minutes before</option>
+            <option :value="30">30 minutes before</option>
+            <option :value="60">1 hour before</option>
+          </select>
+        </div>
+
         <div class="section-title">Identities (From: addresses)</div>
         <div class="identity-list">
           <div v-for="(id, i) in form.identities" :key="i" class="identity-row">
@@ -72,7 +84,7 @@ const saved = ref(false)
 const error = ref('')
 const notifPermission = ref(typeof Notification !== 'undefined' ? Notification.permission : 'denied')
 
-const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120 })
+const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120, calendar_reminder_minutes: 30 })
 
 async function open() {
   if (!settings.loaded) await settings.fetchSettings()
@@ -80,6 +92,7 @@ async function open() {
   form.signature = settings.settings.signature ?? ''
   form.identities = settings.identities.map(id => ({ ...id }))
   form.poll_interval = settings.pollInterval
+  form.calendar_reminder_minutes = settings.reminderMinutes
   notifPermission.value = typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   saved.value = false
   error.value = ''
@@ -120,6 +133,7 @@ async function save() {
       signature: form.signature,
       identities: JSON.stringify(validIdentities),
       poll_interval: String(form.poll_interval),
+      calendar_reminder_minutes: String(form.calendar_reminder_minutes),
     })
     saved.value = true
     setTimeout(() => { saved.value = false }, 2000)

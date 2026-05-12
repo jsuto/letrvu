@@ -154,7 +154,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Draft saving (IMAP APPEND to Drafts)
 - [x] Reply-all
 - [x] IMAP folder subscription handling
-- [ ] Calendar recurring events (RRULE)
+- [x] Calendar recurring events (RRULE)
 - [ ] Calendar outgoing invites (attach iCal to composed email)
 - [ ] Multi-account support
 - [X] Move messages between folders

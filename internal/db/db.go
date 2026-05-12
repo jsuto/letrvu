@@ -145,5 +145,8 @@ func Migrate(db *DB) error {
 		}
 	}
 
+	// Best-effort column additions for schema evolution (ignored if already exist).
+	_, _ = db.Exec(`ALTER TABLE calendar_events ADD COLUMN rrule TEXT NOT NULL DEFAULT ''`)
+
 	return nil
 }

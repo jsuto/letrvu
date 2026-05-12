@@ -9,9 +9,12 @@ import (
 
 // allowed is the set of setting keys users may read and write.
 var allowed = map[string]bool{
-	"display_name": true,
-	"signature":    true,
-	"identities":   true,
+	"display_name":               true,
+	"signature":                  true,
+	"identities":                 true,
+	"notifications_enabled":      true,
+	"poll_interval":              true,
+	"calendar_reminder_minutes":  true,
 }
 
 // Store persists per-user settings keyed by (username, imap_host).

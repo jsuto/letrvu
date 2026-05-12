@@ -63,5 +63,11 @@ export const useSettingsStore = defineStore('settings', () => {
   // Whether the user has opted into desktop notifications.
   const notificationsEnabled = computed(() => settings.value.notifications_enabled === 'true')
 
-  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled }
+  // Minutes before a calendar event to fire a reminder notification. 0 = off.
+  const reminderMinutes = computed(() => {
+    const v = parseInt(settings.value.calendar_reminder_minutes, 10)
+    return isNaN(v) ? 30 : v
+  })
+
+  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes }
 })

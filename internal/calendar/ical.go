@@ -66,6 +66,9 @@ func componentToEvent(comp *ical.Component) (Event, error) {
 	if p := comp.Props.Get(ical.PropLocation); p != nil {
 		ev.Location = p.Value
 	}
+	if p := comp.Props.Get(ical.PropRecurrenceRule); p != nil {
+		ev.Rrule = p.Value
+	}
 
 	dtstart := comp.Props.Get(ical.PropDateTimeStart)
 	dtend := comp.Props.Get(ical.PropDateTimeEnd)
@@ -124,6 +127,12 @@ func eventToComponent(ev Event) *ical.Component {
 
 	now := ical.Prop{Name: ical.PropDateTimeStamp, Value: time.Now().UTC().Format("20060102T150405Z")}
 	comp.Props[ical.PropDateTimeStamp] = []ical.Prop{now}
+
+	if ev.Rrule != "" {
+		rruleProp := ical.Prop{Name: ical.PropRecurrenceRule, Value: ev.Rrule, Params: make(ical.Params)}
+		rruleProp.SetValueType("RECUR")
+		comp.Props[ical.PropRecurrenceRule] = []ical.Prop{rruleProp}
+	}
 
 	return comp
 }

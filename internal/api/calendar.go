@@ -96,10 +96,8 @@ func (h *handler) deleteCalendarEvent(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) exportCalendar(w http.ResponseWriter, r *http.Request) {
 	sess := h.sessionFrom(r)
-	// Export all events (wide range).
-	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-	to := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
-	events, err := h.calendar.List(sess.Username, sess.IMAPHost, from, to)
+	// ListAll returns base events with RRULE intact (no expansion).
+	events, err := h.calendar.ListAll(sess.Username, sess.IMAPHost)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return

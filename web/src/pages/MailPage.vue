@@ -20,6 +20,7 @@ import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import { useMailEvents } from '../composables/useMailEvents'
 import { useTabTitle } from '../composables/useTabTitle'
+import { useCalendarReminders } from '../composables/useCalendarReminders'
 import FolderList from '../components/FolderList.vue'
 import MessageList from '../components/MessageList.vue'
 import MessageView from '../components/MessageView.vue'
@@ -36,6 +37,7 @@ provide('compose', composeModal)
 
 useMailEvents()
 useTabTitle()
+useCalendarReminders()
 
 onMounted(async () => {
   await Promise.all([mail.fetchFolders(), settings.fetchSettings()])
