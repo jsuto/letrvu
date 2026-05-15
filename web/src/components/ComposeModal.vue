@@ -106,6 +106,13 @@
         <span v-if="draftSaved && !savingDraft" class="text-[12px] text-[var(--color-text-muted)]">Draft saved</span>
 
         <button
+          @click="fileInputEl.click()"
+          title="Attach file"
+          class="text-[18px] leading-none text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+        >📎</button>
+        <input ref="fileInputEl" type="file" multiple class="hidden" @change="onFileInput" />
+
+        <button
           @click="togglePlainText"
           :title="plainTextMode ? 'Switch to rich text' : 'Switch to plain text'"
           class="ml-auto text-[12px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
@@ -138,6 +145,7 @@ const savingDraft = ref(false)
 const draftSaved = ref(false)
 const error = ref('')
 const textareaEl = ref(null)
+const fileInputEl = ref(null)
 const plainTextMode = ref(false)
 
 const form = reactive({ fromIndex: 0, to: '', cc: '', subject: '', plainBody: '' })
@@ -353,6 +361,19 @@ function close() {
 
 function removeAttachment(i) {
   attachments.value.splice(i, 1)
+}
+
+function onFileInput(e) {
+  const files = Array.from(e.target.files ?? [])
+  for (const file of files) {
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const base64 = ev.target.result.split(',')[1]
+      attachments.value.push({ filename: file.name, content_type: file.type || 'application/octet-stream', data: base64 })
+    }
+    reader.readAsDataURL(file)
+  }
+  e.target.value = '' // reset so the same file can be picked again
 }
 
 function onPasteImage(e) {
