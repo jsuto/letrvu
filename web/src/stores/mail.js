@@ -48,6 +48,11 @@ export const useMailStore = defineStore('mail', () => {
       messages.value = data
       // If we got a full page there may be more.
       hasMore.value = data.length === pageSize
+      // Sync folder unseen count from loaded messages. Some IMAP servers
+      // don't return a correct STATUS count for certain folders (e.g. INBOX),
+      // so we derive it from the message list as a reliable fallback.
+      const f = folders.value.find(f => f.name === folder)
+      if (f) f.unseen = data.filter(m => !m.read).length
     } finally {
       loading.value = false
     }
@@ -103,7 +108,11 @@ export const useMailStore = defineStore('mail', () => {
       body: JSON.stringify({ read }),
     })
     const msg = messages.value.find(m => m.uid === uid)
-    if (msg) msg.read = read
+    if (msg && msg.read !== read) {
+      msg.read = read
+      const f = folders.value.find(f => f.name === folder)
+      if (f) f.unseen = Math.max(0, f.unseen + (read ? -1 : 1))
+    }
     if (currentMessage.value?.uid === uid) currentMessage.value = { ...currentMessage.value, read }
   }
 
@@ -192,8 +201,16 @@ export const useMailStore = defineStore('mail', () => {
     })
     if (!res.ok) throw new Error('Mark read failed')
     const uidSet = new Set(uids)
+    let delta = 0
     for (const m of messages.value) {
-      if (uidSet.has(m.uid)) m.read = read
+      if (uidSet.has(m.uid) && m.read !== read) {
+        m.read = read
+        delta += read ? -1 : 1
+      }
+    }
+    if (delta !== 0) {
+      const f = folders.value.find(f => f.name === folder)
+      if (f) f.unseen = Math.max(0, f.unseen + delta)
     }
     if (currentMessage.value && uidSet.has(currentMessage.value.uid)) {
       currentMessage.value = { ...currentMessage.value, read }

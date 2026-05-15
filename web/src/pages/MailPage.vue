@@ -51,10 +51,11 @@ onMounted(async () => {
 onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 function onKeydown(e) {
-  // Ignore shortcuts when the user is typing or a modal is open.
+  // Ignore shortcuts when the user is typing, a modal is open, or a modifier key is held.
   const tag = document.activeElement?.tagName
   if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return
   if (composeModal.value?.visible) return
+  if (e.metaKey || e.ctrlKey || e.altKey) return
 
   switch (e.key) {
     case 'c':
