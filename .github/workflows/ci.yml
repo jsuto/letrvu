@@ -87,12 +87,19 @@ jobs:
           context: .
           push: false
           load: true
-          tags: letrvu:${{ github.sha }}
+          tags: sutoj/letrvu:test
 
       - name: Docker Scout scan
         uses: docker/scout-action@v1
         with:
           command: cves,recommendations
-          image: letrvu:${{ github.sha }}
+          image: sutoj/letrvu:test
           only-severities: critical,high
           exit-code: true
+
+      - name: Push image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: sutoj/letrvu:test
