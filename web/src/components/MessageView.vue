@@ -53,7 +53,8 @@
           </div>
           <button v-if="!isJunkFolder" @click="spam" title="Move to Junk" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Spam</button>
           <button @click="confirmDeleteVisible = true" class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]">Delete</button>
-          <button @click="viewSource" title="View message source" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs font-mono cursor-pointer ml-auto hover:bg-[var(--color-bg)]">&lt;/&gt;</button>
+          <button @click="printMessage" title="Print message" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer ml-auto hover:bg-[var(--color-bg)]">🖨</button>
+          <button @click="viewSource" title="View message source" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs font-mono cursor-pointer hover:bg-[var(--color-bg)]">&lt;/&gt;</button>
         </div>
       </div>
 
@@ -661,6 +662,62 @@ async function moveTo(dest) {
   const msg = mail.currentMessage
   if (!msg) return
   await mail.moveMessage(mail.currentFolder, msg.uid, dest)
+}
+
+function printMessage() {
+  const msg = mail.currentMessage
+  if (!msg) return
+
+  const date = msg.date ? new Date(msg.date).toLocaleString() : ''
+  const toStr = Array.isArray(msg.to) ? msg.to.join(', ') : (msg.to ?? '')
+  const ccStr = Array.isArray(msg.cc) ? msg.cc.join(', ') : (msg.cc ?? '')
+
+  // Build email body content. Always show images in print (user has opted in by printing).
+  let headExtra = ''
+  let bodyContent = ''
+  if (msg.html_body) {
+    const result = processHtml(msg.html_body, msg.inline_images, false, false)
+    const emailDoc = new DOMParser().parseFromString(result.html, 'text/html')
+    headExtra = Array.from(emailDoc.head.querySelectorAll('style')).map(s => s.outerHTML).join('\n')
+    bodyContent = emailDoc.body.innerHTML
+  } else {
+    const escaped = (msg.text_body ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    bodyContent = `<pre style="font-family:inherit;white-space:pre-wrap;margin:0">${escaped}</pre>`
+  }
+
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const metaRow = (label, value) => value ? `<span class="label">${label}</span><span>${esc(value)}</span>` : ''
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>${esc(msg.subject || '(no subject)')}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #000; background: #fff; margin: 0; padding: 28px 36px; }
+  .ph { border-bottom: 1.5px solid #333; padding-bottom: 14px; margin-bottom: 22px; }
+  .ph h1 { font-size: 19px; font-weight: 600; margin: 0 0 10px; }
+  .pm { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 13px; }
+  .pm .label { color: #555; font-weight: 500; }
+  @media print { @page { margin: 1.5cm; } body { padding: 0; } }
+</style>
+${headExtra}
+</head><body>
+<div class="ph">
+  <h1>${esc(msg.subject || '(no subject)')}</h1>
+  <div class="pm">
+    ${metaRow('From', msg.from)}
+    ${metaRow('To', toStr)}
+    ${metaRow('CC', ccStr)}
+    ${metaRow('Date', date)}
+  </div>
+</div>
+${bodyContent}
+<script>window.onload=function(){window.print()}<\/script>
+</body></html>`
+
+  const w = window.open('', '_blank', 'width=820,height=700')
+  if (!w) return
+  w.document.write(html)
+  w.document.close()
 }
 
 async function viewSource() {
