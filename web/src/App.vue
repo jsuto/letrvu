@@ -8,18 +8,6 @@ useDarkMode() // applies data-theme attribute on mount
 </script>
 
 <style>
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-input, textarea, button, select {
-  color: inherit;
-  font-family: inherit;
-  font-size: inherit;
-}
-
 input, textarea, select {
   background: var(--color-surface);
 }
@@ -39,8 +27,8 @@ body {
   --color-border: #e5e5e3;
   --color-surface: #ffffff;
   --color-bg: #f5f5f3;
-  --sidebar-width: 220px;
-  --list-width: 320px;
+  --sidebar-width: 260px;
+  --list-width: 360px;
 }
 
 [data-theme="dark"] {

@@ -113,7 +113,7 @@ function navigateMessage(delta) {
   flex-shrink: 0;
   border-right: 0.5px solid var(--color-border);
   background: var(--color-surface);
-  overflow-y: auto;
+  overflow: hidden;
 }
 .message-list-panel {
   width: var(--list-width);

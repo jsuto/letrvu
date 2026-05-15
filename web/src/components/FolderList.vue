@@ -17,12 +17,12 @@
       class="block px-2 py-1.5 rounded-md text-sm text-[var(--color-text)] no-underline mb-2 hover:bg-[var(--color-teal-light)]"
       active-class="!bg-[var(--color-teal-light)] font-medium"
     >Calendar</RouterLink>
-    <ul v-if="visibleFolders.length" class="list-none flex-1 overflow-y-auto">
+    <ul v-if="visibleFolders.length" class="list-none flex-1 overflow-y-auto mt-1">
       <li
         v-for="folder in visibleFolders"
         :key="folder.name"
         :class="[
-          'flex justify-between items-center px-2 py-1.5 rounded-md cursor-pointer text-sm text-[var(--color-text)] hover:bg-[var(--color-teal-light)]',
+          'flex justify-between items-center pl-3 pr-2 py-1.5 rounded-md cursor-pointer text-sm text-[var(--color-text)] hover:bg-[var(--color-teal-light)]',
           mail.currentFolder === folder.name ? 'bg-[var(--color-teal-light)] font-medium' : '',
           dragOver === folder.name ? '!bg-teal !text-white' : '',
           folder.unseen > 0 ? 'font-semibold' : '',

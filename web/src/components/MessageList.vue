@@ -5,7 +5,7 @@
       :message="`Delete ${mail.selectedUids.size} selected ${mail.selectedUids.size === 1 ? 'message' : 'messages'}?`"
       @confirm="doBulkDelete"
     />
-    <div class="px-4 py-2 border-b border-[var(--color-border)] flex items-center gap-2">
+    <div class="px-4 py-2.5 border-b border-[var(--color-border)] flex items-center gap-2">
       <span class="text-sm font-medium whitespace-nowrap">{{ mail.globalSearchMode ? 'All folders' : mail.currentFolder }}</span>
       <form class="flex-1 flex gap-1" @submit.prevent="onSearch">
         <input
@@ -55,7 +55,7 @@
         v-for="(thread, i) in mail.threads"
         :key="thread.id"
         :class="[
-          'flex items-start gap-2 px-3 py-2.5 border-b border-[var(--color-border)] cursor-pointer select-none hover:bg-[var(--color-bg)]',
+          'flex items-start gap-2 px-4 py-3 border-b border-[var(--color-border)] cursor-pointer select-none hover:bg-[var(--color-bg)]',
           isThreadActive(thread) ? 'bg-[var(--color-teal-light)]' : '',
           isThreadSelected(thread) ? '!bg-teal/10' : '',
         ]"
