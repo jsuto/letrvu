@@ -177,7 +177,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] Vacation / autoresponder (Sieve)
 - [x] Contact groups / distribution lists
 - [ ] Per-sender image trust ("always show images from this sender")
-- [ ] Print view
+- [x] Print view
 - [ ] PGP / S-MIME encryption
 
 ## Keyboard shortcuts
