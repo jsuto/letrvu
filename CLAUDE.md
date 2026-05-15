@@ -89,6 +89,19 @@ Tailwind emits all utility classes inside `@layer utilities`. Any **unlayered** 
 **Common cause:** A global reset like `* { padding: 0; margin: 0 }` written as plain CSS in a Vue `<style>` block or imported stylesheet.
 **Fix:** Either wrap the conflicting rule in `@layer base { ... }`, or remove it (Tailwind's preflight already provides a correct reset inside `@layer base`).
 
+## Roadmap
+
+The roadmap lives in `/Users/sj/devel/letrvu/README.md` under the `## Roadmap` section. Check it when the user refers to roadmap items. Unchecked items (`[ ]`) as of the last read:
+
+- [ ] Calendar outgoing invites (attach iCal to composed email)
+- [ ] Multi-account support
+- [ ] Mobile-responsive layout
+- [ ] Undo send (configurable delay before SMTP submission)
+- [ ] Vacation / autoresponder (Sieve)
+- [ ] Per-sender image trust ("always show images from this sender")
+- [ ] Print view
+- [ ] PGP / S-MIME encryption
+
 ## Tests
 
 Add both backend and frontend unit tests for every new feature.
