@@ -73,6 +73,22 @@ Frontend (Vue 3 SPA)
 - Go: `github.com/emersion/go-imap/v2`, `go-smtp`, `go-message`, `go-vcard`, `go-ical`, `modernc.org/sqlite`, `pgx/v5`
 - Frontend: Vue 3, Vue Router 4, Pinia, Vite 5
 
+## Frontend Styling (Tailwind v4)
+
+The frontend uses Tailwind CSS v4 via the `@tailwindcss/vite` plugin. Key notes:
+
+- **Design tokens** are defined as CSS custom properties in `App.vue` (`:root` / `[data-theme="dark"]`) and mapped into Tailwind via `@theme inline` in `tailwind.css`. Use them as arbitrary values: `bg-[var(--color-surface)]`, `text-[var(--color-text)]`, etc.
+- **Dark mode** uses a custom `dark:` variant tied to the `data-theme="dark"` attribute (not `prefers-color-scheme`). See `tailwind.css`.
+- **Intentional `<style>` blocks** remain in a few components for things Tailwind can't handle: ProseMirror editor styles (ComposeModal), drag-ghost element (MessageList), MailPage structural layout.
+
+### Critical: unlayered global CSS breaks Tailwind utilities
+
+Tailwind emits all utility classes inside `@layer utilities`. Any **unlayered** CSS rule (i.e. written outside an `@layer` block) that touches `padding`, `margin`, `color`, or similar properties will **always win** over Tailwind utilities, regardless of specificity — because unlayered styles beat `@layer` styles in the CSS cascade.
+
+**Symptom:** Tailwind spacing/color classes appear in the built CSS but have no visible effect.
+**Common cause:** A global reset like `* { padding: 0; margin: 0 }` written as plain CSS in a Vue `<style>` block or imported stylesheet.
+**Fix:** Either wrap the conflicting rule in `@layer base { ... }`, or remove it (Tailwind's preflight already provides a correct reset inside `@layer base`).
+
 ## Tests
 
 Add both backend and frontend unit tests for every new feature.
