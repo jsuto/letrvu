@@ -53,7 +53,7 @@
           </div>
           <button v-if="!isJunkFolder" @click="spam" title="Move to Junk" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Spam</button>
           <button @click="confirmDeleteVisible = true" class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]">Delete</button>
-          <button @click="viewSource" title="View message source" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs font-mono cursor-pointer text-[var(--color-text-muted)] ml-auto hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]">&lt;/&gt;</button>
+          <button @click="viewSource" title="View message source" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs font-mono cursor-pointer ml-auto hover:bg-[var(--color-bg)]">&lt;/&gt;</button>
         </div>
       </div>
 
