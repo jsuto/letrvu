@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/license-MIT-1D9E75" />
   <img src="https://img.shields.io/badge/go-1.26+-00ADD8" />
   <img src="https://img.shields.io/badge/vue-3-42b883" />
-  <img src="https://img.shields.io/badge/status-early%20development-orange" />
+  <img src="https://img.shields.io/badge/status-beta-blue" />
 </p>
 
 ---
