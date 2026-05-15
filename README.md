@@ -179,6 +179,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] Per-sender image trust ("always show images from this sender")
 - [x] Print view
 - [ ] PGP / S-MIME encryption
+- [x] Docker scout scanning
 
 ## Keyboard shortcuts
 
