@@ -75,7 +75,7 @@
         />
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between gap-1.5 mb-0.5">
-            <span :class="['text-sm text-[var(--color-text)] whitespace-nowrap overflow-hidden text-ellipsis min-w-0', thread.hasUnread ? 'font-bold' : '']">{{ threadSenders(thread) }}</span>
+            <span :class="['text-sm whitespace-nowrap overflow-hidden text-ellipsis min-w-0', thread.messages.some(m => m.flagged) ? 'text-rose-500' : 'text-[var(--color-text)]', thread.hasUnread ? 'font-bold' : '']">{{ threadSenders(thread) }}</span>
             <span class="flex items-center gap-1 shrink-0">
               <span v-if="thread.messages.some(m => m.flagged)" class="text-orange-400 text-xs">★</span>
               <span v-if="thread.messages.some(m => m.has_attachments)" class="text-xs">📎</span>
@@ -83,7 +83,7 @@
               <span class="text-[11px] text-[var(--color-text-muted)]">{{ formatDate(thread.latestDate) }}</span>
             </span>
           </div>
-          <div :class="['text-sm text-[var(--color-text-muted)] whitespace-nowrap overflow-hidden text-ellipsis', thread.hasUnread ? 'font-semibold text-[var(--color-text)]' : '']">{{ thread.latest.subject || '(no subject)' }}</div>
+          <div :class="['text-sm whitespace-nowrap overflow-hidden text-ellipsis', thread.messages.some(m => m.flagged) ? 'text-rose-500' : thread.hasUnread ? 'font-semibold text-[var(--color-text)]' : 'text-[var(--color-text-muted)]']">{{ thread.latest.subject || '(no subject)' }}</div>
           <div v-if="mail.globalSearchMode && thread.latest.folder" class="text-[10px] text-[var(--color-text-muted)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-1.5 py-px inline-block mt-0.5 max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{{ thread.latest.folder }}</div>
         </div>
       </li>
