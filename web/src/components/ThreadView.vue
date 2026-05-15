@@ -181,7 +181,7 @@ function processedHtml(uid) {
   const doc = new DOMParser().parseFromString(sanitized, 'text/html')
   if (dark.value) {
     const s = doc.createElement('style')
-    s.textContent = 'body{background-color:#141412;color:#e0e0de}a:not([style*="color"]){color:#7ab3ef}'
+    s.textContent = 'html{filter:invert(1) hue-rotate(180deg) !important;background:#fff}img,video,picture,canvas,svg image{filter:invert(1) hue-rotate(180deg)}'
     doc.head.prepend(s)
   }
   return doc.documentElement.outerHTML

@@ -311,9 +311,11 @@ function processHtml(html, inlineImages, blockImages, isDark = false) {
   const doc = new DOMParser().parseFromString(sanitized, 'text/html')
   if (isDark) {
     const style = doc.createElement('style')
-    // Element-level selectors are overridden by any email-specific inline styles
-    // or stylesheet rules that come later in the document.
-    style.textContent = 'body{background-color:#141412;color:#e0e0de}a:not([style*="color"]){color:#7ab3ef}'
+    // Invert the whole document so white→black and black→white.
+    // hue-rotate(180deg) cancels the hue shift from invert(1), preserving
+    // colours while only flipping lightness — exactly what dark-mode needs.
+    // Images/video get the same double-inversion so they appear at original colours.
+    style.textContent = 'html{filter:invert(1) hue-rotate(180deg) !important;background:#fff}img,video,picture,canvas,svg image{filter:invert(1) hue-rotate(180deg)}'
     doc.head.prepend(style)
   }
   const foundImages = blockImages ? blockRemoteImages(doc) : false
