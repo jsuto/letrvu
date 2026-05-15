@@ -3,7 +3,7 @@
     v-if="visible"
     class="fixed inset-0 z-[100] flex items-end justify-end p-8 pointer-events-none"
   >
-    <div class="pointer-events-auto w-[560px] max-h-[620px] flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
+    <div class="pointer-events-auto w-[560px] max-h-[620px] flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl" @paste="onPasteImage">
 
       <!-- Header -->
       <div class="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
@@ -353,6 +353,26 @@ function close() {
 
 function removeAttachment(i) {
   attachments.value.splice(i, 1)
+}
+
+function onPasteImage(e) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  for (const item of items) {
+    if (!item.type.startsWith('image/')) continue
+    const file = item.getAsFile()
+    if (!file) continue
+    e.preventDefault()
+    const ext = item.type.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png'
+    const filename = `image-${Date.now()}.${ext}`
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const base64 = ev.target.result.split(',')[1]
+      attachments.value.push({ filename, content_type: item.type, data: base64 })
+    }
+    reader.readAsDataURL(file)
+    break // one image per paste
+  }
 }
 
 // --- send() ---
