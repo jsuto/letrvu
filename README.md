@@ -130,9 +130,60 @@ The `db_data` volume is declared external so that `docker compose down` (or even
 
 letrvu speaks plain HTTP and must sit behind a TLS-terminating reverse proxy in production. Set `SECURE_COOKIES=true` in your `.env` once HTTPS is in place — this adds the `Secure` flag to session and CSRF cookies so they are never sent over plain HTTP.
 
-### Caddy (recommended)
+### Traefik (recommended for Docker Compose)
 
-Caddy obtains and renews Let's Encrypt certificates automatically.
+Traefik integrates directly with Docker Compose via container labels — no separate config file needed. Add a Traefik service to your `docker-compose.yml` and annotate the `letrvu` service with routing labels:
+
+```yaml
+services:
+  traefik:
+    image: traefik:latest
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.tlschallenge=true
+      - --certificatesresolvers.le.acme.email=you@example.com
+      - --certificatesresolvers.le.acme.storage=/acme/acme.json
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - acme_data:/acme
+    restart: unless-stopped
+
+  letrvu:
+    image: sutoj/letrvu:latest
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.letrvu.rule=Host(`mail.example.com`)
+      - traefik.http.routers.letrvu.entrypoints=websecure
+      - traefik.http.routers.letrvu.tls.certresolver=le
+      # Required for SSE (real-time new mail push)
+      - traefik.http.services.letrvu.loadbalancer.responseforwarding.flushinterval=-1
+    # ... rest of letrvu service config
+
+volumes:
+  acme_data:
+    external: true
+```
+
+Create the ACME volume before first run:
+```bash
+docker volume create acme_data
+```
+
+Set `TRUSTED_PROXY` to Traefik's container IP or the Docker bridge subnet (e.g. `172.17.0.0/16`) so letrvu reads the real client IP from `X-Forwarded-For`:
+```bash
+TRUSTED_PROXY=172.17.0.0/16
+```
+
+### Caddy (recommended for bare-metal)
+
+Caddy obtains and renews Let's Encrypt certificates automatically with zero config.
 
 ```
 # /etc/caddy/Caddyfile
@@ -190,8 +241,8 @@ SESSION_SECRET=$(openssl rand -hex 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 16)
 SECURE_COOKIES=true
 WEBMAIL_HOSTNAME=mail.example.com
-TRUSTED_PROXY=127.0.0.1
-IMAP_INSECURE_TLS=false   # only if your mail server has a valid certificate
+TRUSTED_PROXY=127.0.0.1        # or 172.17.0.0/16 when using Traefik
+IMAP_INSECURE_TLS=false        # only if your mail server has a valid certificate
 ```
 
 ## Configuration
