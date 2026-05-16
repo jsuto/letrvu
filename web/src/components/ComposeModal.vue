@@ -146,11 +146,27 @@
         >📅</button>
 
         <button
+          v-if="pgp.isUnlocked"
+          @click="pgpSign = !pgpSign"
+          :title="pgpSign ? 'Signing enabled — click to disable' : 'Sign this message'"
+          :class="['text-[12px] transition-colors px-2 py-1 rounded border', pgpSign ? 'border-teal text-teal bg-[var(--color-teal-light)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]']"
+        >✍ Sign</button>
+
+        <button
+          v-if="pgp.isUnlocked"
+          @click="pgpEncrypt = !pgpEncrypt"
+          :disabled="!pgpEncryptable && !pgpEncrypt"
+          :title="pgpEncryptable ? (pgpEncrypt ? 'Encryption enabled — click to disable' : 'Encrypt this message') : 'No public key found for all recipients (checked contacts and WKD)'"
+          :class="['text-[12px] transition-colors px-2 py-1 rounded border', pgpEncrypt ? 'border-teal text-teal bg-[var(--color-teal-light)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed']"
+        >🔐 Encrypt</button>
+
+        <button
           @click="togglePlainText"
           :title="plainTextMode ? 'Switch to rich text' : 'Switch to plain text'"
           class="ml-auto text-[12px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
         >{{ plainTextMode ? 'Rich text' : 'Plain text' }}</button>
 
+        <p v-if="pgpError" class="text-[12px] text-orange-600">{{ pgpError }}</p>
         <p v-if="error" class="text-[12px] text-red-600">{{ error }}</p>
       </div>
 
@@ -168,12 +184,14 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import { useCalendarStore } from '../stores/calendar'
+import { usePGPStore } from '../stores/pgp'
 import { apiFetch } from '../api'
 import AddressInput from './AddressInput.vue'
 
 const mail = useMailStore()
 const settings = useSettingsStore()
 const calendarStore = useCalendarStore()
+const pgp = usePGPStore()
 
 const visible = ref(false)
 const sending = ref(false)
@@ -192,6 +210,12 @@ const references = ref('')
 // pendingInvite holds { id, title } when a calendar event is queued as an invite.
 // The actual .ics is generated at send time using the final To/CC addresses.
 const pendingInvite = ref(null)
+
+// PGP toggles
+const pgpSign = ref(false)
+const pgpEncrypt = ref(false)
+const pgpEncryptable = ref(false)   // true when all recipients have stored public keys
+const pgpError = ref('')
 
 const showEventPicker = ref(false)
 const pickerEvents = ref([])
@@ -272,6 +296,25 @@ function scheduleAutoSave() {
 }
 
 watch(() => [form.to, form.cc, form.subject, form.plainBody], scheduleAutoSave)
+
+// Resolve a public key for a single recipient: stored contact key first, WKD fallback.
+async function resolveRecipientKey(email) {
+  const stored = await pgp.getKeyForEmail(email)
+  if (stored) return stored
+  return pgp.wkdLookup(email)
+}
+
+// Check whether all recipients have a resolvable public key (enables Encrypt toggle).
+watch(() => [form.to, form.cc], async () => {
+  if (!pgp.isUnlocked) return
+  const recipients = [
+    ...form.to.split(',').map(s => s.trim()).filter(Boolean),
+    ...form.cc.split(',').map(s => s.trim()).filter(Boolean),
+  ]
+  if (!recipients.length) { pgpEncryptable.value = false; return }
+  const results = await Promise.all(recipients.map(r => resolveRecipientKey(r)))
+  pgpEncryptable.value = results.every(k => k !== null)
+})
 
 // --- Draft save / send helpers ---
 
@@ -396,6 +439,7 @@ function close() {
   clearTimeout(autoSaveTimer)
   visible.value = false
   error.value = ''
+  pgpError.value = ''
   draftSaved.value = false
   attachments.value = []
   pendingInvite.value = null
@@ -404,6 +448,9 @@ function close() {
   originalDraft.value = null
   inReplyTo.value = ''
   references.value = ''
+  pgpSign.value = false
+  pgpEncrypt.value = false
+  pgpEncryptable.value = false
   editor.value?.commands.setContent('')
 }
 
@@ -502,12 +549,41 @@ async function buildInviteAttachment() {
 async function send() {
   sending.value = true
   error.value = ''
+  pgpError.value = ''
   try {
     const inviteAtt = await buildInviteAttachment()
     const payload = buildPayload()
     if (inviteAtt) {
       payload.attachments = [...(payload.attachments ?? []), inviteAtt]
     }
+
+    // PGP: sign and/or encrypt the message body before sending.
+    if (pgpSign.value || pgpEncrypt.value) {
+      // Both operations require plain text body.
+      const bodyText = plainTextMode.value
+        ? form.plainBody
+        : htmlToPlain(editor.value?.getHTML() ?? '')
+
+      if (pgpEncrypt.value) {
+        // Inline PGP encryption (replaces the body with an encrypted block).
+        const allRecipients = [...(payload.to ?? []), ...(payload.cc ?? [])]
+        const keys = await Promise.all(allRecipients.map(r => resolveRecipientKey(r)))
+        if (keys.some(k => !k)) {
+          pgpError.value = 'Missing public key for one or more recipients. Encryption aborted.'
+          return
+        }
+        const armoredMsg = await pgp.encryptText(bodyText, keys, pgpSign.value)
+        payload.text = armoredMsg
+        delete payload.html
+      } else if (pgpSign.value) {
+        // PGP/MIME detached signature (RFC 3156 multipart/signed).
+        const { text, signature, micalg } = await pgp.signMIME(bodyText)
+        payload.text = text
+        delete payload.html
+        payload.pgp_mime_sig = { signature, micalg }
+      }
+    }
+
     await mail.sendMessage({
       ...payload,
       in_reply_to: inReplyTo.value || undefined,
@@ -518,7 +594,8 @@ async function send() {
       originalDraft.value = null
     }
     close()
-  } catch {
+  } catch (e) {
+    if (pgpError.value) return  // already set above
     error.value = 'Failed to send. Please try again.'
   } finally {
     sending.value = false

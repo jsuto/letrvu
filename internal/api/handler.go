@@ -843,6 +843,10 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 			ContentType string `json:"content_type"`
 			Data        string `json:"data"` // base64-encoded
 		} `json:"attachments,omitempty"`
+		PGPMimeSig *struct {
+			Signature string `json:"signature"`
+			MicAlg    string `json:"micalg"`
+		} `json:"pgp_mime_sig,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResp("invalid request body"))
@@ -895,6 +899,10 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		MessageID:    msgID,
 		InReplyTo:    body.InReplyTo,
 		References:   body.References,
+	}
+	if body.PGPMimeSig != nil {
+		smtpMsg.PGPSignature = body.PGPMimeSig.Signature
+		smtpMsg.PGPMicAlg = body.PGPMimeSig.MicAlg
 	}
 
 	if err := smtp.Send(smtp.Config{

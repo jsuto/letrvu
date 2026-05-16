@@ -15,6 +15,7 @@ var allowed = map[string]bool{
 	"notifications_enabled":      true,
 	"poll_interval":              true,
 	"calendar_reminder_minutes":  true,
+	"pgp_key_enc":                true,
 }
 
 // Store persists per-user settings keyed by (username, imap_host).
@@ -46,6 +47,15 @@ func (s *Store) Get(username, imapHost string) (map[string]string, error) {
 		result[k] = v
 	}
 	return result, rows.Err()
+}
+
+// Delete removes a single setting key for the given user.
+func (s *Store) Delete(username, imapHost, key string) error {
+	_, err := s.db.Exec(
+		s.db.Q(`DELETE FROM user_settings WHERE username=? AND imap_host=? AND key=?`),
+		username, imapHost, key,
+	)
+	return err
 }
 
 // Set upserts one or more settings. Unknown keys are silently ignored.
