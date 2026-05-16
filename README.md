@@ -288,7 +288,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Reply-all
 - [x] IMAP folder subscription handling
 - [x] Calendar recurring events (RRULE)
-- [ ] Calendar outgoing invites (attach iCal to composed email)
+- [x] Calendar outgoing invites (attach iCal to composed email)
 - [ ] Multi-account support
 - [X] Move messages between folders
 - [X] Show message source

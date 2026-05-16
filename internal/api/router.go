@@ -94,6 +94,8 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("GET /api/calendar/events/{id}", h.requireAuth(h.getCalendarEvent))
 	mux.HandleFunc("PUT /api/calendar/events/{id}", h.requireAuth(h.updateCalendarEvent))
 	mux.HandleFunc("DELETE /api/calendar/events/{id}", h.requireAuth(h.deleteCalendarEvent))
+	mux.HandleFunc("GET /api/calendar/events/{id}/ical", h.requireAuth(h.getEventICal))
+	mux.HandleFunc("POST /api/calendar/events/{id}/ical", h.requireAuth(h.createEventICal))
 
 	// SSE — real-time new mail notifications via IMAP IDLE
 	mux.HandleFunc("GET /api/events", h.requireAuth(h.events))

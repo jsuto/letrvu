@@ -69,11 +69,23 @@
         class="min-h-[200px] flex-1 resize-none bg-[var(--color-surface)] px-4 py-3 text-[14px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
       />
 
-      <!-- Attachments -->
+      <!-- Attachments + pending invite badge -->
       <div
-        v-if="attachments.length"
+        v-if="attachments.length || pendingInvite"
         class="flex shrink-0 flex-wrap gap-1.5 border-t border-[var(--color-border)] px-4 py-2"
       >
+        <div
+          v-if="pendingInvite"
+          class="flex items-center gap-1 rounded-full border border-teal bg-[var(--color-teal-light)] px-2 py-0.5 text-[12px] text-teal"
+        >
+          <span>📅</span>
+          <span class="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap">{{ pendingInvite.title }}.ics</span>
+          <button
+            @click="pendingInvite = null"
+            class="ml-0.5 transition-colors hover:text-red-600"
+            title="Remove invite"
+          >×</button>
+        </div>
         <div
           v-for="(att, i) in attachments"
           :key="i"
@@ -87,6 +99,21 @@
             title="Remove"
           >×</button>
         </div>
+      </div>
+
+      <!-- Event picker panel -->
+      <div v-if="showEventPicker" class="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg)] max-h-[180px] overflow-y-auto">
+        <div v-if="pickerLoading" class="px-4 py-3 text-xs text-[var(--color-text-muted)]">Loading events…</div>
+        <div v-else-if="!pickerEvents.length" class="px-4 py-3 text-xs text-[var(--color-text-muted)]">No upcoming events in the next 60 days.</div>
+        <button
+          v-for="ev in pickerEvents"
+          :key="ev.id"
+          @click="attachEvent(ev)"
+          class="w-full text-left px-4 py-2 text-[13px] hover:bg-[var(--color-teal-light)] flex items-center gap-2 border-none bg-transparent cursor-pointer"
+        >
+          <span class="font-medium text-[var(--color-text)] truncate flex-1">{{ ev.title }}</span>
+          <span class="shrink-0 text-xs text-[var(--color-text-muted)]">{{ formatEventDate(ev.starts_at) }}</span>
+        </button>
       </div>
 
       <!-- Footer -->
@@ -113,6 +140,12 @@
         <input ref="fileInputEl" type="file" multiple class="hidden" @change="onFileInput" />
 
         <button
+          @click="toggleEventPicker"
+          title="Attach calendar invite"
+          :class="['text-[18px] leading-none transition-colors', showEventPicker ? 'text-teal' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]']"
+        >📅</button>
+
+        <button
           @click="togglePlainText"
           :title="plainTextMode ? 'Switch to rich text' : 'Switch to plain text'"
           class="ml-auto text-[12px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
@@ -134,10 +167,13 @@ import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
+import { useCalendarStore } from '../stores/calendar'
+import { apiFetch } from '../api'
 import AddressInput from './AddressInput.vue'
 
 const mail = useMailStore()
 const settings = useSettingsStore()
+const calendarStore = useCalendarStore()
 
 const visible = ref(false)
 const sending = ref(false)
@@ -153,6 +189,13 @@ const attachments = ref([])
 const originalDraft = ref(null)
 const inReplyTo = ref('')
 const references = ref('')
+// pendingInvite holds { id, title } when a calendar event is queued as an invite.
+// The actual .ics is generated at send time using the final To/CC addresses.
+const pendingInvite = ref(null)
+
+const showEventPicker = ref(false)
+const pickerEvents = ref([])
+const pickerLoading = ref(false)
 
 // --- Tiptap editor ---
 
@@ -309,6 +352,7 @@ async function open(prefill = {}) {
 
   const { _originalRecipients: _r, _attachments: _a, _fromEmail: _fe, _noSignature: _ns,
           _draftFolder: _df, _draftUid: _du, _inReplyTo: _irt, _references: _refs,
+          _inviteEvent: _inv,
           html: prefillHtml, body: prefillBody, ...rest } = prefill
 
   originalDraft.value = (_df && _du != null) ? { folder: _df, uid: _du } : null
@@ -318,6 +362,7 @@ async function open(prefill = {}) {
   Object.assign(form, { fromIndex, to: '', cc: '', subject: '', plainBody: '', ...rest, fromIndex })
 
   attachments.value = _a ? [..._a] : []
+  pendingInvite.value = _inv ?? null
 
   // Build the HTML content for the editor.
   // Layout: [cursor] [sig block] [quoted content if reply/forward]
@@ -353,6 +398,9 @@ function close() {
   error.value = ''
   draftSaved.value = false
   attachments.value = []
+  pendingInvite.value = null
+  showEventPicker.value = false
+  pickerEvents.value = []
   originalDraft.value = null
   inReplyTo.value = ''
   references.value = ''
@@ -396,14 +444,72 @@ function onPasteImage(e) {
   }
 }
 
+// --- event picker ---
+
+async function toggleEventPicker() {
+  showEventPicker.value = !showEventPicker.value
+  if (showEventPicker.value && !pickerEvents.value.length) {
+    pickerLoading.value = true
+    try {
+      pickerEvents.value = await calendarStore.fetchUpcoming(60)
+    } finally {
+      pickerLoading.value = false
+    }
+  }
+}
+
+function attachEvent(ev) {
+  pendingInvite.value = { id: ev.id, title: ev.title }
+  showEventPicker.value = false
+}
+
+function formatEventDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleString('default', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+// --- invite helpers ---
+
+// Fetches a METHOD:REQUEST .ics for the pending invite and returns it as an
+// attachment object, or null if the fetch fails. Attendees are the final To+CC
+// addresses so they appear in the ATTENDEE fields of the iCal.
+async function buildInviteAttachment() {
+  if (!pendingInvite.value) return null
+  const payload = buildPayload()
+  const attendees = [
+    ...payload.to ?? [],
+    ...payload.cc ?? [],
+  ]
+  try {
+    const res = await apiFetch(`/api/calendar/events/${pendingInvite.value.id}/ical`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attendees }),
+    })
+    if (!res.ok) return null
+    const icsText = await res.text()
+    const b64 = btoa(unescape(encodeURIComponent(icsText)))
+    const filename = (pendingInvite.value.title || 'invite').replace(/[/\\:*?"<>|]/g, '_') + '.ics'
+    return { filename, content_type: 'text/calendar; method=REQUEST', data: b64 }
+  } catch {
+    return null
+  }
+}
+
 // --- send() ---
 
 async function send() {
   sending.value = true
   error.value = ''
   try {
+    const inviteAtt = await buildInviteAttachment()
+    const payload = buildPayload()
+    if (inviteAtt) {
+      payload.attachments = [...(payload.attachments ?? []), inviteAtt]
+    }
     await mail.sendMessage({
-      ...buildPayload(),
+      ...payload,
       in_reply_to: inReplyTo.value || undefined,
       references: references.value || undefined,
     })

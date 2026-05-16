@@ -62,5 +62,17 @@ export const useCalendarStore = defineStore('calendar', () => {
     return res.json()
   }
 
-  return { events, loading, fetchEvents, createEvent, updateEvent, deleteEvent, importFromInvite }
+  // fetchUpcoming returns events in the next `days` days (default 60).
+  // Used by the ComposeModal event picker. Does not update the store's events array.
+  async function fetchUpcoming(days = 60) {
+    const from = new Date()
+    const to = new Date(from)
+    to.setDate(to.getDate() + days)
+    const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })
+    const res = await fetch(`/api/calendar/events?${params}`)
+    if (!res.ok) return []
+    return res.json()
+  }
+
+  return { events, loading, fetchEvents, createEvent, updateEvent, deleteEvent, importFromInvite, fetchUpcoming }
 })

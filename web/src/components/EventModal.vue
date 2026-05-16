@@ -134,6 +134,10 @@
           @click="confirmDeleteVisible = true">Delete</button>
         <span class="flex-1" />
         <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
+        <button v-if="isEdit" @click="sendInvite"
+          class="px-3.5 py-2 bg-none border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] cursor-pointer hover:border-teal hover:text-teal">
+          Send as invite
+        </button>
         <button @click="save" :disabled="saving"
           class="px-5 py-2 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
           {{ saving ? 'Saving…' : 'Save' }}
@@ -148,7 +152,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useCalendarStore } from '../stores/calendar'
 import ConfirmDialog from './ConfirmDialog.vue'
 
-const emit = defineEmits(['saved', 'deleted'])
+const emit = defineEmits(['saved', 'deleted', 'send-invite'])
 const cal = useCalendarStore()
 
 const visible = ref(false)
@@ -300,6 +304,11 @@ async function save() {
   } finally {
     saving.value = false
   }
+}
+
+function sendInvite() {
+  emit('send-invite', { id: editId.value, title: form.title })
+  close()
 }
 
 async function doDelete() {
