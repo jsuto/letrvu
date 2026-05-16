@@ -13,6 +13,9 @@ internal/api/static/
 
 letrvu.db
 
+# Python
+__pycache__/
+
 # Editor
 .idea/
 .vscode/
