@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"context"
 	"net"
 	"net/http"
 	"net/url"
@@ -23,6 +24,10 @@ import (
 	"github.com/jsuto/letrvu/internal/settings"
 	"github.com/jsuto/letrvu/internal/smtp"
 )
+
+type contextKey int
+
+const sessionKey contextKey = iota
 
 func randomHex(n int) (string, error) {
 	b := make([]byte, n)
@@ -189,21 +194,21 @@ func (h *handler) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeJSON(w, http.StatusUnauthorized, errorResp("unauthorized"))
 			return
 		}
-		if _, ok := h.sessions.Get(cookie.Value); !ok {
+		sess, ok := h.sessions.Get(cookie.Value)
+		if !ok {
 			writeJSON(w, http.StatusUnauthorized, errorResp("session expired"))
 			return
 		}
 		if !checkCSRF(w, r) {
 			return
 		}
-		next(w, r)
+		next(w, r.WithContext(context.WithValue(r.Context(), sessionKey, sess)))
 	}
 }
 
-// sessionFrom extracts the session for an authenticated request.
+// sessionFrom extracts the session stored in the request context by requireAuth.
 func (h *handler) sessionFrom(r *http.Request) *session.Session {
-	cookie, _ := r.Cookie("letrvu_session")
-	sess, _ := h.sessions.Get(cookie.Value)
+	sess, _ := r.Context().Value(sessionKey).(*session.Session)
 	return sess
 }
 
