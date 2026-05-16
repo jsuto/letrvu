@@ -898,20 +898,42 @@ func (c *Client) MarkReadMessages(folder string, uids []uint32, read bool) error
 
 // MoveMessage moves a single message to another folder using IMAP MOVE (RFC 6851).
 func (c *Client) MoveMessage(folder string, uid uint32, destFolder string) error {
-	return c.MoveMessages(folder, []uint32{uid}, destFolder)
+	_, err := c.MoveMessages(folder, []uint32{uid}, destFolder)
+	return err
 }
 
 // MoveMessages moves multiple messages to another folder in one IMAP MOVE command.
-func (c *Client) MoveMessages(folder string, uids []uint32, destFolder string) error {
+// The returned MoveData contains DestUIDs (requires server UIDPLUS support); it
+// may be nil or have nil DestUIDs on servers that do not advertise UIDPLUS.
+func (c *Client) MoveMessages(folder string, uids []uint32, destFolder string) (*imapclient.MoveData, error) {
 	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
-		return fmt.Errorf("select %q: %w", folder, err)
+		return nil, fmt.Errorf("select %q: %w", folder, err)
 	}
 	var uidSet goimap.UIDSet
 	for _, uid := range uids {
 		uidSet.AddNum(goimap.UID(uid))
 	}
-	_, err := c.c.Move(uidSet, destFolder).Wait()
-	return err
+	return c.c.Move(uidSet, destFolder).Wait()
+}
+
+// SetJunkFlag sets $Junk (junk=true) or $NotJunk (junk=false) on a set of
+// messages, clearing the opposite flag at the same time. This is best-effort:
+// errors are silently ignored because many servers do not advertise $Junk in
+// PERMANENTFLAGS, yet still accept and persist the keyword.
+func (c *Client) SetJunkFlag(folder string, uidSet goimap.NumSet, junk bool) {
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return
+	}
+	add, del := goimap.Flag("$Junk"), goimap.Flag("$NotJunk")
+	if !junk {
+		add, del = del, add
+	}
+	c.c.Store(uidSet, &goimap.StoreFlags{ //nolint:errcheck
+		Op: goimap.StoreFlagsAdd, Silent: true, Flags: []goimap.Flag{add},
+	}, nil).Close()
+	c.c.Store(uidSet, &goimap.StoreFlags{ //nolint:errcheck
+		Op: goimap.StoreFlagsDel, Silent: true, Flags: []goimap.Flag{del},
+	}, nil).Close()
 }
 
 // MarkFlagged sets or clears the \Flagged flag on a message.

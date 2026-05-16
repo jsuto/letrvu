@@ -314,7 +314,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] PGP / S-MIME encryption
 - [x] Docker scout scanning
 - [x] Session timeout / logout all devices
-- [ ] Spam flag feedback (`$Junk` IMAP flag)
+- [x] Spam flag feedback (`$Junk` IMAP flag)
 
 ## Releasing
 

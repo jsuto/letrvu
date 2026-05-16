@@ -193,6 +193,19 @@ export const useMailStore = defineStore('mail', () => {
     selectedUids.value = new Set()
   }
 
+  async function markAsNotSpam(folder, uids) {
+    const res = await apiFetch(`/api/folders/${encodeURIComponent(folder)}/messages/notspam`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uids }),
+    })
+    if (!res.ok) throw new Error('Mark as not spam failed')
+    const uidSet = new Set(uids)
+    messages.value = messages.value.filter(m => !uidSet.has(m.uid))
+    if (currentMessage.value && uidSet.has(currentMessage.value.uid)) currentMessage.value = null
+    selectedUids.value = new Set()
+  }
+
   async function markReadMessages(folder, uids, read) {
     const res = await apiFetch(`/api/folders/${encodeURIComponent(folder)}/messages/read`, {
       method: 'POST',
@@ -368,6 +381,7 @@ export const useMailStore = defineStore('mail', () => {
     saveDraft,
     deleteMessages,
     markAsSpam,
+    markAsNotSpam,
     markReadMessages,
     subscribeFolder,
     unsubscribeFolder,

@@ -129,6 +129,7 @@ function messageActions(msg) {
     { label: 'Reply All', handler: replyAll },
   ]
   if (!isJunkFolder.value) actions.push({ label: 'Spam', handler: spam })
+  if (isJunkFolder.value) actions.push({ label: 'Not spam', handler: notSpam })
   actions.push({ label: 'Delete', handler: requestDelete, danger: true })
   return actions
 }
@@ -266,6 +267,10 @@ function replyAll(msg) {
 
 async function spam(msg) {
   await mail.markAsSpam(mail.currentFolder, [msg.uid])
+}
+
+async function notSpam(msg) {
+  await mail.markAsNotSpam(mail.currentFolder, [msg.uid])
 }
 
 const deleteTarget = ref(null)
