@@ -19,11 +19,12 @@ func openTestDB(t *testing.T) *db.DB {
 	}
 	stmts := []string{
 		`CREATE TABLE contacts (
-			id        INTEGER PRIMARY KEY,
-			owner     TEXT NOT NULL,
-			imap_host TEXT NOT NULL,
-			name      TEXT NOT NULL DEFAULT '',
-			notes     TEXT NOT NULL DEFAULT ''
+			id             INTEGER PRIMARY KEY,
+			owner          TEXT NOT NULL,
+			imap_host      TEXT NOT NULL,
+			name           TEXT NOT NULL DEFAULT '',
+			notes          TEXT NOT NULL DEFAULT '',
+			pgp_public_key TEXT NOT NULL DEFAULT ''
 		)`,
 		`CREATE TABLE contact_emails (
 			id         INTEGER PRIMARY KEY,

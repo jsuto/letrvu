@@ -18,6 +18,7 @@
     "@tiptap/starter-kit": "^3.23.1",
     "@tiptap/vue-3": "^3.23.1",
     "dompurify": "^3.4.2",
+    "openpgp": "^6.3.0",
     "pinia": "^3.0.4",
     "tailwindcss": "^4.3.0",
     "vue": "^3.4.0",

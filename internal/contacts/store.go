@@ -11,10 +11,11 @@ import (
 
 // Contact represents an address book entry.
 type Contact struct {
-	ID     int64          `json:"id"`
-	Name   string         `json:"name"`
-	Notes  string         `json:"notes"`
-	Emails []ContactEmail `json:"emails"`
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Notes     string         `json:"notes"`
+	Emails    []ContactEmail `json:"emails"`
+	HasPGPKey bool           `json:"has_pgp_key"`
 }
 
 // ContactEmail is a single email address belonging to a contact.
@@ -69,7 +70,7 @@ func NewStore(database *db.DB) *Store {
 // List returns all contacts (with their emails) for the given owner.
 func (s *Store) List(owner, imapHost string) ([]Contact, error) {
 	rows, err := s.db.Query(
-		s.db.Q(`SELECT id, name, notes FROM contacts WHERE owner=? AND imap_host=? ORDER BY name`),
+		s.db.Q(`SELECT id, name, notes, pgp_public_key != '' FROM contacts WHERE owner=? AND imap_host=? ORDER BY name`),
 		owner, imapHost,
 	)
 	if err != nil {
@@ -80,7 +81,7 @@ func (s *Store) List(owner, imapHost string) ([]Contact, error) {
 	var contacts []Contact
 	for rows.Next() {
 		var c Contact
-		if err := rows.Scan(&c.ID, &c.Name, &c.Notes); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Notes, &c.HasPGPKey); err != nil {
 			return nil, err
 		}
 		contacts = append(contacts, c)
@@ -103,9 +104,9 @@ func (s *Store) List(owner, imapHost string) ([]Contact, error) {
 func (s *Store) Get(id int64, owner, imapHost string) (*Contact, error) {
 	var c Contact
 	err := s.db.QueryRow(
-		s.db.Q(`SELECT id, name, notes FROM contacts WHERE id=? AND owner=? AND imap_host=?`),
+		s.db.Q(`SELECT id, name, notes, pgp_public_key != '' FROM contacts WHERE id=? AND owner=? AND imap_host=?`),
 		id, owner, imapHost,
-	).Scan(&c.ID, &c.Name, &c.Notes)
+	).Scan(&c.ID, &c.Name, &c.Notes, &c.HasPGPKey)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -500,6 +501,46 @@ func (s *Store) listGroupMembers(groupID int64) ([]GroupMember, error) {
 		members = append(members, m)
 	}
 	return members, rows.Err()
+}
+
+// GetPGPKey returns the armored PGP public key for a contact, or "" if unset.
+func (s *Store) GetPGPKey(id int64, owner, imapHost string) (string, error) {
+	var key string
+	err := s.db.QueryRow(
+		s.db.Q(`SELECT pgp_public_key FROM contacts WHERE id=? AND owner=? AND imap_host=?`),
+		id, owner, imapHost,
+	).Scan(&key)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return key, err
+}
+
+// SetPGPKey stores (or clears when key=="") a PGP public key for a contact.
+func (s *Store) SetPGPKey(id int64, owner, imapHost, key string) error {
+	_, err := s.db.Exec(
+		s.db.Q(`UPDATE contacts SET pgp_public_key=? WHERE id=? AND owner=? AND imap_host=?`),
+		key, id, owner, imapHost,
+	)
+	return err
+}
+
+// FindPublicKeyByEmail looks up the PGP public key for the first contact
+// matching the given email address. Returns "" if not found or no key set.
+func (s *Store) FindPublicKeyByEmail(owner, imapHost, email string) (string, error) {
+	var key string
+	err := s.db.QueryRow(
+		s.db.Q(`SELECT c.pgp_public_key
+			FROM contacts c
+			JOIN contact_emails ce ON ce.contact_id = c.id
+			WHERE c.owner=? AND c.imap_host=? AND LOWER(ce.email)=?
+			LIMIT 1`),
+		owner, imapHost, strings.ToLower(email),
+	).Scan(&key)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return key, err
 }
 
 func (s *Store) listEmails(contactID int64) ([]ContactEmail, error) {

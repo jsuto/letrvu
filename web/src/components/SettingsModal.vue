@@ -90,6 +90,90 @@
           <p v-if="logoutAllError" class="text-xs text-red-600">{{ logoutAllError }}</p>
         </div>
 
+        <!-- PGP -->
+        <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">PGP Key</div>
+        <div class="flex flex-col gap-2">
+
+          <!-- No key stored -->
+          <template v-if="!pgp.hasKey">
+            <p class="text-xs text-[var(--color-text-muted)]">No PGP key configured. Generate a new key pair or import an existing one.</p>
+            <div class="flex gap-2 flex-wrap">
+              <button @click="pgpMode = 'generate'"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:border-teal hover:text-teal">Generate key</button>
+              <button @click="pgpMode = 'import'"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:border-teal hover:text-teal">Import key</button>
+            </div>
+
+            <!-- Generate form -->
+            <div v-if="pgpMode === 'generate'" class="flex flex-col gap-2 p-3 bg-[var(--color-bg)] rounded-md border border-[var(--color-border)]">
+              <p class="text-xs font-medium text-[var(--color-text)]">Generate new ECC (Curve25519) key pair</p>
+              <input v-model="pgpForm.name" type="text" placeholder="Your name"
+                class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+              <input v-model="pgpForm.email" type="email" placeholder="your@email.com"
+                class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+              <input v-model="pgpForm.passphrase" type="password" placeholder="Passphrase (used to protect the key)"
+                class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+              <input v-model="pgpForm.passphrase2" type="password" placeholder="Confirm passphrase"
+                class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+              <p v-if="pgpError" class="text-xs text-red-600">{{ pgpError }}</p>
+              <div class="flex gap-2">
+                <button @click="generatePGPKey" :disabled="pgpBusy"
+                  class="px-4 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer disabled:opacity-60">{{ pgpBusy ? 'Generating…' : 'Generate' }}</button>
+                <button @click="pgpMode = null" class="px-3 py-1.5 border border-[var(--color-border)] rounded-md text-xs cursor-pointer">Cancel</button>
+              </div>
+            </div>
+
+            <!-- Import form -->
+            <div v-if="pgpMode === 'import'" class="flex flex-col gap-2 p-3 bg-[var(--color-bg)] rounded-md border border-[var(--color-border)]">
+              <p class="text-xs font-medium text-[var(--color-text)]">Import existing private key</p>
+              <textarea v-model="pgpForm.armoredKey" rows="5" placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----"
+                class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-xs font-mono outline-none bg-[var(--color-surface)] resize-y focus:border-teal" />
+              <input v-model="pgpForm.passphrase" type="password" placeholder="Passphrase"
+                class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+              <p v-if="pgpError" class="text-xs text-red-600">{{ pgpError }}</p>
+              <div class="flex gap-2">
+                <button @click="importPGPKey" :disabled="pgpBusy"
+                  class="px-4 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer disabled:opacity-60">{{ pgpBusy ? 'Importing…' : 'Import' }}</button>
+                <button @click="pgpMode = null" class="px-3 py-1.5 border border-[var(--color-border)] rounded-md text-xs cursor-pointer">Cancel</button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Key stored but locked -->
+          <template v-else-if="pgp.isLocked">
+            <p class="text-xs text-[var(--color-text-muted)]">Key stored on server. Enter your passphrase to unlock for this session.</p>
+            <div class="flex gap-2">
+              <input v-model="pgpForm.passphrase" type="password" placeholder="Passphrase"
+                class="flex-1 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal"
+                @keydown.enter="unlockPGPKey" />
+              <button @click="unlockPGPKey" :disabled="pgpBusy"
+                class="px-4 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer disabled:opacity-60">{{ pgpBusy ? 'Unlocking…' : 'Unlock' }}</button>
+            </div>
+            <p v-if="pgpError" class="text-xs text-red-600">{{ pgpError }}</p>
+            <button @click="confirmDeletePGPKey" class="self-start text-xs text-red-600 bg-none border-none cursor-pointer p-0 hover:underline">Delete key…</button>
+          </template>
+
+          <!-- Key unlocked -->
+          <template v-else-if="pgp.isUnlocked">
+            <div class="px-3 py-2.5 bg-[var(--color-bg)] rounded-md border border-[var(--color-border)] flex flex-col gap-1">
+              <p class="text-xs font-medium text-[var(--color-text)]">🔑 Key unlocked</p>
+              <p class="text-[11px] text-[var(--color-text-muted)] font-mono break-all">{{ pgp.fingerprint }}</p>
+              <p v-if="pgp.userId" class="text-xs text-[var(--color-text-muted)]">{{ pgp.userId }}</p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button @click="exportPublicKey"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:border-teal hover:text-teal">Export public key</button>
+              <button @click="exportPrivateKey"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:border-teal hover:text-teal">Export private key</button>
+              <button @click="pgp.lock()"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:bg-[var(--color-bg)]">Lock</button>
+              <button @click="confirmDeletePGPKey"
+                class="px-3 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-red-600 hover:bg-[var(--color-bg)]">Delete key</button>
+            </div>
+          </template>
+
+        </div>
+
         <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Identities (From: addresses)</div>
         <div class="flex flex-col gap-2">
           <div v-for="(id, i) in form.identities" :key="i" class="flex gap-1.5 items-center">
@@ -121,10 +205,12 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useSettingsStore } from '../stores/settings'
 import { useAuthStore } from '../stores/auth'
+import { usePGPStore } from '../stores/pgp'
 import { apiFetch } from '../api'
 
 const settings = useSettingsStore()
 const auth = useAuthStore()
+const pgp = usePGPStore()
 const visible = ref(false)
 const saving = ref(false)
 const saved = ref(false)
@@ -135,6 +221,12 @@ const sessions = ref([])
 const sessionsLoading = ref(false)
 const logoutAllBusy = ref(false)
 const logoutAllError = ref('')
+
+// PGP state
+const pgpMode = ref(null)  // null | 'generate' | 'import'
+const pgpBusy = ref(false)
+const pgpError = ref('')
+const pgpForm = reactive({ name: '', email: '', passphrase: '', passphrase2: '', armoredKey: '' })
 
 const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120, calendar_reminder_minutes: 30 })
 
@@ -149,8 +241,16 @@ async function open() {
   saved.value = false
   error.value = ''
   logoutAllError.value = ''
+  pgpMode.value = null
+  pgpError.value = ''
+  pgpForm.passphrase = ''
+  pgpForm.passphrase2 = ''
+  // Pre-fill generate form with account info
+  pgpForm.name = settings.settings.display_name ?? ''
+  pgpForm.email = auth.user?.username ?? ''
   visible.value = true
   fetchSessions()
+  pgp.fetchKey()
 }
 
 async function fetchSessions() {
@@ -270,6 +370,80 @@ async function save() {
 function onKeydown(e) { if (e.key === 'Escape' && visible.value) close() }
 onMounted(() => document.addEventListener('keydown', onKeydown))
 onUnmounted(() => document.removeEventListener('keydown', onKeydown))
+
+// ── PGP helpers ───────────────────────────────────────────────────────────
+
+async function generatePGPKey() {
+  pgpError.value = ''
+  if (!pgpForm.name.trim() || !pgpForm.email.trim()) { pgpError.value = 'Name and email are required.'; return }
+  if (!pgpForm.passphrase) { pgpError.value = 'Passphrase is required.'; return }
+  if (pgpForm.passphrase !== pgpForm.passphrase2) { pgpError.value = 'Passphrases do not match.'; return }
+  pgpBusy.value = true
+  try {
+    await pgp.generateKey(pgpForm.name.trim(), pgpForm.email.trim(), pgpForm.passphrase)
+    pgpMode.value = null
+    pgpForm.passphrase = ''
+    pgpForm.passphrase2 = ''
+  } catch (e) {
+    pgpError.value = e.message || 'Key generation failed.'
+  } finally {
+    pgpBusy.value = false
+  }
+}
+
+async function importPGPKey() {
+  pgpError.value = ''
+  if (!pgpForm.armoredKey.trim()) { pgpError.value = 'Paste your armored private key.'; return }
+  if (!pgpForm.passphrase) { pgpError.value = 'Passphrase is required.'; return }
+  pgpBusy.value = true
+  try {
+    await pgp.importKey(pgpForm.armoredKey.trim(), pgpForm.passphrase)
+    pgpMode.value = null
+    pgpForm.armoredKey = ''
+    pgpForm.passphrase = ''
+  } catch (e) {
+    pgpError.value = e.message || 'Import failed. Check your key and passphrase.'
+  } finally {
+    pgpBusy.value = false
+  }
+}
+
+async function unlockPGPKey() {
+  pgpError.value = ''
+  if (!pgpForm.passphrase) { pgpError.value = 'Enter your passphrase.'; return }
+  pgpBusy.value = true
+  try {
+    await pgp.unlock(pgpForm.passphrase)
+    pgpForm.passphrase = ''
+  } catch {
+    pgpError.value = 'Wrong passphrase.'
+  } finally {
+    pgpBusy.value = false
+  }
+}
+
+async function confirmDeletePGPKey() {
+  if (!confirm('Delete your PGP key from the server? This cannot be undone.')) return
+  await pgp.deleteKey()
+}
+
+function downloadText(text, filename, mime = 'text/plain') {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([text], { type: mime }))
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+function exportPublicKey() {
+  const armored = pgp.armoredPublicKey()
+  if (armored) downloadText(armored, 'publickey.asc', 'application/pgp-keys')
+}
+
+function exportPrivateKey() {
+  if (!pgp.encryptedKey) return
+  downloadText(pgp.encryptedKey, 'privatekey.asc', 'application/pgp-keys')
+}
 
 defineExpose({ open, close })
 </script>

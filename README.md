@@ -311,7 +311,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Contact groups / distribution lists
 - [ ] Per-sender image trust ("always show images from this sender")
 - [x] Print view
-- [ ] PGP / S-MIME encryption
+- [x] PGP signing and encryption (openpgp.js, server-stored encrypted key, WKD lookup)
 - [x] Docker scout scanning
 - [x] Session timeout / logout all devices
 - [x] Spam flag feedback (`$Junk` IMAP flag)

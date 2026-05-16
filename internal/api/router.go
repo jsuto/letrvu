@@ -98,6 +98,16 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("GET /api/calendar/events/{id}/ical", h.requireAuth(h.getEventICal))
 	mux.HandleFunc("POST /api/calendar/events/{id}/ical", h.requireAuth(h.createEventICal))
 
+	// PGP — private key storage and contact public key management
+	mux.HandleFunc("GET /api/pgp/key", h.requireAuth(h.getPGPKey))
+	mux.HandleFunc("POST /api/pgp/key", h.requireAuth(h.setPGPKey))
+	mux.HandleFunc("DELETE /api/pgp/key", h.requireAuth(h.deletePGPKey))
+	mux.HandleFunc("GET /api/pgp/key-for-email", h.requireAuth(h.getKeyForEmail))
+	mux.HandleFunc("GET /api/pgp/wkd", h.requireAuth(h.wkdLookup))
+	mux.HandleFunc("GET /api/contacts/{id}/pgpkey", h.requireAuth(h.getContactPGPKey))
+	mux.HandleFunc("PUT /api/contacts/{id}/pgpkey", h.requireAuth(h.setContactPGPKey))
+	mux.HandleFunc("DELETE /api/contacts/{id}/pgpkey", h.requireAuth(h.deleteContactPGPKey))
+
 	// SSE — real-time new mail notifications via IMAP IDLE
 	mux.HandleFunc("GET /api/events", h.requireAuth(h.events))
 

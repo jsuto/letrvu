@@ -101,21 +101,35 @@
         <span>⚠ {{ phishingCount }} misleading {{ phishingCount === 1 ? 'link' : 'links' }} detected — the visible text shows a different domain than the actual destination.</span>
       </div>
 
+      <!-- PGP banner -->
+      <div v-if="pgpStatus" :class="['flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 border', pgpStatus.style]">
+        <span>{{ pgpStatus.icon }} {{ pgpStatus.label }}</span>
+        <button v-if="pgpStatus.action" @click="pgpStatus.action.fn" :disabled="pgpBusy"
+          class="ml-auto px-3 py-1 border border-current rounded-md text-xs cursor-pointer disabled:opacity-50 whitespace-nowrap">
+          {{ pgpBusy ? 'Working…' : pgpStatus.action.label }}
+        </button>
+      </div>
+
+      <!-- Decrypted PGP body (shown instead of normal body when decrypted) -->
+      <pre v-if="pgpDecryptedText" class="whitespace-pre-wrap text-sm leading-7 text-[var(--color-text)]">{{ pgpDecryptedText }}</pre>
+
       <!-- HTML email rendered in a sandboxed iframe to prevent XSS.
            allow-popups: target="_blank" links open in a new tab.
            allow-same-origin: lets the parent read scrollHeight to auto-size
            the iframe so the outer pane scrolls instead of the iframe itself.
            Scripts are still blocked (no allow-scripts). -->
-      <iframe
-        v-if="mail.currentMessage.html_body"
-        ref="iframeEl"
-        class="w-full min-h-[200px] border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] block"
-        sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
-        :srcdoc="displayHtml"
-        title="Message body"
-        @load="resizeIframe"
-      />
-      <pre v-else class="whitespace-pre-wrap text-sm leading-7 text-[var(--color-text)]">{{ mail.currentMessage.text_body }}</pre>
+      <template v-else>
+        <iframe
+          v-if="mail.currentMessage.html_body"
+          ref="iframeEl"
+          class="w-full min-h-[200px] border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] block"
+          sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+          :srcdoc="displayHtml"
+          title="Message body"
+          @load="resizeIframe"
+        />
+        <pre v-else class="whitespace-pre-wrap text-sm leading-7 text-[var(--color-text)]">{{ pgpCleartextBody ?? mail.currentMessage.text_body }}</pre>
+      </template>
 
       <div v-if="mail.currentMessage.attachments?.length" class="mt-6 border-t border-[var(--color-border)] pt-4">
         <p class="text-xs text-[var(--color-text-muted)] mb-2">Attachments</p>
@@ -168,6 +182,7 @@ import { useMailStore } from '../stores/mail'
 import { useContactsStore } from '../stores/contacts'
 import { useCalendarStore } from '../stores/calendar'
 import { useSettingsStore } from '../stores/settings'
+import { usePGPStore } from '../stores/pgp'
 import { useDarkMode } from '../composables/useDarkMode'
 import { extractEmail, buildReplyAllCc, isPreviewable } from '../utils/mail.js'
 import ConfirmDialog from './ConfirmDialog.vue'
@@ -176,6 +191,7 @@ const mail = useMailStore()
 const contacts = useContactsStore()
 const calendar = useCalendarStore()
 const settings = useSettingsStore()
+const pgp = usePGPStore()
 const compose = inject('compose')
 const setMobilePanel = inject('setMobilePanel', () => {})
 const { dark } = useDarkMode()
@@ -198,6 +214,12 @@ const sourceText = ref('')
 const sourceCopied = ref(false)
 const iframeEl = ref(null)
 const previewAtt = ref(null)
+
+// PGP state
+const pgpBusy = ref(false)
+const pgpDecryptedText = ref(null)   // decrypted plaintext (replaces body when set)
+const pgpCleartextBody = ref(null)   // plaintext portion of a cleartext-signed message
+const pgpStatus = ref(null)          // { icon, label, style, action? }
 
 function openPreview(att) {
   previewAtt.value = att
@@ -475,8 +497,104 @@ onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown)
 })
 
-// Reset invite state when message changes
-watch(() => mail.currentMessage?.uid, () => { inviteAdded.value = false })
+// Reset state when message changes
+watch(() => mail.currentMessage?.uid, () => {
+  inviteAdded.value = false
+  pgpDecryptedText.value = null
+  pgpCleartextBody.value = null
+  pgpBusy.value = false
+  detectPGP()
+})
+
+function detectPGP() {
+  const body = mail.currentMessage?.text_body ?? ''
+  if (body.includes('-----BEGIN PGP MESSAGE-----')) {
+    if (pgp.isUnlocked) {
+      pgpStatus.value = {
+        icon: '🔐', label: 'This message is encrypted.',
+        style: 'bg-[#f0f4ff] border-[#7090d0] text-[#1a3a7a]',
+        action: { label: 'Decrypt', fn: decryptBody },
+      }
+    } else {
+      pgpStatus.value = {
+        icon: '🔐', label: 'This message is encrypted. Unlock your PGP key in Settings to decrypt.',
+        style: 'bg-[#f0f4ff] border-[#7090d0] text-[#1a3a7a]',
+      }
+    }
+  } else if (body.includes('-----BEGIN PGP SIGNED MESSAGE-----')) {
+    pgpStatus.value = {
+      icon: '✍', label: 'This message is PGP-signed.',
+      style: 'bg-[#f0fff4] border-[#50c070] text-[#1a5a30]',
+      action: { label: 'Verify signature', fn: verifySignature },
+    }
+    // Show the cleartext portion without the PGP wrapper
+    pgpCleartextBody.value = parseCleartextBody(body)
+  } else {
+    pgpStatus.value = null
+  }
+}
+
+// Extract the human-readable text from a cleartext signed message.
+function parseCleartextBody(armored) {
+  const hashEnd = armored.indexOf('\n\n')
+  if (hashEnd === -1) return armored
+  const sigStart = armored.lastIndexOf('-----BEGIN PGP SIGNATURE-----')
+  if (sigStart === -1) return armored
+  return armored.slice(hashEnd + 2, sigStart).replace(/^- /gm, '').trimEnd()
+}
+
+async function decryptBody() {
+  pgpBusy.value = true
+  try {
+    const { data } = await pgp.decryptMessage(mail.currentMessage.text_body)
+    pgpDecryptedText.value = data
+    pgpStatus.value = {
+      icon: '🔓', label: 'Decrypted successfully.',
+      style: 'bg-[#f0fff4] border-[#50c070] text-[#1a5a30]',
+    }
+  } catch {
+    pgpStatus.value = {
+      icon: '🔐', label: 'Decryption failed — wrong key or corrupted message.',
+      style: 'bg-[#fdf0f0] border-[#e07070] text-[#7a1a1a]',
+    }
+  } finally {
+    pgpBusy.value = false
+  }
+}
+
+async function verifySignature() {
+  pgpBusy.value = true
+  try {
+    const senderEmail = extractEmail(mail.currentMessage.from)
+    const senderKey = await pgp.getKeyForEmail(senderEmail)
+    if (!senderKey) {
+      pgpStatus.value = {
+        icon: '✍', label: `Signed, but no stored public key for ${senderEmail}. Import the sender's key in Contacts to verify.`,
+        style: 'bg-[#f5f5f0] border-[#b0b080] text-[#555530]',
+      }
+      return
+    }
+    const { valid } = await pgp.verifyCleartext(mail.currentMessage.text_body, senderKey)
+    if (valid) {
+      pgpStatus.value = {
+        icon: '✅', label: `Signature verified — message is authentic and unmodified.`,
+        style: 'bg-[#f0fff4] border-[#50c070] text-[#1a5a30]',
+      }
+    } else {
+      pgpStatus.value = {
+        icon: '❌', label: 'Signature verification FAILED — message may have been tampered with.',
+        style: 'bg-[#fdf0f0] border-[#e07070] text-[#7a1a1a]',
+      }
+    }
+  } catch {
+    pgpStatus.value = {
+      icon: '⚠', label: 'Could not verify signature.',
+      style: 'bg-[#fff4e5] border-[#e09030] text-[#7a4000]',
+    }
+  } finally {
+    pgpBusy.value = false
+  }
+}
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
