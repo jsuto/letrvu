@@ -156,7 +156,7 @@
           v-if="pgp.isUnlocked"
           @click="pgpEncrypt = !pgpEncrypt"
           :disabled="!pgpEncryptable && !pgpEncrypt"
-          :title="pgpEncryptable ? (pgpEncrypt ? 'Encryption enabled — click to disable' : 'Encrypt this message') : 'No stored public keys for all recipients'"
+          :title="pgpEncryptable ? (pgpEncrypt ? 'Encryption enabled — click to disable' : 'Encrypt this message') : 'No public key found for all recipients (checked contacts and WKD)'"
           :class="['text-[12px] transition-colors px-2 py-1 rounded border', pgpEncrypt ? 'border-teal text-teal bg-[var(--color-teal-light)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed']"
         >🔐 Encrypt</button>
 
@@ -297,7 +297,14 @@ function scheduleAutoSave() {
 
 watch(() => [form.to, form.cc, form.subject, form.plainBody], scheduleAutoSave)
 
-// Check whether all recipients have stored public keys (enables Encrypt toggle).
+// Resolve a public key for a single recipient: stored contact key first, WKD fallback.
+async function resolveRecipientKey(email) {
+  const stored = await pgp.getKeyForEmail(email)
+  if (stored) return stored
+  return pgp.wkdLookup(email)
+}
+
+// Check whether all recipients have a resolvable public key (enables Encrypt toggle).
 watch(() => [form.to, form.cc], async () => {
   if (!pgp.isUnlocked) return
   const recipients = [
@@ -305,7 +312,7 @@ watch(() => [form.to, form.cc], async () => {
     ...form.cc.split(',').map(s => s.trim()).filter(Boolean),
   ]
   if (!recipients.length) { pgpEncryptable.value = false; return }
-  const results = await Promise.all(recipients.map(r => pgp.getKeyForEmail(r)))
+  const results = await Promise.all(recipients.map(r => resolveRecipientKey(r)))
   pgpEncryptable.value = results.every(k => k !== null)
 })
 
@@ -560,7 +567,7 @@ async function send() {
       if (pgpEncrypt.value) {
         // Inline PGP encryption (replaces the body with an encrypted block).
         const allRecipients = [...(payload.to ?? []), ...(payload.cc ?? [])]
-        const keys = await Promise.all(allRecipients.map(r => pgp.getKeyForEmail(r)))
+        const keys = await Promise.all(allRecipients.map(r => resolveRecipientKey(r)))
         if (keys.some(k => !k)) {
           pgpError.value = 'Missing public key for one or more recipients. Encryption aborted.'
           return
