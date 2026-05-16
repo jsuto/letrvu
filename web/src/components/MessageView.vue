@@ -56,6 +56,7 @@
             </ul>
           </div>
           <button v-if="!isJunkFolder" @click="spam" title="Move to Junk" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Spam</button>
+          <button v-if="isJunkFolder" @click="notSpam" title="Move to Inbox" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Not spam</button>
           <button @click="confirmDeleteVisible = true" class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]">Delete</button>
           <button @click="printMessage" title="Print message" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer ml-auto hover:bg-[var(--color-bg)]">🖨</button>
           <button @click="viewSource" title="View message source" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs font-mono cursor-pointer hover:bg-[var(--color-bg)]">&lt;/&gt;</button>
@@ -109,7 +110,7 @@
         v-if="mail.currentMessage.html_body"
         ref="iframeEl"
         class="w-full min-h-[200px] border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] block"
-        sandbox="allow-popups allow-same-origin"
+        sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
         :srcdoc="displayHtml"
         title="Message body"
         @load="resizeIframe"
@@ -625,6 +626,12 @@ async function spam() {
   const msg = mail.currentMessage
   if (!msg) return
   await mail.markAsSpam(mail.currentFolder, [msg.uid])
+}
+
+async function notSpam() {
+  const msg = mail.currentMessage
+  if (!msg) return
+  await mail.markAsNotSpam(mail.currentFolder, [msg.uid])
 }
 
 async function doDelete() {

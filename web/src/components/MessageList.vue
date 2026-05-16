@@ -43,7 +43,8 @@
           <li v-for="f in otherFolders" :key="f.name" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]" @click="bulkMove(f.name)">{{ f.name }}</li>
         </ul>
       </div>
-      <button v-if="!isJunkFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkSpam" title="Mark as spam">⊘</button>
+      <button v-if="!isJunkFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkSpam" title="Mark as spam">⊘ Spam</button>
+      <button v-if="isJunkFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkNotSpam" title="Move to Inbox">Not spam</button>
       <button class="px-2.5 py-1 border border-red-300 rounded bg-transparent text-xs cursor-pointer text-red-600 whitespace-nowrap hover:bg-red-600 hover:text-white hover:border-red-600" @click="confirmBulkDeleteVisible = true" title="Delete">🗑</button>
       <button class="px-2.5 py-1 border-transparent border rounded bg-transparent text-xs cursor-pointer text-[var(--color-text-muted)] whitespace-nowrap ml-auto hover:text-[var(--color-text)]" @click="mail.clearSelection()" title="Clear selection">✕</button>
     </div>
@@ -183,6 +184,11 @@ async function bulkMove(dest) {
 async function bulkSpam() {
   const uids = [...mail.selectedUids]
   await mail.markAsSpam(mail.currentFolder, uids)
+}
+
+async function bulkNotSpam() {
+  const uids = [...mail.selectedUids]
+  await mail.markAsNotSpam(mail.currentFolder, uids)
 }
 
 async function doBulkDelete() {

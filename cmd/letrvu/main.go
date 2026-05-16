@@ -69,6 +69,7 @@ func main() {
 	// Server-level IMAP/SMTP defaults (pre-fill login form via /api/config).
 	if strings.EqualFold(os.Getenv("LOG_LEVEL"), "debug") {
 		imap.Debug = true
+		smtp.Debug = true
 		log.Println("debug logging enabled")
 	}
 

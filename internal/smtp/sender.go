@@ -7,11 +7,21 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log"
 	netsmtp "net/smtp"
 	"regexp"
 	"strings"
 	"time"
 )
+
+// Debug enables verbose logging for development. Set via LOG_LEVEL=debug.
+var Debug bool
+
+func debugf(format string, args ...any) {
+	if Debug {
+		log.Printf("[smtp debug] "+format, args...)
+	}
+}
 
 // DefaultTLSConfig is used for every outbound SMTP connection. main() may
 // replace it before the server starts (e.g. to toggle InsecureSkipVerify).
@@ -115,6 +125,8 @@ func Send(cfg Config, msg Message) error {
 		envelopeFrom = msg.From
 	}
 
+	debugf("sending from=%s to=[%s]", envelopeFrom, strings.Join(append(msg.To, msg.CC...), ", "))
+
 	if err = c.Mail(envelopeFrom); err != nil {
 		return fmt.Errorf("smtp mail from: %w", err)
 	}
@@ -205,6 +217,18 @@ func buildMIME(msg Message) string {
 			sb.WriteString(fmt.Sprintf("--%s\r\n", mixedBoundary))
 			sb.WriteString(fmt.Sprintf("Content-Type: %s\r\n", ct))
 			sb.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=%q\r\n", att.Filename))
+
+			// RFC 2045 §6.4: message/* types MUST NOT use base64 or
+			// quoted-printable. Embed the raw bytes inline with 8bit encoding
+			// so the inner message is handed to recipients verbatim — including
+			// all original headers (e.g. spam-filter watermarks).
+			if strings.HasPrefix(strings.ToLower(ct), "message/") {
+				sb.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
+				sb.Write(att.Data) //nolint:errcheck
+				sb.WriteString("\r\n")
+				continue
+			}
+
 			sb.WriteString("Content-Transfer-Encoding: base64\r\n\r\n")
 			// RFC 2045: base64 lines must not exceed 76 characters.
 			encoded := base64.StdEncoding.EncodeToString(att.Data)

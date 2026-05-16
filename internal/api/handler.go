@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"context"
 	"net"
 	"net/http"
 	"net/url"
@@ -23,6 +24,10 @@ import (
 	"github.com/jsuto/letrvu/internal/settings"
 	"github.com/jsuto/letrvu/internal/smtp"
 )
+
+type contextKey int
+
+const sessionKey contextKey = iota
 
 func randomHex(n int) (string, error) {
 	b := make([]byte, n)
@@ -189,21 +194,21 @@ func (h *handler) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeJSON(w, http.StatusUnauthorized, errorResp("unauthorized"))
 			return
 		}
-		if _, ok := h.sessions.Get(cookie.Value); !ok {
+		sess, ok := h.sessions.Get(cookie.Value)
+		if !ok {
 			writeJSON(w, http.StatusUnauthorized, errorResp("session expired"))
 			return
 		}
 		if !checkCSRF(w, r) {
 			return
 		}
-		next(w, r)
+		next(w, r.WithContext(context.WithValue(r.Context(), sessionKey, sess)))
 	}
 }
 
-// sessionFrom extracts the session for an authenticated request.
+// sessionFrom extracts the session stored in the request context by requireAuth.
 func (h *handler) sessionFrom(r *http.Request) *session.Session {
-	cookie, _ := r.Cookie("letrvu_session")
-	sess, _ := h.sessions.Get(cookie.Value)
+	sess, _ := r.Context().Value(sessionKey).(*session.Session)
 	return sess
 }
 
@@ -680,7 +685,7 @@ func (h *handler) moveMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.Close()
 
-	if err := c.MoveMessages(folder, body.UIDs, body.Dest); err != nil {
+	if _, err := c.MoveMessages(folder, body.UIDs, body.Dest); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
@@ -710,12 +715,55 @@ func (h *handler) markSpam(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 
 	dest := c.JunkFolder()
-	if err := c.MoveMessages(folder, body.UIDs, dest); err != nil {
+	data, err := c.MoveMessages(folder, body.UIDs, dest)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
 	}
+	// Best-effort: set $Junk on the moved messages in the destination folder.
+	// DestUIDs is only available when the server supports UIDPLUS; skip silently otherwise.
+	if data != nil && data.DestUIDs != nil {
+		c.SetJunkFlag(dest, data.DestUIDs, true)
+	}
+	log.Printf("audit: mark_spam user=%s ip=%s folder=%s count=%d", sess.Username, h.clientIP(r), folder, len(body.UIDs))
 	go h.index.Delete(sess.Username, sess.IMAPHost, folder, body.UIDs)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "dest": dest})
+}
+
+func (h *handler) notSpam(w http.ResponseWriter, r *http.Request) {
+	folder, err := url.PathUnescape(r.PathValue("folder"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid folder name"))
+		return
+	}
+	var body struct {
+		UIDs []uint32 `json:"uids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.UIDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, errorResp("uids required"))
+		return
+	}
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+
+	const inbox = "INBOX"
+	data, err := c.MoveMessages(folder, body.UIDs, inbox)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	// Best-effort: set $NotJunk on the moved messages.
+	if data != nil && data.DestUIDs != nil {
+		c.SetJunkFlag(inbox, data.DestUIDs, false)
+	}
+	log.Printf("audit: mark_not_spam user=%s ip=%s folder=%s count=%d", sess.Username, h.clientIP(r), folder, len(body.UIDs))
+	go h.index.Delete(sess.Username, sess.IMAPHost, folder, body.UIDs)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "dest": inbox})
 }
 
 func (h *handler) deleteMessages(w http.ResponseWriter, r *http.Request) {
