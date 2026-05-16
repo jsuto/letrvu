@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jsuto/letrvu/internal/calendar"
@@ -163,6 +165,78 @@ func (h *handler) importCalendarFromInvite(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, created)
+}
+
+// getEventICal returns a plain .ics file for a single calendar event.
+// Useful for downloading or sharing an event without invite semantics.
+func (h *handler) getEventICal(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid id"))
+		return
+	}
+	sess := h.sessionFrom(r)
+	ev, err := h.calendar.Get(id, sess.Username, sess.IMAPHost)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	if ev == nil {
+		writeJSON(w, http.StatusNotFound, errorResp("not found"))
+		return
+	}
+	ics := calendar.FormatICalSingle(*ev)
+	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.ics"`, sanitizeFilename(ev.Title)))
+	w.Write([]byte(ics)) //nolint:errcheck
+}
+
+// createEventICal returns a METHOD:REQUEST invite .ics for a calendar event.
+// The organizer is the authenticated user. The request body carries the list
+// of attendee email addresses (To + CC from the compose form).
+func (h *handler) createEventICal(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid id"))
+		return
+	}
+	var body struct {
+		Attendees []string `json:"attendees"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid request body"))
+		return
+	}
+	sess := h.sessionFrom(r)
+	ev, err := h.calendar.Get(id, sess.Username, sess.IMAPHost)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	if ev == nil {
+		writeJSON(w, http.StatusNotFound, errorResp("not found"))
+		return
+	}
+	ics := calendar.FormatICalInvite(*ev, sess.Username, body.Attendees)
+	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+	w.Write([]byte(ics)) //nolint:errcheck
+}
+
+// sanitizeFilename strips characters that are unsafe in Content-Disposition filenames.
+func sanitizeFilename(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r == '"' || r == '\\' || r == '/' || r == '\n' || r == '\r' {
+			b.WriteRune('_')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	out := b.String()
+	if out == "" {
+		return "event"
+	}
+	return out
 }
 
 // monthRange parses ?from= and ?to= query params (RFC3339) and falls back to

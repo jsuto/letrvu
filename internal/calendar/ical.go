@@ -54,6 +54,61 @@ func FormatICalSingle(ev Event) string {
 	return FormatICal([]Event{ev})
 }
 
+// FormatICalInvite serialises a single Event as a meeting invite
+// (METHOD:REQUEST) with ORGANIZER and ATTENDEE fields set. This produces an
+// iCalendar payload that mail clients interpret as an accept/decline invitation.
+//
+// organizer is the sender's email address ("alice@example.com").
+// attendees is the list of recipient addresses. Duplicates and the organizer
+// address are silently deduplicated. An empty attendees slice is valid — the
+// resulting invite still carries METHOD:REQUEST and the ORGANIZER field, but
+// mail clients may not show accept/decline buttons without at least one ATTENDEE.
+func FormatICalInvite(ev Event, organizer string, attendees []string) string {
+	cal := ical.NewCalendar()
+	cal.Props.SetText(ical.PropVersion, "2.0")
+	cal.Props.SetText(ical.PropProductID, "-//letrvu//letrvu//EN")
+	cal.Props.SetText("METHOD", "REQUEST")
+
+	comp := eventToComponent(ev)
+	comp.Props.SetText("STATUS", "CONFIRMED")
+
+	// ORGANIZER
+	orgProp := ical.Prop{
+		Name:   "ORGANIZER",
+		Value:  "mailto:" + organizer,
+		Params: make(ical.Params),
+	}
+	orgProp.Params.Set("CN", organizer)
+	comp.Props["ORGANIZER"] = []ical.Prop{orgProp}
+
+	// ATTENDEE — one entry per unique address; skip the organizer's own address
+	seen := map[string]bool{strings.ToLower(organizer): true}
+	for _, addr := range attendees {
+		lc := strings.ToLower(strings.TrimSpace(addr))
+		if lc == "" || seen[lc] {
+			continue
+		}
+		seen[lc] = true
+		att := ical.Prop{
+			Name:   "ATTENDEE",
+			Value:  "mailto:" + addr,
+			Params: make(ical.Params),
+		}
+		att.Params.Set("CUTYPE", "INDIVIDUAL")
+		att.Params.Set("ROLE", "REQ-PARTICIPANT")
+		att.Params.Set("PARTSTAT", "NEEDS-ACTION")
+		att.Params.Set("RSVP", "TRUE")
+		comp.Props["ATTENDEE"] = append(comp.Props["ATTENDEE"], att)
+	}
+
+	cal.Children = append(cal.Children, comp)
+
+	var buf bytes.Buffer
+	enc := ical.NewEncoder(&buf)
+	enc.Encode(cal) //nolint:errcheck
+	return buf.String()
+}
+
 func componentToEvent(comp *ical.Component) (Event, error) {
 	var ev Event
 

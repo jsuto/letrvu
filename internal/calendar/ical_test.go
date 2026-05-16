@@ -258,3 +258,96 @@ func TestFormatICalSingle(t *testing.T) {
 		t.Error("FormatICalSingle should produce identical output to FormatICal with one event")
 	}
 }
+
+// --- FormatICalInvite ---------------------------------------------------------
+
+func sampleEvent() Event {
+	return Event{
+		ID:       7,
+		Title:    "Team sync",
+		Location: "Zoom",
+		StartsAt: time.Date(2026, 5, 20, 14, 0, 0, 0, time.UTC),
+		EndsAt:   time.Date(2026, 5, 20, 15, 0, 0, 0, time.UTC),
+	}
+}
+
+func TestFormatICalInvite_MethodRequest(t *testing.T) {
+	ics := FormatICalInvite(sampleEvent(), "alice@example.com", []string{"bob@example.com"})
+	if !strings.Contains(ics, "METHOD:REQUEST") {
+		t.Error("invite must contain METHOD:REQUEST")
+	}
+}
+
+func TestFormatICalInvite_Organizer(t *testing.T) {
+	ics := FormatICalInvite(sampleEvent(), "alice@example.com", nil)
+	if !strings.Contains(ics, "mailto:alice@example.com") {
+		t.Error("invite must contain ORGANIZER with mailto: prefix")
+	}
+	if !strings.Contains(ics, "ORGANIZER") {
+		t.Error("invite must contain ORGANIZER property")
+	}
+}
+
+func TestFormatICalInvite_Attendees(t *testing.T) {
+	ics := FormatICalInvite(sampleEvent(), "alice@example.com", []string{"bob@example.com", "carol@example.com"})
+	if !strings.Contains(ics, "mailto:bob@example.com") {
+		t.Error("missing bob attendee")
+	}
+	if !strings.Contains(ics, "mailto:carol@example.com") {
+		t.Error("missing carol attendee")
+	}
+	if !strings.Contains(ics, "RSVP=TRUE") {
+		t.Error("attendees should have RSVP=TRUE")
+	}
+	if !strings.Contains(ics, "PARTSTAT=NEEDS-ACTION") {
+		t.Error("attendees should have PARTSTAT=NEEDS-ACTION")
+	}
+}
+
+func TestFormatICalInvite_OrganizerNotInAttendees(t *testing.T) {
+	// The organizer's own address should not appear as an ATTENDEE.
+	ics := FormatICalInvite(sampleEvent(), "alice@example.com", []string{"alice@example.com", "bob@example.com"})
+	// Count occurrences of alice's address in ATTENDEE lines only.
+	lines := strings.Split(ics, "\n")
+	attendeeAlice := 0
+	for _, l := range lines {
+		if strings.HasPrefix(l, "ATTENDEE") && strings.Contains(l, "alice@example.com") {
+			attendeeAlice++
+		}
+	}
+	if attendeeAlice > 0 {
+		t.Error("organizer address should not appear as ATTENDEE")
+	}
+}
+
+func TestFormatICalInvite_DeduplicatesAttendees(t *testing.T) {
+	ics := FormatICalInvite(sampleEvent(), "alice@example.com", []string{"bob@example.com", "BOB@EXAMPLE.COM"})
+	count := strings.Count(ics, "mailto:bob@example.com")
+	if count != 1 {
+		t.Errorf("duplicate attendees should be deduplicated, got %d occurrences", count)
+	}
+}
+
+func TestFormatICalInvite_NoAttendees(t *testing.T) {
+	ics := FormatICalInvite(sampleEvent(), "alice@example.com", nil)
+	if !strings.Contains(ics, "METHOD:REQUEST") {
+		t.Error("invite without attendees must still have METHOD:REQUEST")
+	}
+	if strings.Contains(ics, "ATTENDEE") {
+		t.Error("no ATTENDEE lines expected when attendees list is empty")
+	}
+}
+
+func TestFormatICalInvite_EventFields(t *testing.T) {
+	ev := sampleEvent()
+	ics := FormatICalInvite(ev, "alice@example.com", []string{"bob@example.com"})
+	if !strings.Contains(ics, "SUMMARY:Team sync") {
+		t.Error("invite must contain the event summary")
+	}
+	if !strings.Contains(ics, "LOCATION:Zoom") {
+		t.Error("invite must contain the event location")
+	}
+	if !strings.Contains(ics, "STATUS:CONFIRMED") {
+		t.Error("invite should have STATUS:CONFIRMED")
+	}
+}

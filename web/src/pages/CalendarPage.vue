@@ -53,7 +53,7 @@
     </div>
   </div>
 
-  <EventModal ref="eventModal" @saved="onSaved" @deleted="onSaved" />
+  <EventModal ref="eventModal" @saved="onSaved" @deleted="onSaved" @send-invite="onSendInvite" />
   <ComposeModal ref="composeModal" />
 </template>
 
@@ -138,6 +138,13 @@ watch([view, () => cursor.year, () => cursor.month, weekCursor], fetchVisible)
 
 function onSaved() {
   fetchVisible()
+}
+
+function onSendInvite(event) {
+  composeModal.value?.open({
+    subject: event.title,
+    _inviteEvent: { id: event.id, title: event.title },
+  })
 }
 
 async function importIcs(e) {
