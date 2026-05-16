@@ -17,6 +17,12 @@
 
 **letrvu** ("letter view") is a lightweight, modern webmail client that connects to any standard IMAP/SMTP server. No bundled mail server, no PHP.
 
+## Live demo
+
+**[letrvu.wadzu.com](https://letrvu.wadzu.com)**
+
+Log in with `demo@letrvu.demo` / `demo@letrvu.demo`. The inbox is a sandbox — emails you send stay within it and the inbox resets automatically every few minutes.
+
 ## Features
 
 - Connects to any IMAP server (Dovecot, Cyrus, Gmail, Fastmail, etc.)
