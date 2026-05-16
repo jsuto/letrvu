@@ -112,6 +112,20 @@ docker build -t letrvu .
 docker run -p 8080:8080 letrvu
 ```
 
+### Docker Compose (with PostgreSQL)
+
+```bash
+cp .env.example .env
+# edit .env: set SESSION_SECRET, POSTGRES_PASSWORD, IMAP_HOST, SMTP_HOST
+
+# Create the external volume once — persists even if the stack is removed
+docker volume create db_data
+
+docker compose up -d
+```
+
+The `db_data` volume is declared external so that `docker compose down` (or even `docker compose down -v`) cannot accidentally delete your database. Only `docker volume rm db_data` will remove it.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and adjust as needed:
@@ -180,6 +194,22 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Print view
 - [ ] PGP / S-MIME encryption
 - [x] Docker scout scanning
+
+## Releasing
+
+1. Bump the version in `VERSION`:
+   ```bash
+   echo "0.2" > VERSION
+   git add VERSION
+   git commit -m "Release v0.2"
+   ```
+2. Tag and push — this triggers the release workflow:
+   ```bash
+   git tag v0.2
+   git push origin master --tags
+   ```
+
+The workflow will build Linux binaries (`amd64`, `arm64`), run a Docker Scout CVE scan, push a multi-platform Docker image (`sutoj/letrvu:<version>` and `sutoj/letrvu:latest`), and create a GitHub Release with the binaries and a `sha256sums.txt` attached.
 
 ## Keyboard shortcuts
 
