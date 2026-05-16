@@ -54,7 +54,7 @@
               v-if="fullMessages[msg.uid].html_body"
               :ref="el => setIframe(el, msg.uid)"
               class="block w-full border-none min-h-[60px]"
-              sandbox="allow-popups allow-same-origin"
+              sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
               :srcdoc="processedHtml(msg.uid)"
               :title="`Message from ${msg.from}`"
               @load="resizeIframe(msg.uid)"

@@ -110,7 +110,7 @@
         v-if="mail.currentMessage.html_body"
         ref="iframeEl"
         class="w-full min-h-[200px] border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] block"
-        sandbox="allow-popups allow-same-origin"
+        sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
         :srcdoc="displayHtml"
         title="Message body"
         @load="resizeIframe"
