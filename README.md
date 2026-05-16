@@ -313,7 +313,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Print view
 - [ ] PGP / S-MIME encryption
 - [x] Docker scout scanning
-- [ ] Session timeout / logout all devices
+- [x] Session timeout / logout all devices
 - [ ] Spam flag feedback (`$Junk` IMAP flag)
 
 ## Releasing

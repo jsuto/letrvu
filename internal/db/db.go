@@ -147,6 +147,8 @@ func Migrate(db *DB) error {
 
 	// Best-effort column additions for schema evolution (ignored if already exist).
 	_, _ = db.Exec(`ALTER TABLE calendar_events ADD COLUMN rrule TEXT NOT NULL DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE sessions ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE sessions ADD COLUMN last_activity_at TEXT NOT NULL DEFAULT ''`)
 
 	// Message index tables (best-effort; already exist on upgrade).
 	for _, s := range []string{

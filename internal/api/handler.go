@@ -268,7 +268,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	c.Close()
 	h.loginLimiter.recordSuccess(ip)
 
-	cookieVal, err := h.sessions.Create(body.IMAPHost, body.IMAPPort, body.SMTPHost, body.SMTPPort, body.Username, body.Password)
+	cookieVal, err := h.sessions.Create(body.IMAPHost, body.IMAPPort, body.SMTPHost, body.SMTPPort, body.Username, body.Password, r.UserAgent())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("could not create session"))
 		return
@@ -311,6 +311,45 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: "letrvu_session", MaxAge: -1, Path: "/"})
 	http.SetCookie(w, &http.Cookie{Name: "letrvu_csrf", MaxAge: -1, Path: "/"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// listSessions returns all active sessions for the authenticated user.
+func (h *handler) listSessions(w http.ResponseWriter, r *http.Request) {
+	sess := h.sessionFrom(r)
+	sessions, err := h.sessions.List(sess.Username, sess.IMAPHost, sess.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("could not list sessions"))
+		return
+	}
+	if sessions == nil {
+		sessions = []session.SessionInfo{}
+	}
+	writeJSON(w, http.StatusOK, sessions)
+}
+
+// logoutAllSessions invalidates all sessions for the authenticated user except
+// the current one, then optionally the current one too (logout everywhere).
+func (h *handler) logoutAllSessions(w http.ResponseWriter, r *http.Request) {
+	sess := h.sessionFrom(r)
+
+	var body struct {
+		IncludeCurrent bool `json:"include_current"`
+	}
+	json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck
+
+	currentID := sess.ID
+	if body.IncludeCurrent {
+		currentID = ""
+	}
+
+	log.Printf("audit: logout_all user=%s ip=%s include_current=%v", sess.Username, h.clientIP(r), body.IncludeCurrent)
+	h.sessions.DeleteAllForUser(sess.Username, sess.IMAPHost, currentID)
+
+	if body.IncludeCurrent {
+		http.SetCookie(w, &http.Cookie{Name: "letrvu_session", MaxAge: -1, Path: "/"})
+		http.SetCookie(w, &http.Cookie{Name: "letrvu_csrf", MaxAge: -1, Path: "/"})
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
