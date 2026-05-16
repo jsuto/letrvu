@@ -1,0 +1,41 @@
+services:
+  letrvu:
+    image: sutoj/letrvu:latest
+    ports:
+      - "8080:8080"
+    environment:
+      DB_DRIVER: postgres
+      DATABASE_URL: postgres://letrvu:letrvu@db:5432/letrvu?sslmode=disable
+      SESSION_SECRET: ${SESSION_SECRET}
+      IMAP_HOST: ${IMAP_HOST}
+      IMAP_PORT: ${IMAP_PORT:-993}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      IMAP_INSECURE_TLS: ${IMAP_INSECURE_TLS:-false}
+      WEBMAIL_HOSTNAME: ${WEBMAIL_HOSTNAME:-localhost}
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
+      TRUSTED_PROXY: ${TRUSTED_PROXY:-}
+      FOLDER_CACHE_TTL: ${FOLDER_CACHE_TTL:-2m}
+      INTERNAL_DOMAINS: ${INTERNAL_DOMAINS:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: letrvu
+      POSTGRES_PASSWORD: letrvu
+      POSTGRES_DB: letrvu
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U letrvu"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  db_data:
