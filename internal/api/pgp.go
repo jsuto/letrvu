@@ -152,7 +152,14 @@ func (h *handler) wkdLookup(w http.ResponseWriter, r *http.Request) {
 	hash := wkdHash(localpart)
 	escaped := url.QueryEscape(localpart)
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	// Do not follow redirects: a 3xx from a WKD URL is not a valid key response
+	// (e.g. protonmail.com redirects /.well-known/openpgpkey to an HTML page).
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 
 	// Advanced method
 	advURL := fmt.Sprintf("https://%s/.well-known/openpgpkey/hu/%s?l=%s", domain, hash, escaped)
