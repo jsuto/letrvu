@@ -522,13 +522,20 @@ function detectPGP() {
       }
     }
   } else if (body.includes('-----BEGIN PGP SIGNED MESSAGE-----')) {
+    // Inline cleartext signed (legacy fallback)
     pgpStatus.value = {
       icon: '✍', label: 'This message is PGP-signed.',
       style: 'bg-[#f0fff4] border-[#50c070] text-[#1a5a30]',
       action: { label: 'Verify signature', fn: verifySignature },
     }
-    // Show the cleartext portion without the PGP wrapper
     pgpCleartextBody.value = parseCleartextBody(body)
+  } else if (hasPGPMIMESig()) {
+    // PGP/MIME detached signature (RFC 3156 multipart/signed)
+    pgpStatus.value = {
+      icon: '✍', label: 'This message has a PGP/MIME detached signature.',
+      style: 'bg-[#f0fff4] border-[#50c070] text-[#1a5a30]',
+      action: { label: 'Verify signature', fn: verifyMIMESignature },
+    }
   } else {
     pgpStatus.value = null
   }
@@ -556,6 +563,75 @@ async function decryptBody() {
     pgpStatus.value = {
       icon: '🔐', label: 'Decryption failed — wrong key or corrupted message.',
       style: 'bg-[#fdf0f0] border-[#e07070] text-[#7a1a1a]',
+    }
+  } finally {
+    pgpBusy.value = false
+  }
+}
+
+function hasPGPMIMESig() {
+  return mail.currentMessage?.attachments?.some(a =>
+    a.content_type?.toLowerCase().includes('application/pgp-signature') ||
+    a.filename?.toLowerCase() === 'signature.asc'
+  ) ?? false
+}
+
+async function verifyMIMESignature() {
+  pgpBusy.value = true
+  try {
+    const senderEmail = extractEmail(mail.currentMessage.from)
+    const senderKey = await pgp.getKeyForEmail(senderEmail)
+    if (!senderKey) {
+      pgpStatus.value = {
+        icon: '✍', label: `Signed, but no stored public key for ${senderEmail}. Import the sender's key in Contacts to verify.`,
+        style: 'bg-[#f5f5f0] border-[#b0b080] text-[#555530]',
+      }
+      return
+    }
+
+    // Find the signature attachment
+    const sigAtt = mail.currentMessage.attachments?.find(a =>
+      a.content_type?.toLowerCase().includes('application/pgp-signature') ||
+      a.filename?.toLowerCase() === 'signature.asc'
+    )
+    if (!sigAtt) return
+
+    // Download signature
+    const folder = encodeURIComponent(mail.currentFolder)
+    const res = await fetch(`/api/folders/${folder}/messages/${mail.currentMessage.uid}/attachments/${sigAtt.index}`)
+    if (!res.ok) throw new Error('Could not download signature')
+    const sigBytes = new Uint8Array(await res.arrayBuffer())
+    const armoredSig = new TextDecoder().decode(sigBytes)
+
+    // Reconstruct the canonical body part that was signed (same as signMIME in pgp.js)
+    const body = mail.currentMessage.text_body ?? ''
+    const crlf = body.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '\r\n')
+    const bodyPart = 'Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n' + crlf
+    const binary = new TextEncoder().encode(bodyPart)
+
+    const { default: openpgp } = await import('openpgp')
+    const message = await openpgp.createMessage({ binary })
+    const sig = await openpgp.readSignature({ armoredSignature: armoredSig })
+    const verKey = await openpgp.readKey({ armoredKey: senderKey })
+    const { signatures } = await openpgp.verify({ message, signature: sig, verificationKeys: verKey })
+    let valid = false
+    try { valid = await signatures[0]?.verified } catch { valid = false }
+
+    if (valid) {
+      pgpStatus.value = {
+        icon: '✅', label: 'PGP/MIME signature verified — message is authentic and unmodified.',
+        style: 'bg-[#f0fff4] border-[#50c070] text-[#1a5a30]',
+      }
+    } else {
+      pgpStatus.value = {
+        icon: '❌', label: 'PGP/MIME signature verification FAILED — message may have been tampered with.',
+        style: 'bg-[#fdf0f0] border-[#e07070] text-[#7a1a1a]',
+      }
+    }
+  } catch (e) {
+    pgpStatus.value = {
+      icon: '⚠', label: 'Could not verify PGP/MIME signature.',
+      style: 'bg-[#fff4e5] border-[#e09030] text-[#7a4000]',
     }
   } finally {
     pgpBusy.value = false

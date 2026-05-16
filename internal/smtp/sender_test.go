@@ -428,3 +428,170 @@ func TestSend_EnvelopeFromFallback(t *testing.T) {
 	mustContain(t, m, "From: alias@example.com", "From header is alias")
 	mustNotContain(t, m, "auth@example.com", "envelope address not in MIME body")
 }
+
+// --- PGP/MIME signing (RFC 3156) ---------------------------------------------
+
+const testPGPSig = "-----BEGIN PGP SIGNATURE-----\n\nABCDEFGH\n-----END PGP SIGNATURE-----\n"
+
+func TestBuildMIME_PGPMIMESigned_TopLevelContentType(t *testing.T) {
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject:      "s",
+		Text:         "hello",
+		PGPSignature: testPGPSig,
+		PGPMicAlg:    "pgp-sha512",
+	})
+	mustContain(t, m, `Content-Type: multipart/signed`, "multipart/signed content-type")
+	mustContain(t, m, `protocol="application/pgp-signature"`, "pgp-signature protocol")
+	mustContain(t, m, `micalg=pgp-sha512`, "micalg")
+	mustContain(t, m, `boundary="letrvu-pgpsig-001"`, "boundary param")
+}
+
+func TestBuildMIME_PGPMIMESigned_Boundaries(t *testing.T) {
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "hello", PGPSignature: testPGPSig,
+	})
+	mustContain(t, m, "--letrvu-pgpsig-001\r\n", "opening boundary")
+	mustContain(t, m, "--letrvu-pgpsig-001--", "closing boundary")
+	// Must have exactly two body parts (two opening boundaries).
+	if count := strings.Count(m, "--letrvu-pgpsig-001\r\n"); count != 2 {
+		t.Errorf("expected 2 part boundaries, got %d", count)
+	}
+}
+
+func TestBuildMIME_PGPMIMESigned_FirstPartHeaders(t *testing.T) {
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "hello", PGPSignature: testPGPSig,
+	})
+	// The first MIME part must carry exactly these two headers (byte-identical
+	// to what signMIME() in pgp.js constructs before signing).
+	mustContain(t, m, "Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n", "first part headers")
+}
+
+func TestBuildMIME_PGPMIMESigned_BodyCRLF(t *testing.T) {
+	// Body text with bare LF must be CRLF-normalised in the signed part.
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "line1\nline2", PGPSignature: testPGPSig,
+	})
+	mustContain(t, m, "line1\r\nline2", "CRLF-normalised body")
+	// Bare LF must not remain in the text body part (between the 8bit header and the
+	// next boundary). Extract that section and check for lone LFs.
+	const bodyHeader = "Content-Transfer-Encoding: 8bit\r\n\r\n"
+	const nextBoundary = "\r\n--letrvu-pgpsig-001\r\n"
+	start := strings.Index(m, bodyHeader)
+	if start < 0 {
+		t.Fatal("8bit header not found")
+	}
+	start += len(bodyHeader)
+	end := strings.Index(m[start:], nextBoundary)
+	if end < 0 {
+		t.Fatal("closing boundary after body not found")
+	}
+	bodySection := m[start : start+end]
+	stripped := strings.ReplaceAll(bodySection, "\r\n", "")
+	if strings.Contains(stripped, "\n") {
+		t.Errorf("bare LF found in body section: %q", bodySection)
+	}
+}
+
+func TestBuildMIME_PGPMIMESigned_SecondPartSignature(t *testing.T) {
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "hello", PGPSignature: testPGPSig,
+	})
+	mustContain(t, m, "Content-Type: application/pgp-signature", "second part content-type")
+	mustContain(t, m, testPGPSig, "verbatim signature in second part")
+}
+
+func TestBuildMIME_PGPMIMESigned_DefaultMicAlg(t *testing.T) {
+	// PGPMicAlg defaults to pgp-sha512 when empty.
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "hello", PGPSignature: testPGPSig,
+	})
+	mustContain(t, m, "micalg=pgp-sha512", "default micalg")
+}
+
+func TestBuildMIME_PGPMIMESigned_NotMultipartMixed(t *testing.T) {
+	// A signed message with no attachments must NOT use multipart/mixed.
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "hello", PGPSignature: testPGPSig,
+	})
+	mustNotContain(t, m, "multipart/mixed", "no multipart/mixed for signed-only message")
+}
+
+func TestBuildMIME_PGPSignatureWithAttachments_UsesSignatureAsc(t *testing.T) {
+	// When there are attachments, the signature travels as signature.asc
+	// inside multipart/mixed instead of a proper multipart/signed wrapper.
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "hello",
+		PGPSignature: testPGPSig,
+		Attachments: []Attachment{
+			{Filename: "doc.pdf", ContentType: "application/pdf", Data: []byte("pdfdata")},
+		},
+	})
+	mustContain(t, m, "multipart/mixed", "multipart/mixed when attachments present")
+	mustContain(t, m, `filename="signature.asc"`, "signature.asc attachment")
+	mustContain(t, m, "application/pgp-signature", "pgp-signature content-type on attachment")
+	// Attachment content is base64-encoded; check the first recognisable bytes.
+	mustContain(t, m, base64.StdEncoding.EncodeToString([]byte(testPGPSig))[:20], "base64 signature data")
+	mustNotContain(t, m, "multipart/signed", "no multipart/signed when attachments present")
+}
+
+func TestBuildMIME_NoPGPSignature_Unaffected(t *testing.T) {
+	// Messages without a PGPSignature must produce plain text output, unaffected
+	// by the PGP dispatch logic.
+	m := buildMIME(Message{
+		From: "a@example.com", To: []string{"b@example.com"},
+		Subject: "s", Text: "hello",
+	})
+	mustNotContain(t, m, "multipart/signed", "no multipart/signed without signature")
+	mustNotContain(t, m, "pgp-signature", "no pgp-signature without signature")
+	mustContain(t, m, "Content-Type: text/plain; charset=UTF-8", "plain text content-type")
+	mustContain(t, m, "hello", "body present")
+}
+
+// --- normalizeCRLF -----------------------------------------------------------
+
+func TestNormalizeCRLF_BareLineFeed(t *testing.T) {
+	if got := normalizeCRLF("a\nb"); got != "a\r\nb" {
+		t.Errorf("bare LF: got %q", got)
+	}
+}
+
+func TestNormalizeCRLF_CarriageReturn(t *testing.T) {
+	if got := normalizeCRLF("a\rb"); got != "a\r\nb" {
+		t.Errorf("bare CR: got %q", got)
+	}
+}
+
+func TestNormalizeCRLF_AlreadyCRLF(t *testing.T) {
+	if got := normalizeCRLF("a\r\nb"); got != "a\r\nb" {
+		t.Errorf("already CRLF: got %q", got)
+	}
+}
+
+func TestNormalizeCRLF_Mixed(t *testing.T) {
+	in := "a\r\nb\nc\rd"
+	want := "a\r\nb\r\nc\r\nd"
+	if got := normalizeCRLF(in); got != want {
+		t.Errorf("mixed endings: got %q, want %q", got, want)
+	}
+}
+
+func TestNormalizeCRLF_Empty(t *testing.T) {
+	if got := normalizeCRLF(""); got != "" {
+		t.Errorf("empty: got %q", got)
+	}
+}
+
+func TestNormalizeCRLF_NoLineEndings(t *testing.T) {
+	if got := normalizeCRLF("hello"); got != "hello" {
+		t.Errorf("no newlines: got %q", got)
+	}
+}

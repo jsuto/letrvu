@@ -108,7 +108,28 @@ export const usePGPStore = defineStore('pgp', () => {
 
   // ── Crypto operations ─────────────────────────────────────────────────────
 
-  // Sign plain text. Returns an armored cleartext signed message.
+  // Sign for PGP/MIME (RFC 3156). Constructs the canonical MIME body part
+  // (matching exactly what the backend will emit as the first part of
+  // multipart/signed), signs its raw bytes as a detached signature, and
+  // returns { text, signature, micalg } for inclusion in the send payload.
+  // The backend reconstructs the identical MIME part and uses the detached
+  // signature as the second multipart/signed part.
+  async function signMIME(text) {
+    if (!privateKey.value) throw new Error('Key not unlocked')
+    // Canonical CRLF — must match normalizeCRLF() in smtp/sender.go
+    const crlf = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '\r\n')
+    // Byte-identical to what the backend writes as the first MIME part
+    const bodyPart = 'Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n' + crlf
+    const binary = new TextEncoder().encode(bodyPart)
+    const signature = await openpgp.sign({
+      message: await openpgp.createMessage({ binary }),
+      signingKeys: privateKey.value,
+      detached: true,
+    })
+    return { text, signature, micalg: 'pgp-sha512' }
+  }
+
+  // Sign plain text as inline cleartext (kept for compatibility).
   async function signText(text) {
     if (!privateKey.value) throw new Error('Key not unlocked')
     return openpgp.sign({
@@ -182,7 +203,7 @@ export const usePGPStore = defineStore('pgp', () => {
     fetchKey, unlock, lock,
     generateKey, importKey, deleteKey,
     armoredPublicKey,
-    signText, encryptText, decryptMessage, verifyCleartext,
+    signMIME, signText, encryptText, decryptMessage, verifyCleartext,
     getKeyForEmail, wkdLookup,
   }
 })

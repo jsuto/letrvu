@@ -552,14 +552,14 @@ async function send() {
 
     // PGP: sign and/or encrypt the message body before sending.
     if (pgpSign.value || pgpEncrypt.value) {
-      // Both sign and encrypt require plain text body.
+      // Both operations require plain text body.
       const bodyText = plainTextMode.value
         ? form.plainBody
         : htmlToPlain(editor.value?.getHTML() ?? '')
 
       if (pgpEncrypt.value) {
-        // Gather recipient public keys.
-        const allRecipients = [...payload.to ?? [], ...payload.cc ?? []]
+        // Inline PGP encryption (replaces the body with an encrypted block).
+        const allRecipients = [...(payload.to ?? []), ...(payload.cc ?? [])]
         const keys = await Promise.all(allRecipients.map(r => pgp.getKeyForEmail(r)))
         if (keys.some(k => !k)) {
           pgpError.value = 'Missing public key for one or more recipients. Encryption aborted.'
@@ -569,9 +569,11 @@ async function send() {
         payload.text = armoredMsg
         delete payload.html
       } else if (pgpSign.value) {
-        const signedMsg = await pgp.signText(bodyText)
-        payload.text = signedMsg
+        // PGP/MIME detached signature (RFC 3156 multipart/signed).
+        const { text, signature, micalg } = await pgp.signMIME(bodyText)
+        payload.text = text
         delete payload.html
+        payload.pgp_mime_sig = { signature, micalg }
       }
     }
 

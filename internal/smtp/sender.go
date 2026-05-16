@@ -72,6 +72,12 @@ type Message struct {
 	MessageID  string
 	InReplyTo  string // Message-ID of the message being replied to
 	References string // space-separated chain of Message-IDs for thread tracking
+
+	// PGP/MIME signing (RFC 3156). When PGPSignature is set and there are no
+	// attachments the message is wrapped in multipart/signed. With attachments
+	// the signature is included as a signature.asc attachment instead.
+	PGPSignature string // armored detached PGP signature
+	PGPMicAlg    string // hash algorithm string, e.g. "pgp-sha512"
 }
 
 // Send delivers msg via SMTP. Port 465 uses implicit TLS (SMTPS — the TLS
@@ -199,6 +205,20 @@ func buildMIME(msg Message) string {
 	sb.WriteString("X-Mailer: letrvu\r\n")
 	sb.WriteString("MIME-Version: 1.0\r\n")
 
+	if msg.PGPSignature != "" && len(msg.Attachments) == 0 {
+		writePGPMIMESigned(&sb, msg)
+		return sb.String()
+	}
+
+	if msg.PGPSignature != "" {
+		// Has attachments: append signature.asc so it travels with them.
+		msg.Attachments = append(msg.Attachments, Attachment{
+			Filename:    "signature.asc",
+			ContentType: "application/pgp-signature",
+			Data:        []byte(msg.PGPSignature),
+		})
+	}
+
 	if len(msg.Attachments) > 0 {
 		const mixedBoundary = "letrvu-mixed-001"
 		sb.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%q\r\n\r\n", mixedBoundary))
@@ -292,6 +312,47 @@ var (
 		"&quot;", `"`, "&#39;", "'", "&nbsp;", " ",
 	)
 )
+
+// normalizeCRLF converts all line endings to CRLF, as required for canonical
+// MIME content (RFC 2822 §2.3, RFC 3156 §5).
+func normalizeCRLF(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	return strings.ReplaceAll(s, "\n", "\r\n")
+}
+
+// writePGPMIMESigned outputs a multipart/signed body (RFC 3156). The first
+// part is the canonical text/plain body signed by the sender; the second is
+// the armored detached PGP signature. The canonical body part MUST be
+// byte-identical to what the sender signed — see signMIME() in pgp.js.
+func writePGPMIMESigned(sb *strings.Builder, msg Message) {
+	micalg := msg.PGPMicAlg
+	if micalg == "" {
+		micalg = "pgp-sha512"
+	}
+	const boundary = "letrvu-pgpsig-001"
+	sb.WriteString(fmt.Sprintf(
+		"Content-Type: multipart/signed; protocol=\"application/pgp-signature\";\r\n\tmicalg=%s; boundary=%q\r\n\r\n",
+		micalg, boundary,
+	))
+
+	// Part 1 — signed body. Headers and body must match exactly what the
+	// frontend passed to openpgp.sign() in signMIME().
+	sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	sb.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	sb.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
+	sb.WriteString(normalizeCRLF(msg.Text))
+	sb.WriteString("\r\n")
+
+	// Part 2 — detached signature
+	sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	sb.WriteString("Content-Type: application/pgp-signature\r\n")
+	sb.WriteString("Content-Description: OpenPGP digital signature\r\n")
+	sb.WriteString("Content-Disposition: attachment; filename=\"signature.asc\"\r\n\r\n")
+	sb.WriteString(msg.PGPSignature)
+	sb.WriteString("\r\n")
+	sb.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+}
 
 func stripHTML(html string) string {
 	s := reBlockEnd.Replace(html)
