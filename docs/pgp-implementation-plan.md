@@ -94,7 +94,7 @@ PGP/MIME format (`multipart/signed`) is preferred over inline PGP: the email bod
 - `internal/api`: new routes `GET /api/pgp/key`, `POST /api/pgp/key`, `DELETE /api/pgp/key`
 - `internal/contacts`: add `pgp_public_key TEXT` column (migration)
 
-## Out of scope for v1
+## Deferred to v2
 
 - Key-encryption key (KEK) scheme tied to login password (deferred to v2)
 - Key signing / web of trust UI
