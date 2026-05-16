@@ -95,7 +95,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	// 4. Stores and router.
 	secret := make([]byte, 32)
 	rand.Read(secret) //nolint:errcheck
-	sessionStore := session.NewStore(database, secret)
+	sessionStore := session.NewStore(database, secret, 0)
 	settingsStore := settings.NewStore(database)
 	contactsStore := contacts.NewStore(database)
 	calendarStore := calendar.NewStore(database)

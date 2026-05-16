@@ -17,6 +17,7 @@ services:
       TRUSTED_PROXY: ${TRUSTED_PROXY:-}
       FOLDER_CACHE_TTL: ${FOLDER_CACHE_TTL:-2m}
       INTERNAL_DOMAINS: ${INTERNAL_DOMAINS:-}
+      SESSION_IDLE_TIMEOUT: ${SESSION_IDLE_TIMEOUT:-24h}
     depends_on:
       db:
         condition: service_healthy

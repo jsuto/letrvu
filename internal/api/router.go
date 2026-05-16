@@ -30,6 +30,8 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	// Auth
 	mux.HandleFunc("POST /api/auth/login", h.login)
 	mux.HandleFunc("POST /api/auth/logout", h.logout)
+	mux.HandleFunc("GET /api/auth/sessions", h.requireAuth(h.listSessions))
+	mux.HandleFunc("DELETE /api/auth/sessions", h.requireAuth(h.logoutAllSessions))
 
 	// Folders
 	mux.HandleFunc("GET /api/folders", h.requireAuth(h.listFolders))

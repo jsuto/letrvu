@@ -58,7 +58,7 @@ func main() {
 	secret := loadOrGenerateSecret()
 
 	// Stores
-	sessions := session.NewStore(database, secret)
+	sessions := session.NewStore(database, secret, envDuration("SESSION_IDLE_TIMEOUT", 0))
 	sessions.DeleteExpired()
 
 	settingsStore := settings.NewStore(database)
