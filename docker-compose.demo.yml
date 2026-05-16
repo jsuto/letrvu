@@ -1,0 +1,52 @@
+name: letrvu-demo
+
+services:
+  greenmail:
+    image: greenmail/standalone:2.1.3
+    environment:
+      GREENMAIL_OPTS: >-
+        -Dgreenmail.setup.test.all
+        -Dgreenmail.hostname=0.0.0.0
+        -Dgreenmail.auth.disabled
+        -Dgreenmail.users.login=email
+        -Dlog4j.logger.com.icegreen.greenmail.imap.commands.ListCommand=ERROR
+    restart: unless-stopped
+
+  # socat forwards port 465 → greenmail:3465 (SMTPS) so letrvu's implicit-TLS
+  # path triggers correctly.
+  smtp-relay:
+    image: alpine/socat
+    command: ["TCP-LISTEN:465,fork,reuseaddr", "TCP:greenmail:3465"]
+    depends_on:
+      - greenmail
+    restart: unless-stopped
+
+  letrvu:
+    image: sutoj/letrvu:latest
+    ports:
+      - "8080:8080"
+    environment:
+      DB_DRIVER: sqlite
+      # Fixed secret — fine for a demo; replace for any real deployment.
+      SESSION_SECRET: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+      IMAP_HOST: greenmail
+      IMAP_PORT: "3993"
+      SMTP_HOST: smtp-relay
+      SMTP_PORT: "465"
+      IMAP_INSECURE_TLS: "true"
+    depends_on:
+      - greenmail
+      - smtp-relay
+    restart: unless-stopped
+
+  # Seeds the inbox on startup, then watches every 60 s:
+  # - foreign messages (visitor sent mail) are deleted
+  # - if a seed message is missing, the inbox is fully re-seeded
+  reset:
+    image: python:3-alpine
+    depends_on:
+      - greenmail
+    volumes:
+      - ./demo:/demo:ro
+    command: ["python", "/demo/seed.py"]
+    restart: unless-stopped
