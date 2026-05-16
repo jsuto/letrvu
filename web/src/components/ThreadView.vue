@@ -2,7 +2,12 @@
   <div class="h-full overflow-y-auto">
     <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-[var(--color-border)] sticky top-0 bg-[var(--color-bg)] z-[1]">
       <button
-        class="bg-none border border-[var(--color-border)] rounded-md px-2.5 py-1 text-sm cursor-pointer text-[var(--color-text-muted)] shrink-0 hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+        class="md:hidden bg-none border border-[var(--color-border)] rounded-md px-2.5 py-1 text-sm cursor-pointer text-[var(--color-text-muted)] shrink-0 hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+        @click="setMobilePanel('list')"
+        title="Back to messages"
+      >←</button>
+      <button
+        class="hidden md:block bg-none border border-[var(--color-border)] rounded-md px-2.5 py-1 text-sm cursor-pointer text-[var(--color-text-muted)] shrink-0 hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
         @click="mail.currentThread = null"
         title="Back to message"
       >←</button>
@@ -100,6 +105,7 @@ import ConfirmDialog from './ConfirmDialog.vue'
 const mail = useMailStore()
 const settings = useSettingsStore()
 const compose = inject('compose')
+const setMobilePanel = inject('setMobilePanel', () => {})
 const { dark } = useDarkMode()
 
 const thread = computed(() => mail.currentThread)
