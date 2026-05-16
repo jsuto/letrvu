@@ -112,6 +112,20 @@ docker build -t letrvu .
 docker run -p 8080:8080 letrvu
 ```
 
+### Docker Compose (with PostgreSQL)
+
+```bash
+cp .env.example .env
+# edit .env: set SESSION_SECRET, POSTGRES_PASSWORD, IMAP_HOST, SMTP_HOST
+
+# Create the external volume once — persists even if the stack is removed
+docker volume create db_data
+
+docker compose up -d
+```
+
+The `db_data` volume is declared external so that `docker compose down` (or even `docker compose down -v`) cannot accidentally delete your database. Only `docker volume rm db_data` will remove it.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and adjust as needed:
