@@ -181,6 +181,22 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] PGP / S-MIME encryption
 - [x] Docker scout scanning
 
+## Releasing
+
+1. Bump the version in `VERSION`:
+   ```bash
+   echo "0.2" > VERSION
+   git add VERSION
+   git commit -m "Release v0.2"
+   ```
+2. Tag and push — this triggers the release workflow:
+   ```bash
+   git tag v0.2
+   git push origin master --tags
+   ```
+
+The workflow will build Linux binaries (`amd64`, `arm64`), run a Docker Scout CVE scan, push a multi-platform Docker image (`sutoj/letrvu:<version>` and `sutoj/letrvu:latest`), and create a GitHub Release with the binaries and a `sha256sums.txt` attached.
+
 ## Keyboard shortcuts
 
 | Key | Action |
