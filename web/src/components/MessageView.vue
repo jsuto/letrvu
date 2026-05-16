@@ -8,7 +8,11 @@
     <div v-if="!mail.currentMessage" class="h-full flex items-center justify-center text-[var(--color-text-muted)] text-sm">
       <p>Select a message to read</p>
     </div>
-    <div v-else class="px-8 py-8 max-w-[80%] mx-auto">
+    <div v-else class="px-4 py-5 md:px-8 md:py-8 md:max-w-[80%] md:mx-auto">
+      <button
+        class="md:hidden mb-4 flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] bg-none border-none cursor-pointer p-0 hover:text-[var(--color-text)]"
+        @click="setMobilePanel('list')"
+      >← Back</button>
       <div class="mb-6">
         <h2 class="text-lg font-medium mb-2">{{ mail.currentMessage.subject || '(no subject)' }}</h2>
         <div class="text-sm text-[var(--color-text-muted)] mb-4 flex gap-4 items-center">
@@ -172,6 +176,7 @@ const contacts = useContactsStore()
 const calendar = useCalendarStore()
 const settings = useSettingsStore()
 const compose = inject('compose')
+const setMobilePanel = inject('setMobilePanel', () => {})
 const { dark } = useDarkMode()
 
 const confirmDeleteVisible = ref(false)

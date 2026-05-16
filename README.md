@@ -303,7 +303,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Conversation / thread view
 - [x] Unread count in browser tab title
 - [x] Desktop notifications (Browser Notification API + IMAP IDLE)
-- [ ] Mobile-responsive layout
+- [x] Mobile-responsive layout
 - [x] Mark as spam (move to Junk folder)
 - [X] Cross-folder search
 - [ ] Undo send (configurable delay before SMTP submission)

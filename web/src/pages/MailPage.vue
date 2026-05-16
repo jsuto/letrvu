@@ -1,22 +1,49 @@
 <template>
   <div class="mail-layout">
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ 'mobile-hidden': mobilePanel !== 'folders' }">
       <FolderList />
     </aside>
-    <section class="message-list-panel">
+    <section class="message-list-panel" :class="{ 'mobile-hidden': mobilePanel !== 'list' }">
       <MessageList />
     </section>
-    <main class="message-view-panel">
+    <main class="message-view-panel" :class="{ 'mobile-hidden': mobilePanel !== 'view' }">
       <ThreadView v-if="mail.currentThread" />
       <MessageView v-else ref="messageView" />
     </main>
+
+    <!-- Mobile bottom navigation -->
+    <nav class="mobile-nav">
+      <button
+        :class="['mobile-nav-btn', mobilePanel === 'folders' ? 'mobile-nav-active' : '']"
+        @click="mobilePanel = 'folders'"
+      >
+        <span class="mobile-nav-icon">☰</span>
+        <span class="mobile-nav-label">Folders</span>
+      </button>
+      <button
+        :class="['mobile-nav-btn', mobilePanel === 'list' ? 'mobile-nav-active' : '']"
+        @click="mobilePanel = 'list'"
+      >
+        <span class="mobile-nav-icon">✉</span>
+        <span class="mobile-nav-label">Messages</span>
+      </button>
+      <button
+        :class="['mobile-nav-btn', mobilePanel === 'view' ? 'mobile-nav-active' : '']"
+        :disabled="!mail.currentMessage && !mail.currentThread"
+        @click="mobilePanel = 'view'"
+      >
+        <span class="mobile-nav-icon">📖</span>
+        <span class="mobile-nav-label">Read</span>
+      </button>
+    </nav>
+
     <ComposeModal ref="composeModal" />
     <KeyboardShortcutsModal />
   </div>
 </template>
 
 <script setup>
-import { ref, provide, onMounted, onUnmounted } from 'vue'
+import { ref, provide, watch, onMounted, onUnmounted } from 'vue'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import { useMailEvents } from '../composables/useMailEvents'
@@ -33,9 +60,16 @@ const mail = useMailStore()
 const settings = useSettingsStore()
 const composeModal = ref(null)
 const messageView = ref(null)
+const mobilePanel = ref('list')
 
 // Provide compose modal to all descendants so FolderList and MessageView can open it.
 provide('compose', composeModal)
+provide('setMobilePanel', (panel) => { mobilePanel.value = panel })
+
+// Auto-advance panels on mobile when store state changes.
+watch(() => mail.currentMessage, (msg) => { if (msg) mobilePanel.value = 'view' })
+watch(() => mail.currentThread,  (t)   => { if (t)   mobilePanel.value = 'view' })
+watch(() => mail.currentFolder,  ()    => { mobilePanel.value = 'list' })
 
 useMailEvents()
 useTabTitle()
@@ -127,5 +161,60 @@ function navigateMessage(delta) {
   flex: 1;
   overflow-y: auto;
   background: var(--color-bg);
+}
+.mobile-nav {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .sidebar,
+  .message-list-panel,
+  .message-view-panel {
+    position: absolute;
+    inset: 0;
+    bottom: 52px;
+    width: 100%;
+    border-right: none;
+  }
+  .mobile-hidden {
+    display: none !important;
+  }
+  .mobile-nav {
+    display: flex;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
+    border-top: 0.5px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    padding: 0;
+  }
+  .mobile-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .mobile-nav-btn.mobile-nav-active {
+    color: var(--color-teal);
+  }
+  .mobile-nav-icon {
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-nav-label {
+    font-size: 10px;
+  }
 }
 </style>
