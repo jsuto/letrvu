@@ -10,13 +10,14 @@ import (
 )
 
 type vacationResp struct {
-	Enabled     bool   `json:"enabled"`
-	Subject     string `json:"subject"`
-	Body        string `json:"body"`
-	Start       string `json:"start"`
-	End         string `json:"end"`
-	SieveActive bool   `json:"sieve_active"`
-	SieveError  string `json:"sieve_error,omitempty"`
+	Enabled         bool   `json:"enabled"`
+	Subject         string `json:"subject"`
+	Body            string `json:"body"`
+	Start           string `json:"start"`
+	End             string `json:"end"`
+	SieveConfigured bool   `json:"sieve_configured"`
+	SieveActive     bool   `json:"sieve_active"`
+	SieveError      string `json:"sieve_error,omitempty"`
 }
 
 func (h *handler) getVacation(w http.ResponseWriter, r *http.Request) {
@@ -27,12 +28,13 @@ func (h *handler) getVacation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, vacationResp{
-		Enabled:     vals["vacation_enabled"] == "true",
-		Subject:     vals["vacation_subject"],
-		Body:        vals["vacation_body"],
-		Start:       vals["vacation_start"],
-		End:         vals["vacation_end"],
-		SieveActive: vals["vacation_sieve_active"] == "true",
+		Enabled:         vals["vacation_enabled"] == "true",
+		Subject:         vals["vacation_subject"],
+		Body:            vals["vacation_body"],
+		Start:           vals["vacation_start"],
+		End:             vals["vacation_end"],
+		SieveConfigured: h.config.SieveHost != "",
+		SieveActive:     vals["vacation_sieve_active"] == "true",
 	})
 }
 
@@ -75,11 +77,16 @@ func (h *handler) setVacation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Attempt ManageSieve upload. Failure is non-fatal.
-	sieveActive, sieveErrMsg := uploadVacationSieve(
-		sess.IMAPHost, sess.Username, sess.Password,
-		body.Enabled, body.Subject, body.Body, body.Start, body.End,
-	)
+	// Attempt ManageSieve upload only when SIEVE_HOST is configured.
+	sieveConfigured := h.config.SieveHost != ""
+	var sieveActive bool
+	var sieveErrMsg string
+	if sieveConfigured {
+		sieveActive, sieveErrMsg = uploadVacationSieve(
+			h.config.SieveHost, sess.Username, sess.Password,
+			body.Enabled, body.Subject, body.Body, body.Start, body.End,
+		)
+	}
 
 	sieveActiveStr := "false"
 	if sieveActive {
@@ -89,29 +96,29 @@ func (h *handler) setVacation(w http.ResponseWriter, r *http.Request) {
 		"vacation_sieve_active": sieveActiveStr,
 	})
 
-	log.Printf("audit: vacation_set user=%s ip=%s enabled=%v sieve_active=%v",
-		sess.Username, h.clientIP(r), body.Enabled, sieveActive)
+	log.Printf("audit: vacation_set user=%s ip=%s enabled=%v sieve_configured=%v sieve_active=%v",
+		sess.Username, h.clientIP(r), body.Enabled, sieveConfigured, sieveActive)
 
 	writeJSON(w, http.StatusOK, vacationResp{
-		Enabled:     body.Enabled,
-		Subject:     body.Subject,
-		Body:        body.Body,
-		Start:       body.Start,
-		End:         body.End,
-		SieveActive: sieveActive,
-		SieveError:  sieveErrMsg,
+		Enabled:         body.Enabled,
+		Subject:         body.Subject,
+		Body:            body.Body,
+		Start:           body.Start,
+		End:             body.End,
+		SieveConfigured: sieveConfigured,
+		SieveActive:     sieveActive,
+		SieveError:      sieveErrMsg,
 	})
 }
 
 // uploadVacationSieve connects to ManageSieve and uploads or deactivates the
-// vacation script. Returns (true, "") on success, (false, reason) if the
-// server is unreachable or the upload fails.
-func uploadVacationSieve(imapHost, username, password string, enabled bool, subject, body, start, end string) (active bool, errMsg string) {
+// vacation script. Returns (true, "") on success, (false, reason) on failure.
+func uploadVacationSieve(sieveHost, username, password string, enabled bool, subject, body, start, end string) (active bool, errMsg string) {
 	const scriptName = "letrvu-vacation"
 
-	c, err := sieve.Connect(imapHost, username, password)
+	c, err := sieve.Connect(sieveHost, username, password)
 	if err != nil {
-		log.Printf("sieve: connect failed user=%s host=%s: %v", username, imapHost, err)
+		log.Printf("sieve: connect failed user=%s host=%s: %v", username, sieveHost, err)
 		return false, "ManageSieve not available: " + err.Error()
 	}
 	defer c.Close()
@@ -126,7 +133,7 @@ func uploadVacationSieve(imapHost, username, password string, enabled bool, subj
 			log.Printf("sieve: setactive failed user=%s: %v", username, err)
 			return false, "failed to activate script: " + err.Error()
 		}
-		log.Printf("sieve: vacation activated user=%s host=%s", username, imapHost)
+		log.Printf("sieve: vacation activated user=%s host=%s", username, sieveHost)
 		return true, ""
 	}
 
@@ -134,7 +141,7 @@ func uploadVacationSieve(imapHost, username, password string, enabled bool, subj
 	if err := c.SetActive(""); err != nil {
 		log.Printf("sieve: deactivate failed user=%s: %v", username, err)
 	} else {
-		log.Printf("sieve: vacation deactivated user=%s host=%s", username, imapHost)
+		log.Printf("sieve: vacation deactivated user=%s host=%s", username, sieveHost)
 	}
 	return false, ""
 }

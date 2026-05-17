@@ -315,7 +315,9 @@ async function fetchVacation() {
     if (data.enabled) {
       vacationStatus.value = data.sieve_active
         ? { type: 'active', message: 'Active on mail server (Sieve).' }
-        : { type: 'warn', message: 'Saved locally — your mail server does not support Sieve scripts. Autoresponses will not be sent automatically.' }
+        : data.sieve_configured
+          ? { type: 'warn', message: 'Saved locally — could not activate on mail server.' }
+          : null
     }
   } catch {
     // Non-critical — silently ignore
@@ -436,11 +438,14 @@ async function save() {
       end: form.vacation_end,
     })
     if (form.vacation_enabled) {
-      vacationStatus.value = vacResult.sieve_active
-        ? { type: 'active', message: 'Active on mail server (Sieve).' }
-        : { type: 'warn', message: vacResult.sieve_error
-            ? 'Saved locally. Server error: ' + vacResult.sieve_error
-            : 'Saved locally — your mail server does not support Sieve scripts. Autoresponses will not be sent automatically.' }
+      if (vacResult.sieve_active) {
+        vacationStatus.value = { type: 'active', message: 'Active on mail server (Sieve).' }
+      } else if (vacResult.sieve_configured) {
+        vacationStatus.value = { type: vacResult.sieve_error ? 'error' : 'warn',
+          message: vacResult.sieve_error ? 'Server error: ' + vacResult.sieve_error : 'Saved locally — could not activate on mail server.' }
+      } else {
+        vacationStatus.value = null
+      }
     } else {
       vacationStatus.value = null
     }

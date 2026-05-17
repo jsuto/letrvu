@@ -53,6 +53,9 @@ type ServerConfig struct {
 	// X-Forwarded-For / X-Real-IP are trusted only if the TCP connection comes
 	// from within that range. Nil disables proxy header reading entirely.
 	TrustedProxy    *net.IPNet    `json:"-"`
+	// SieveHost is the ManageSieve server hostname or IP. When empty, Sieve
+	// upload is skipped and vacation config is stored locally only.
+	SieveHost       string        `json:"-"`
 	// InternalDomains is the set of domains that belong to this organisation.
 	// Messages whose From domain is not in this list are flagged as external
 	// in the UI — but only when Authentication-Results headers are present so
