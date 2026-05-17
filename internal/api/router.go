@@ -70,6 +70,10 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("GET /api/settings", h.requireAuth(h.getSettings))
 	mux.HandleFunc("PATCH /api/settings", h.requireAuth(h.updateSettings))
 
+	// Vacation autoresponder
+	mux.HandleFunc("GET /api/vacation", h.requireAuth(h.getVacation))
+	mux.HandleFunc("PUT /api/vacation", h.requireAuth(h.setVacation))
+
 	// Contacts — specific paths before wildcard {id}
 	mux.HandleFunc("GET /api/contacts/autocomplete", h.requireAuth(h.autocompleteContacts))
 	mux.HandleFunc("GET /api/contacts/export", h.requireAuth(h.exportContacts))

@@ -16,6 +16,12 @@ var allowed = map[string]bool{
 	"poll_interval":              true,
 	"calendar_reminder_minutes":  true,
 	"pgp_key_enc":                true,
+	"vacation_enabled":           true,
+	"vacation_subject":           true,
+	"vacation_body":              true,
+	"vacation_start":             true,
+	"vacation_end":               true,
+	"vacation_sieve_active":      true,
 }
 
 // Store persists per-user settings keyed by (username, imap_host).
