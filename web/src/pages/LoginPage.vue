@@ -3,24 +3,26 @@
     <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-8 py-10 w-full max-w-[400px]">
       <img src="/assets/letrvu-logo-stacked.svg" alt="letrvu" class="block mx-auto mb-8 h-20" />
       <form @submit.prevent="handleLogin">
-        <div class="mb-4">
-          <label class="block text-xs text-[var(--color-text-muted)] mb-1">IMAP server</label>
-          <div class="flex gap-2">
-            <input v-model="form.imapHost" type="text" placeholder="mail.example.com" required
-              class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
-            <input v-model.number="form.imapPort" type="number" placeholder="993"
-              class="w-20 shrink-0 px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+        <template v-if="!serverLocked">
+          <div class="mb-4">
+            <label class="block text-xs text-[var(--color-text-muted)] mb-1">IMAP server</label>
+            <div class="flex gap-2">
+              <input v-model="form.imapHost" type="text" placeholder="mail.example.com" required
+                class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+              <input v-model.number="form.imapPort" type="number" placeholder="993"
+                class="w-20 shrink-0 px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+            </div>
           </div>
-        </div>
-        <div class="mb-4">
-          <label class="block text-xs text-[var(--color-text-muted)] mb-1">SMTP server</label>
-          <div class="flex gap-2">
-            <input v-model="form.smtpHost" type="text" placeholder="smtp.example.com" required
-              class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
-            <input v-model.number="form.smtpPort" type="number" placeholder="587"
-              class="w-20 shrink-0 px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+          <div class="mb-4">
+            <label class="block text-xs text-[var(--color-text-muted)] mb-1">SMTP server</label>
+            <div class="flex gap-2">
+              <input v-model="form.smtpHost" type="text" placeholder="smtp.example.com" required
+                class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+              <input v-model.number="form.smtpPort" type="number" placeholder="587"
+                class="w-20 shrink-0 px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
+            </div>
           </div>
-        </div>
+        </template>
         <div class="mb-4">
           <label class="block text-xs text-[var(--color-text-muted)] mb-1">Email address</label>
           <input v-model="form.username" type="email" placeholder="you@example.com" required
@@ -59,6 +61,7 @@ const form = reactive({
 })
 const loading = ref(false)
 const error = ref('')
+const serverLocked = ref(false)
 
 onMounted(async () => {
   try {
@@ -69,6 +72,7 @@ onMounted(async () => {
       if (cfg.imap_port) form.imapPort = cfg.imap_port
       if (cfg.smtp_host) form.smtpHost = cfg.smtp_host
       if (cfg.smtp_port) form.smtpPort = cfg.smtp_port
+      serverLocked.value = cfg.server_locked ?? false
     }
   } catch {}
 })
