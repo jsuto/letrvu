@@ -103,6 +103,10 @@ func (c *Client) PutScript(name, content string) error {
 	if _, err := c.conn.Write(script); err != nil {
 		return err
 	}
+	// Dovecot expects a CRLF after the literal bytes to terminate the command.
+	if _, err := fmt.Fprint(c.conn, "\r\n"); err != nil {
+		return err
+	}
 	return c.readOK()
 }
 
