@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jsuto/letrvu/internal/db"
 	"github.com/jsuto/letrvu/internal/imap"
@@ -39,7 +40,7 @@ func (s *Store) Upsert(username, imapHost, folder string, msgs []imap.Message) e
 					message_id=EXCLUDED.message_id, in_reply_to=EXCLUDED.in_reply_to,
 					refs=EXCLUDED.refs`,
 				username, imapHost, folder, m.UID,
-				m.Subject, m.From, m.Date.UTC().Format(time.RFC3339),
+				safeUTF8(m.Subject), safeUTF8(m.From), m.Date.UTC().Format(time.RFC3339),
 				boolInt(m.Read), boolInt(m.Flagged), boolInt(m.HasAttachments), m.Size,
 				m.MessageID, m.InReplyTo, m.References,
 			)
@@ -50,7 +51,7 @@ func (s *Store) Upsert(username, imapHost, folder string, msgs []imap.Message) e
 					 read, flagged, has_attachments, size, message_id, in_reply_to, refs)
 				 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 				username, imapHost, folder, m.UID,
-				m.Subject, m.From, m.Date.UTC().Format(time.RFC3339),
+				safeUTF8(m.Subject), safeUTF8(m.From), m.Date.UTC().Format(time.RFC3339),
 				boolInt(m.Read), boolInt(m.Flagged), boolInt(m.HasAttachments), m.Size,
 				m.MessageID, m.InReplyTo, m.References,
 			)
@@ -229,4 +230,13 @@ func boolInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// safeUTF8 strips bytes that form invalid UTF-8 sequences.
+// PostgreSQL requires valid UTF-8; some email headers contain legacy encodings.
+func safeUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, "")
 }
