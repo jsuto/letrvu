@@ -146,10 +146,17 @@ func Migrate(db *DB) error {
 	}
 
 	// Best-effort column additions for schema evolution (ignored if already exist).
-	_, _ = db.Exec(`ALTER TABLE calendar_events ADD COLUMN rrule TEXT NOT NULL DEFAULT ''`)
-	_, _ = db.Exec(`ALTER TABLE sessions ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''`)
-	_, _ = db.Exec(`ALTER TABLE sessions ADD COLUMN last_activity_at TEXT NOT NULL DEFAULT ''`)
-	_, _ = db.Exec(`ALTER TABLE contacts ADD COLUMN pgp_public_key TEXT NOT NULL DEFAULT ''`)
+	addCol := func(stmt string) {
+		if db.Driver == "postgres" {
+			// Rewrite "ADD COLUMN x" → "ADD COLUMN IF NOT EXISTS x" for Postgres
+			stmt = strings.Replace(stmt, "ADD COLUMN ", "ADD COLUMN IF NOT EXISTS ", 1)
+		}
+		_, _ = db.Exec(stmt)
+	}
+	addCol(`ALTER TABLE calendar_events ADD COLUMN rrule TEXT NOT NULL DEFAULT ''`)
+	addCol(`ALTER TABLE sessions ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''`)
+	addCol(`ALTER TABLE sessions ADD COLUMN last_activity_at TEXT NOT NULL DEFAULT ''`)
+	addCol(`ALTER TABLE contacts ADD COLUMN pgp_public_key TEXT NOT NULL DEFAULT ''`)
 
 	// Message index tables (best-effort; already exist on upgrade).
 	for _, s := range []string{

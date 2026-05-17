@@ -23,4 +23,3 @@ RUN apk add --no-cache ca-certificates tzdata
 COPY --from=backend /app/letrvu /usr/local/bin/letrvu
 EXPOSE 8080
 ENTRYPOINT ["letrvu"]
-CMD ["-addr", ":8080"]

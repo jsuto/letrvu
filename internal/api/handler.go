@@ -44,6 +44,9 @@ type ServerConfig struct {
 	IMAPPort        int           `json:"imap_port"`
 	SMTPHost        string        `json:"smtp_host"`
 	SMTPPort        int           `json:"smtp_port"`
+	// ServerLocked is true when the operator has pre-configured the mail server,
+	// so the login form should hide the server fields.
+	ServerLocked    bool          `json:"server_locked"`
 	SecureCookies   bool          `json:"-"`
 	FolderCacheTTL  time.Duration `json:"-"`
 	// TrustedProxy is the IP or CIDR of the reverse proxy. When non-nil,

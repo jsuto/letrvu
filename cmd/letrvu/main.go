@@ -73,11 +73,13 @@ func main() {
 		log.Println("debug logging enabled")
 	}
 
+	imapHost := envOr("IMAP_HOST", "")
 	cfg := api.ServerConfig{
-		IMAPHost:         envOr("IMAP_HOST", ""),
+		IMAPHost:         imapHost,
 		IMAPPort:         envInt("IMAP_PORT", 993),
 		SMTPHost:         envOr("SMTP_HOST", ""),
 		SMTPPort:         envInt("SMTP_PORT", 587),
+		ServerLocked:     imapHost != "",
 		SecureCookies:    envBool("SECURE_COOKIES", false),
 		TrustedProxy:     envCIDR("TRUSTED_PROXY"),
 		FolderCacheTTL:   envDuration("FOLDER_CACHE_TTL", 2*time.Minute),
@@ -85,6 +87,10 @@ func main() {
 		LoginMaxAttempts: envInt("LOGIN_MAX_ATTEMPTS", 5),
 		LoginWindow:      envDuration("LOGIN_WINDOW", time.Minute),
 		LoginLockout:     envDuration("LOGIN_LOCKOUT", 15*time.Minute),
+	}
+
+	if cfg.ServerLocked && cfg.SMTPHost == "" {
+		log.Printf("warning: IMAP_HOST is set but SMTP_HOST is not — outbound mail will not work")
 	}
 
 	handler := api.NewRouter(sessions, settingsStore, contactsStore, calendarStore, indexStore, cfg)
