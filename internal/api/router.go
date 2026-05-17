@@ -25,6 +25,9 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	}
 
 	// Public
+	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 	mux.HandleFunc("GET /api/config", h.getConfig)
 
 	// Auth

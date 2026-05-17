@@ -18,6 +18,11 @@ services:
       FOLDER_CACHE_TTL: ${FOLDER_CACHE_TTL:-2m}
       INTERNAL_DOMAINS: ${INTERNAL_DOMAINS:-}
       SESSION_IDLE_TIMEOUT: ${SESSION_IDLE_TIMEOUT:-24h}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost${LISTEN_ADDR:-:8080}/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
       db:
         condition: service_healthy

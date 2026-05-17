@@ -34,6 +34,11 @@ services:
       SMTP_HOST: smtp-relay
       SMTP_PORT: "465"
       IMAP_INSECURE_TLS: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
       - greenmail
       - smtp-relay
