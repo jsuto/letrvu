@@ -45,6 +45,18 @@
               </span>
             </div>
 
+            <div class="flex gap-2 px-3.5 py-2 border-b border-[var(--color-border)]">
+              <button
+                v-for="(action, idx) in messageActions(msg)"
+                :key="idx"
+                :class="[
+                  'px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] hover:bg-[var(--color-bg)]',
+                  action.danger ? 'text-red-600 border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600' : '',
+                ]"
+                @click="action.handler(msg)"
+              >{{ action.label }}</button>
+            </div>
+
             <!-- Auth / phishing banners reused from MessageView -->
             <div v-if="authFailed(msg.uid)" class="mx-3.5 my-2 px-3 py-2 bg-[#fff4e5] rounded-md text-xs text-[#856404]">
               ⚠ Authentication failed — this message may be spoofed.
@@ -67,18 +79,6 @@
                 <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">📎 {{ att.filename || 'attachment' }}</span>
                 <a :href="attachmentUrl(msg.uid, att)" download class="text-teal no-underline">↓</a>
               </div>
-            </div>
-
-            <div class="flex gap-2 px-3.5 py-2.5 border-t border-[var(--color-border)]">
-              <button
-                v-for="(action, idx) in messageActions(msg)"
-                :key="idx"
-                :class="[
-                  'px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] hover:bg-[var(--color-bg)]',
-                  action.danger ? 'text-red-600 border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600' : '',
-                ]"
-                @click="action.handler(msg)"
-              >{{ action.label }}</button>
             </div>
           </template>
         </div>
