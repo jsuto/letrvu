@@ -24,6 +24,12 @@ type Client struct {
 	r    *bufio.Reader
 }
 
+// ScriptInfo describes a Sieve script on the server.
+type ScriptInfo struct {
+	Name   string
+	Active bool
+}
+
 // Connect dials ManageSieve on port 4190 of the given host, performs STARTTLS
 // if offered, and authenticates with SASL PLAIN using the given credentials.
 // Returns an error (wrapping net.Error) if port 4190 is unreachable, so
@@ -91,6 +97,57 @@ func (c *Client) Close() {
 	c.conn.Close()
 }
 
+// ListScripts returns all scripts on the server and which one is active.
+func (c *Client) ListScripts() ([]ScriptInfo, error) {
+	if err := c.sendLine("LISTSCRIPTS"); err != nil {
+		return nil, err
+	}
+	var scripts []ScriptInfo
+	for {
+		line, err := c.readLine()
+		if err != nil {
+			return nil, err
+		}
+		upper := strings.ToUpper(strings.TrimSpace(line))
+		if strings.HasPrefix(upper, "OK") {
+			return scripts, nil
+		}
+		if strings.HasPrefix(upper, "NO") || strings.HasPrefix(upper, "BYE") {
+			return nil, fmt.Errorf("managesieve: %s", line)
+		}
+		name, rest := parseQuotedString(line)
+		if name == "" {
+			continue
+		}
+		active := strings.Contains(strings.ToUpper(rest), "ACTIVE")
+		scripts = append(scripts, ScriptInfo{Name: name, Active: active})
+	}
+}
+
+// GetScript retrieves the content of a named script.
+// Returns ("", nil) if the script does not exist.
+func (c *Client) GetScript(name string) (string, error) {
+	if err := c.sendLine("GETSCRIPT " + quoteString(name)); err != nil {
+		return "", err
+	}
+	line, err := c.readLine()
+	if err != nil {
+		return "", err
+	}
+	upper := strings.ToUpper(strings.TrimSpace(line))
+	if strings.HasPrefix(upper, "NO") || strings.HasPrefix(upper, "BYE") {
+		return "", nil
+	}
+	if !strings.HasPrefix(line, "{") {
+		return "", fmt.Errorf("managesieve: unexpected GETSCRIPT response: %s", line)
+	}
+	content, err := c.readLiteralContent(line)
+	if err != nil {
+		return "", err
+	}
+	return string(content), c.readOK()
+}
+
 // PutScript uploads a Sieve script with the given name, replacing any
 // existing script with that name.
 func (c *Client) PutScript(name, content string) error {
@@ -117,28 +174,6 @@ func (c *Client) SetActive(name string) error {
 		return err
 	}
 	return c.readOK()
-}
-
-// ScriptExists reports whether a script with the given name exists on the server.
-func (c *Client) ScriptExists(name string) (bool, error) {
-	if err := c.sendLine("GETSCRIPT " + quoteString(name)); err != nil {
-		return false, err
-	}
-	line, err := c.readLine()
-	if err != nil {
-		return false, err
-	}
-	upper := strings.ToUpper(strings.TrimSpace(line))
-	if strings.HasPrefix(upper, "NO") || strings.HasPrefix(upper, "BYE") {
-		return false, nil
-	}
-	// Server sent the script as a literal; drain it then read OK.
-	if strings.HasPrefix(line, "{") {
-		if err := c.drainLiteral(line); err != nil {
-			return false, err
-		}
-	}
-	return true, c.readOK()
 }
 
 // ── internal helpers ──────────────────────────────────────────────────────────
@@ -170,7 +205,6 @@ func (c *Client) readOK() error {
 		case strings.HasPrefix(upper, "NO"), strings.HasPrefix(upper, "BYE"):
 			return fmt.Errorf("managesieve: %s", line)
 		}
-		// Intermediate line — ignore.
 	}
 }
 
@@ -198,24 +232,26 @@ func (c *Client) readCapabilities() (map[string]string, error) {
 	}
 }
 
-// drainLiteral reads and discards a server literal value given its descriptor
-// line (e.g. "{1234}"). RFC 5804: after the n bytes, there is a CRLF.
-func (c *Client) drainLiteral(line string) error {
+// readLiteralContent reads a ManageSieve literal value given its descriptor
+// line (e.g. "{1234}" or "{1234+}") and returns the bytes.
+// RFC 5804: after the n bytes there is a trailing CRLF.
+func (c *Client) readLiteralContent(line string) ([]byte, error) {
 	end := strings.IndexByte(line, '}')
 	if end < 0 {
-		return fmt.Errorf("managesieve: malformed literal: %s", line)
+		return nil, fmt.Errorf("managesieve: malformed literal: %s", line)
 	}
 	sizeStr := strings.TrimRight(line[1:end], "+")
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
-		return fmt.Errorf("managesieve: bad literal size: %w", err)
+		return nil, fmt.Errorf("managesieve: bad literal size: %w", err)
 	}
-	if _, err := io.CopyN(io.Discard, c.r, int64(size)); err != nil {
-		return err
+	buf := make([]byte, size)
+	if _, err := io.ReadFull(c.r, buf); err != nil {
+		return nil, err
 	}
-	// Consume trailing CRLF (RFC 5804 sieve-script CRLF).
+	// Consume trailing CRLF.
 	_, _ = c.r.ReadString('\n')
-	return nil
+	return buf, nil
 }
 
 // quoteString returns a ManageSieve quoted string.
@@ -233,7 +269,6 @@ func parseQuotedString(s string) (string, string) {
 		return "", ""
 	}
 	if s[0] != '"' {
-		// Unquoted atom.
 		i := strings.IndexAny(s, " \t")
 		if i < 0 {
 			return s, ""

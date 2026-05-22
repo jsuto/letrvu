@@ -5,20 +5,28 @@ import (
 	"strings"
 )
 
-// BuildVacationScript generates a Sieve script (RFC 5230) that sends a
-// vacation autoresponse. start and end are optional "YYYY-MM-DD" strings;
-// when both are non-empty the date extension (RFC 5260) bounds the window.
-// addresses is the list of addresses the user receives mail at.
+// BuildVacationScript generates a complete standalone Sieve vacation script.
+// Use InjectVacation instead when adding vacation to an existing script.
 func BuildVacationScript(subject, body, start, end string, addresses []string) string {
+	useDates := start != "" && end != ""
+	return buildRequireStatement(vacationRequires(useDates)) + "\n" +
+		vacationActionBlock(subject, body, start, end, addresses)
+}
+
+// vacationRequires returns the Sieve extensions needed for the vacation rule.
+func vacationRequires(useDates bool) []string {
+	if useDates {
+		return []string{"vacation", "date", "relational"}
+	}
+	return []string{"vacation"}
+}
+
+// vacationActionBlock generates the vacation action without a require statement,
+// suitable for injection into an existing script.
+func vacationActionBlock(subject, body, start, end string, addresses []string) string {
 	var sb strings.Builder
 
 	useDates := start != "" && end != ""
-
-	if useDates {
-		sb.WriteString(`require ["vacation", "date", "relational"];` + "\n")
-	} else {
-		sb.WriteString(`require ["vacation"];` + "\n")
-	}
 
 	if useDates {
 		fmt.Fprintf(&sb,
@@ -41,8 +49,6 @@ func BuildVacationScript(subject, body, start, end string, addresses []string) s
 	}
 	fmt.Fprintf(&sb, " :subject %s\n", sieveQuote(subject))
 
-	// Use Sieve text: block for the body so newlines are preserved as-is.
-	// Lines starting with '.' must be dot-stuffed.
 	sb.WriteString(indent + "text:\n")
 	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
 	for _, line := range lines {
