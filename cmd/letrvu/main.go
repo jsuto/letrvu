@@ -22,6 +22,7 @@ import (
 	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
+	"github.com/jsuto/letrvu/internal/sieve"
 	"github.com/jsuto/letrvu/internal/smtp"
 )
 
@@ -32,12 +33,10 @@ func main() {
 	flag.Parse()
 
 	insecureTLS := envBool("IMAP_INSECURE_TLS", true)
-	imap.DefaultTLSConfig = &tls.Config{
-		InsecureSkipVerify: insecureTLS, //nolint:gosec
-	}
-	smtp.DefaultTLSConfig = &tls.Config{
-		InsecureSkipVerify: insecureTLS, //nolint:gosec
-	}
+	tlsCfg := &tls.Config{InsecureSkipVerify: insecureTLS} //nolint:gosec
+	imap.DefaultTLSConfig = tlsCfg
+	smtp.DefaultTLSConfig = tlsCfg
+	sieve.DefaultTLSConfig = tlsCfg
 	if h := os.Getenv("WEBMAIL_HOSTNAME"); h != "" {
 		smtp.Hostname = h
 	}
@@ -79,6 +78,7 @@ func main() {
 		IMAPPort:         envInt("IMAP_PORT", 993),
 		SMTPHost:         envOr("SMTP_HOST", ""),
 		SMTPPort:         envInt("SMTP_PORT", 587),
+		SieveHost:        envOr("SIEVE_HOST", ""),
 		ServerLocked:     imapHost != "",
 		SecureCookies:    envBool("SECURE_COOKIES", false),
 		TrustedProxy:     envCIDR("TRUSTED_PROXY"),

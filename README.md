@@ -288,7 +288,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Calendar (month + week view, add/edit/delete events)
 - [x] iCal import/export
 - [x] Email invite detection ("Add to calendar" button)
-- [X] Signature insertion in compose
+- [x] Signature insertion in compose
 - [x] Save sent messages to Sent folder (IMAP APPEND)
 - [x] Draft saving (IMAP APPEND to Drafts)
 - [x] Reply-all
@@ -296,12 +296,12 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Calendar recurring events (RRULE)
 - [x] Calendar outgoing invites (attach iCal to composed email)
 - [ ] Multi-account support
-- [X] Move messages between folders
-- [X] Show message source
-- [X] Flag messages
-- [X] Multiple identities
-- [X] Attachment preview
-- [X] Brute force login protection
+- [x] Move messages between folders
+- [x] Show message source
+- [x] Flag messages
+- [x] Multiple identities
+- [x] Attachment preview
+- [x] Brute force login protection
 - [x] Folder management (create / rename / delete IMAP folders)
 - [x] Bulk actions (select multiple messages → delete / move / mark read)
 - [x] Keyboard shortcuts (n/p next/prev, r reply, d delete, c compose)
@@ -311,9 +311,9 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Desktop notifications (Browser Notification API + IMAP IDLE)
 - [x] Mobile-responsive layout
 - [x] Mark as spam (move to Junk folder)
-- [X] Cross-folder search
+- [x] Cross-folder search
 - [ ] Undo send (configurable delay before SMTP submission)
-- [ ] Vacation / autoresponder (Sieve)
+- [x] Vacation / autoresponder (Sieve)
 - [x] Contact groups / distribution lists
 - [ ] Per-sender image trust ("always show images from this sender")
 - [x] Print view

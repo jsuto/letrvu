@@ -69,5 +69,32 @@ export const useSettingsStore = defineStore('settings', () => {
     return isNaN(v) ? 30 : v
   })
 
-  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes }
+  // Vacation autoresponder state.
+  const vacationEnabled = computed(() => settings.value.vacation_enabled === 'true')
+  const vacationSieveActive = computed(() => settings.value.vacation_sieve_active === 'true')
+
+  async function saveVacation(data) {
+    const res = await apiFetch('/api/vacation', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || 'Failed to save vacation settings')
+    }
+    const result = await res.json()
+    // Sync local state to reflect what the server persisted.
+    Object.assign(settings.value, {
+      vacation_enabled: data.enabled ? 'true' : 'false',
+      vacation_subject: data.subject,
+      vacation_body: data.body,
+      vacation_start: data.start,
+      vacation_end: data.end,
+      vacation_sieve_active: result.sieve_active ? 'true' : 'false',
+    })
+    return result
+  }
+
+  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes, vacationEnabled, vacationSieveActive, saveVacation }
 })

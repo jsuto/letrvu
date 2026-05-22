@@ -63,6 +63,51 @@
           </select>
         </div>
 
+        <!-- Vacation autoresponder -->
+        <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Vacation autoresponder</div>
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-2.5">
+            <span class="text-sm text-[var(--color-text)] flex-1">Enable autoresponder</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" v-model="form.vacation_enabled" class="sr-only peer" />
+              <div class="w-9 h-5 bg-[var(--color-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal"></div>
+            </label>
+          </div>
+
+          <template v-if="form.vacation_enabled">
+            <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+              Subject
+              <input v-model="form.vacation_subject" type="text" placeholder="Out of office"
+                class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal" />
+            </label>
+            <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+              Message
+              <textarea v-model="form.vacation_body" placeholder="I'm out of the office and will reply when I return."
+                class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none resize-y min-h-[80px] leading-relaxed focus:border-teal" />
+            </label>
+            <div class="flex gap-2">
+              <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)] flex-1">
+                Start date (optional)
+                <input v-model="form.vacation_start" type="date"
+                  class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)] flex-1">
+                End date (optional)
+                <input v-model="form.vacation_end" type="date"
+                  class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal" />
+              </label>
+            </div>
+          </template>
+
+          <!-- Status banner after save -->
+          <div v-if="vacationStatus" :class="[
+            'px-3 py-2 rounded-md text-xs',
+            vacationStatus.type === 'active' && 'bg-teal/10 text-teal border border-teal/20',
+            vacationStatus.type === 'warn' && 'bg-yellow-50 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800',
+            vacationStatus.type === 'error' && 'bg-red-50 text-red-600 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800',
+          ]">{{ vacationStatus.message }}</div>
+        </div>
+
         <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Security</div>
         <div class="flex flex-col gap-2">
           <div v-if="sessionsLoading" class="text-xs text-[var(--color-text-muted)]">Loading sessions…</div>
@@ -228,7 +273,8 @@ const pgpBusy = ref(false)
 const pgpError = ref('')
 const pgpForm = reactive({ name: '', email: '', passphrase: '', passphrase2: '', armoredKey: '' })
 
-const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120, calendar_reminder_minutes: 30 })
+const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120, calendar_reminder_minutes: 30, vacation_enabled: false, vacation_subject: '', vacation_body: '', vacation_start: '', vacation_end: '' })
+const vacationStatus = ref(null) // { type: 'active'|'warn'|'error', message: string }
 
 async function open() {
   if (!settings.loaded) await settings.fetchSettings()
@@ -241,6 +287,7 @@ async function open() {
   saved.value = false
   error.value = ''
   logoutAllError.value = ''
+  vacationStatus.value = null
   pgpMode.value = null
   pgpError.value = ''
   pgpForm.passphrase = ''
@@ -248,9 +295,33 @@ async function open() {
   // Pre-fill generate form with account info
   pgpForm.name = settings.settings.display_name ?? ''
   pgpForm.email = auth.user?.username ?? ''
+  // Load vacation state from server
+  fetchVacation()
   visible.value = true
   fetchSessions()
   pgp.fetchKey()
+}
+
+async function fetchVacation() {
+  try {
+    const res = await apiFetch('/api/vacation')
+    if (!res.ok) return
+    const data = await res.json()
+    form.vacation_enabled = data.enabled
+    form.vacation_subject = data.subject ?? ''
+    form.vacation_body = data.body ?? ''
+    form.vacation_start = data.start ?? ''
+    form.vacation_end = data.end ?? ''
+    if (data.enabled) {
+      vacationStatus.value = data.sieve_active
+        ? { type: 'active', message: 'Active on mail server (Sieve).' }
+        : data.sieve_configured
+          ? { type: 'warn', message: 'Saved locally — could not activate on mail server.' }
+          : null
+    }
+  } catch {
+    // Non-critical — silently ignore
+  }
 }
 
 async function fetchSessions() {
@@ -358,10 +429,30 @@ async function save() {
       poll_interval: String(form.poll_interval),
       calendar_reminder_minutes: String(form.calendar_reminder_minutes),
     })
+    // Save vacation settings separately (needs its own endpoint for Sieve side-effects).
+    const vacResult = await settings.saveVacation({
+      enabled: form.vacation_enabled,
+      subject: form.vacation_subject,
+      body: form.vacation_body,
+      start: form.vacation_start,
+      end: form.vacation_end,
+    })
+    if (form.vacation_enabled) {
+      if (vacResult.sieve_active) {
+        vacationStatus.value = { type: 'active', message: 'Active on mail server (Sieve).' }
+      } else if (vacResult.sieve_configured) {
+        vacationStatus.value = { type: vacResult.sieve_error ? 'error' : 'warn',
+          message: vacResult.sieve_error ? 'Server error: ' + vacResult.sieve_error : 'Saved locally — could not activate on mail server.' }
+      } else {
+        vacationStatus.value = null
+      }
+    } else {
+      vacationStatus.value = null
+    }
     saved.value = true
     setTimeout(() => { saved.value = false }, 2000)
-  } catch {
-    error.value = 'Could not save settings.'
+  } catch (e) {
+    error.value = e.message || 'Could not save settings.'
   } finally {
     saving.value = false
   }
