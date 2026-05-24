@@ -166,6 +166,16 @@ func Send(cfg Config, msg Message) error {
 	if err != nil {
 		return fmt.Errorf("smtp data: %w", err)
 	}
+	// CodeQL go/email-injection: false positive. This is a webmail client —
+	// user-controlled content in the email body is the intended and correct
+	// behaviour; users are composing their own emails. The go/email-injection
+	// rule targets transactional emails (password resets, notifications) where
+	// server-generated content can be hijacked via header injection. That attack
+	// surface is separately mitigated: sanitizeHeader() strips CR/LF from every
+	// header field value in buildMIME (Subject, From, To, Cc, In-Reply-To,
+	// References, Disposition-Notification-To) and recipients are validated
+	// against \r\n before RCPT TO. The remaining finding is the email body,
+	// which is intentionally authored by the authenticated user.
 	if _, err = fmt.Fprint(wc, buildMIME(msg)); err != nil {
 		wc.Close()
 		return fmt.Errorf("smtp write: %w", err)
