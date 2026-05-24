@@ -59,6 +59,18 @@ func TestBuildMIME_CC(t *testing.T) {
 	mustContain(t, m, "Cc: dave@example.com", "CC header")
 }
 
+func TestBuildMIME_BCC_NotInHeaders(t *testing.T) {
+	m := buildMIME(Message{
+		From:    "alice@example.com",
+		To:      []string{"bob@example.com"},
+		BCC:     []string{"secret@example.com"},
+		Subject: "BCC test",
+		Text:    "body",
+	})
+	mustNotContain(t, m, "secret@example.com", "BCC address must not appear in MIME headers")
+	mustNotContain(t, m, "Bcc:", "Bcc header must not be present")
+}
+
 func TestBuildMIME_DispositionNotificationTo(t *testing.T) {
 	m := buildMIME(Message{
 		From:                      "alice@example.com",

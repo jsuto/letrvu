@@ -334,6 +334,11 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] Snooze / remind me later
 - [ ] Mbox/EML mailbox import-export
 - [ ] S/MIME support
+- [x] BCC field in compose
+- [ ] Archive action (one-click, keyboard shortcut)
+- [ ] Advanced search syntax (from:, to:, subject:, has:attachment, date ranges)
+- [ ] OAuth2 / XOAUTH2 authentication (Gmail / Google Workspace support)
+- [ ] i18n / localization
 
 ## Releasing
 

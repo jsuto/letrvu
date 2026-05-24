@@ -1002,6 +1002,7 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		FromEmail string   `json:"from_email"`
 		To        []string `json:"to"`
 		CC        []string `json:"cc"`
+		BCC       []string `json:"bcc,omitempty"`
 		Subject   string   `json:"subject"`
 		Text      string   `json:"text"`
 		HTML      string   `json:"html"`
@@ -1081,6 +1082,7 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		EnvelopeFrom:              fromEmail, // use the selected From address for SPF alignment
 		To:                        body.To,
 		CC:                        body.CC,
+		BCC:                       body.BCC,
 		Subject:                   body.Subject,
 		Text:                      body.Text,
 		HTML:                      body.HTML,
@@ -1293,6 +1295,7 @@ func (h *handler) saveDraft(w http.ResponseWriter, r *http.Request) {
 		FromEmail string   `json:"from_email"`
 		To        []string `json:"to"`
 		CC        []string `json:"cc"`
+		BCC       []string `json:"bcc,omitempty"`
 		Subject   string   `json:"subject"`
 		Text      string   `json:"text"`
 		HTML      string   `json:"html"`
@@ -1338,6 +1341,7 @@ func (h *handler) saveDraft(w http.ResponseWriter, r *http.Request) {
 		From:        fromHeader,
 		To:          body.To,
 		CC:          body.CC,
+		BCC:         body.BCC,
 		Subject:     body.Subject,
 		Text:        body.Text,
 		HTML:        body.HTML,

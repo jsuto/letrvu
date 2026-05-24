@@ -68,6 +68,7 @@ type Message struct {
 	EnvelopeFrom string
 	To           []string
 	CC           []string
+	BCC          []string // delivered via RCPT TO but not written to headers
 	Subject      string
 	Text         string       // plain text body
 	HTML         string       // optional HTML body; if set, sends multipart/alternative
@@ -150,7 +151,7 @@ func Send(cfg Config, msg Message) error {
 		return fmt.Errorf("smtp mail from: %w", err)
 	}
 
-	for _, rcpt := range append(msg.To, msg.CC...) {
+	for _, rcpt := range append(append(msg.To, msg.CC...), msg.BCC...) {
 		if err = c.Rcpt(rcpt); err != nil {
 			return fmt.Errorf("smtp rcpt %s: %w", rcpt, err)
 		}

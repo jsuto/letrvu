@@ -25,8 +25,17 @@
             <option v-for="(opt, i) in fromOptions" :key="i" :value="i">{{ opt.label }}</option>
           </select>
         </div>
-        <AddressInput v-model="form.to" placeholder="To" />
+        <div class="flex items-center border-b border-[var(--color-border)]">
+          <AddressInput v-model="form.to" placeholder="To" class="flex-1" />
+          <button
+            v-if="!showBcc"
+            @click="showBcc = true"
+            class="shrink-0 px-3 py-2 text-[12px] text-[var(--color-text-muted)] bg-transparent border-none cursor-pointer hover:text-[var(--color-text)]"
+            title="Add BCC"
+          >BCC</button>
+        </div>
         <AddressInput v-model="form.cc" placeholder="CC" />
+        <AddressInput v-if="showBcc" v-model="form.bcc" placeholder="BCC" />
         <input
           v-model="form.subject"
           type="text"
@@ -228,8 +237,9 @@ const error = ref('')
 const textareaEl = ref(null)
 const fileInputEl = ref(null)
 const plainTextMode = ref(false)
+const showBcc = ref(false)
 
-const form = reactive({ fromIndex: 0, to: '', cc: '', subject: '', plainBody: '' })
+const form = reactive({ fromIndex: 0, to: '', cc: '', bcc: '', subject: '', plainBody: '' })
 const attachments = ref([])
 const originalDraft = ref(null)
 const inReplyTo = ref('')
@@ -356,7 +366,7 @@ function scheduleAutoSave() {
   autoSaveTimer = setTimeout(() => { if (visible.value) saveDraft() }, 30_000)
 }
 
-watch(() => [form.to, form.cc, form.subject, form.plainBody], scheduleAutoSave)
+watch(() => [form.to, form.cc, form.bcc, form.subject, form.plainBody], scheduleAutoSave)
 
 // Resolve a public key for a single recipient: stored contact key first, WKD fallback.
 async function resolveRecipientKey(email) {
@@ -366,11 +376,12 @@ async function resolveRecipientKey(email) {
 }
 
 // Check whether all recipients have a resolvable public key (enables Encrypt toggle).
-watch(() => [form.to, form.cc], async () => {
+watch(() => [form.to, form.cc, form.bcc], async () => {
   if (!pgp.isUnlocked) return
   const recipients = [
     ...form.to.split(',').map(s => s.trim()).filter(Boolean),
     ...form.cc.split(',').map(s => s.trim()).filter(Boolean),
+    ...form.bcc.split(',').map(s => s.trim()).filter(Boolean),
   ]
   if (!recipients.length) { pgpEncryptable.value = false; return }
   const results = await Promise.all(recipients.map(r => resolveRecipientKey(r)))
@@ -386,6 +397,7 @@ function buildPayload() {
     from_email: selectedFrom?.email ?? '',
     to: form.to.split(',').map(s => s.trim()).filter(Boolean),
     cc: form.cc.split(',').map(s => s.trim()).filter(Boolean),
+    bcc: form.bcc.split(',').map(s => s.trim()).filter(Boolean) || undefined,
     subject: form.subject,
     attachments: attachments.value.length ? attachments.value : undefined,
     disposition_notification_to: requestReadReceipt.value ? (selectedFrom?.email ?? '') : undefined,
@@ -497,7 +509,8 @@ async function open(prefill = {}) {
   inReplyTo.value = _irt || ''
   references.value = _refs || ''
 
-  Object.assign(form, { fromIndex, to: '', cc: '', subject: '', plainBody: '', ...rest, fromIndex })
+  showBcc.value = !!(rest.bcc)
+  Object.assign(form, { fromIndex, to: '', cc: '', bcc: '', subject: '', plainBody: '', ...rest, fromIndex })
 
   attachments.value = _a ? [..._a] : []
   pendingInvite.value = _inv ?? null
@@ -534,6 +547,7 @@ async function open(prefill = {}) {
 function close() {
   clearTimeout(autoSaveTimer)
   visible.value = false
+  showBcc.value = false
   error.value = ''
   pgpError.value = ''
   draftSaved.value = false
@@ -676,6 +690,7 @@ async function send() {
       const undoState = {
         to: form.to,
         cc: form.cc,
+        bcc: form.bcc,
         subject: form.subject,
         html: editor.value?.getHTML() ?? '',
         _fromEmail: fromOptions.value[form.fromIndex]?.email,
