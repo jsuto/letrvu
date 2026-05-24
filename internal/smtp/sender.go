@@ -194,6 +194,18 @@ func randomToken(n int) string {
 	return hex.EncodeToString(b)
 }
 
+// sanitizeHeader strips CR and LF from a header field value to prevent
+// header injection. A newline in a subject or address field would allow an
+// attacker to append arbitrary headers to the outbound message.
+func sanitizeHeader(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\r' || r == '\n' {
+			return -1
+		}
+		return r
+	}, s)
+}
+
 func buildMIME(msg Message) string {
 	var sb strings.Builder
 
@@ -209,21 +221,21 @@ func buildMIME(msg Message) string {
 	sb.WriteString(fmt.Sprintf("Message-ID: %s\r\n", msgID))
 
 	if msg.InReplyTo != "" {
-		sb.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", msg.InReplyTo))
+		sb.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", sanitizeHeader(msg.InReplyTo)))
 	}
 	if msg.References != "" {
-		sb.WriteString(fmt.Sprintf("References: %s\r\n", msg.References))
+		sb.WriteString(fmt.Sprintf("References: %s\r\n", sanitizeHeader(msg.References)))
 	}
 
-	sb.WriteString(fmt.Sprintf("From: %s\r\n", msg.From))
-	sb.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(msg.To, ", ")))
+	sb.WriteString(fmt.Sprintf("From: %s\r\n", sanitizeHeader(msg.From)))
+	sb.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeHeader(strings.Join(msg.To, ", "))))
 	if len(msg.CC) > 0 {
-		sb.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(msg.CC, ", ")))
+		sb.WriteString(fmt.Sprintf("Cc: %s\r\n", sanitizeHeader(strings.Join(msg.CC, ", "))))
 	}
-	sb.WriteString(fmt.Sprintf("Subject: %s\r\n", msg.Subject))
+	sb.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeHeader(msg.Subject)))
 	sb.WriteString("X-Mailer: letrvu\r\n")
 	if msg.DispositionNotificationTo != "" {
-		sb.WriteString(fmt.Sprintf("Disposition-Notification-To: %s\r\n", msg.DispositionNotificationTo))
+		sb.WriteString(fmt.Sprintf("Disposition-Notification-To: %s\r\n", sanitizeHeader(msg.DispositionNotificationTo)))
 	}
 	sb.WriteString("MIME-Version: 1.0\r\n")
 
@@ -420,9 +432,9 @@ func SendMDN(cfg Config, from, notifyAddr, originalMsgID, originalSubject string
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	sb.WriteString(fmt.Sprintf("Message-ID: %s\r\n", msgID))
-	sb.WriteString(fmt.Sprintf("From: %s\r\n", from))
-	sb.WriteString(fmt.Sprintf("To: %s\r\n", notifyAddr))
-	sb.WriteString(fmt.Sprintf("Subject: Read: %s\r\n", originalSubject))
+	sb.WriteString(fmt.Sprintf("From: %s\r\n", sanitizeHeader(from)))
+	sb.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeHeader(notifyAddr)))
+	sb.WriteString(fmt.Sprintf("Subject: Read: %s\r\n", sanitizeHeader(originalSubject)))
 	sb.WriteString("X-Mailer: letrvu\r\n")
 	sb.WriteString("MIME-Version: 1.0\r\n")
 	sb.WriteString(fmt.Sprintf("Content-Type: multipart/report; report-type=disposition-notification; boundary=%q\r\n\r\n", boundary))
