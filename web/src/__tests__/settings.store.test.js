@@ -153,3 +153,57 @@ describe('settings store — saveSettings', () => {
     await expect(store.saveSettings({ display_name: 'x' })).rejects.toThrow()
   })
 })
+
+describe('settings store — trustedImageSenders', () => {
+  it('returns empty array when setting not set', () => {
+    const store = useSettingsStore()
+    expect(store.trustedImageSenders).toEqual([])
+  })
+
+  it('parses stored JSON array', () => {
+    const store = useSettingsStore()
+    store.settings.trusted_image_senders = JSON.stringify(['a@example.com', 'b@example.com'])
+    expect(store.trustedImageSenders).toEqual(['a@example.com', 'b@example.com'])
+  })
+
+  it('returns empty array for invalid JSON', () => {
+    const store = useSettingsStore()
+    store.settings.trusted_image_senders = 'not-json'
+    expect(store.trustedImageSenders).toEqual([])
+  })
+})
+
+describe('settings store — trustImageSender / untrustImageSender', () => {
+  beforeEach(() => {
+    global.fetch.mockResolvedValue({ ok: true })
+  })
+
+  it('adds a new email to the trust list (lowercased)', async () => {
+    const store = useSettingsStore()
+    store.settings.trusted_image_senders = '[]'
+    await store.trustImageSender('NEWS@Example.com')
+    expect(store.trustedImageSenders).toContain('news@example.com')
+  })
+
+  it('does not duplicate an already-trusted email', async () => {
+    const store = useSettingsStore()
+    store.settings.trusted_image_senders = JSON.stringify(['a@example.com'])
+    await store.trustImageSender('a@example.com')
+    expect(store.trustedImageSenders).toHaveLength(1)
+  })
+
+  it('removes an email from the trust list', async () => {
+    const store = useSettingsStore()
+    store.settings.trusted_image_senders = JSON.stringify(['a@example.com', 'b@example.com'])
+    await store.untrustImageSender('a@example.com')
+    expect(store.trustedImageSenders).not.toContain('a@example.com')
+    expect(store.trustedImageSenders).toContain('b@example.com')
+  })
+
+  it('untrustImageSender on unknown email leaves list unchanged', async () => {
+    const store = useSettingsStore()
+    store.settings.trusted_image_senders = JSON.stringify(['a@example.com'])
+    await store.untrustImageSender('unknown@example.com')
+    expect(store.trustedImageSenders).toEqual(['a@example.com'])
+  })
+})

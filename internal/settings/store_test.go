@@ -167,3 +167,38 @@ func TestSettings_IMAPHostIsolation(t *testing.T) {
 		t.Errorf("imap-b display_name = %q", b["display_name"])
 	}
 }
+
+// --- Per-sender image trust --------------------------------------------------
+
+func TestSettings_TrustedImageSendersAllowed(t *testing.T) {
+	s := newStore(t)
+	value := `["newsletter@example.com","updates@corp.com"]`
+	if err := s.Set("alice", "imap.example.com", map[string]string{
+		"trusted_image_senders": value,
+	}); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	got, err := s.Get("alice", "imap.example.com")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got["trusted_image_senders"] != value {
+		t.Errorf("trusted_image_senders = %q, want %q", got["trusted_image_senders"], value)
+	}
+}
+
+func TestSettings_TrustedImageSendersOverwrite(t *testing.T) {
+	s := newStore(t)
+	s.Set("alice", "imap.example.com", map[string]string{
+		"trusted_image_senders": `["old@example.com"]`,
+	})
+	s.Set("alice", "imap.example.com", map[string]string{
+		"trusted_image_senders": `["new@example.com"]`,
+	})
+
+	got, _ := s.Get("alice", "imap.example.com")
+	if got["trusted_image_senders"] != `["new@example.com"]` {
+		t.Errorf("expected updated value, got %q", got["trusted_image_senders"])
+	}
+}

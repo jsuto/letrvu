@@ -315,12 +315,17 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] Undo send (configurable delay before SMTP submission)
 - [x] Vacation / autoresponder (Sieve)
 - [x] Contact groups / distribution lists
-- [ ] Per-sender image trust ("always show images from this sender")
+- [x] Per-sender image trust ("always show images from this sender")
 - [x] Print view
 - [x] PGP signing and encryption (openpgp.js, server-stored encrypted key, WKD lookup)
 - [x] Docker scout scanning
 - [x] Session timeout / logout all devices
 - [x] Spam flag feedback (`$Junk` IMAP flag)
+- [ ] Email filters / rules (auto-move, auto-label by sender/subject)
+- [ ] Spam/phishing warning banners (suspicious sender analysis)
+- [ ] Read receipts (send and suppress)
+- [ ] Message templates / canned responses
+- [ ] S/MIME support
 
 ## Releasing
 

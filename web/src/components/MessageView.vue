@@ -87,8 +87,12 @@
       <!-- Remote image blocking banner -->
       <div v-if="hasRemoteImages && !showRemoteImages" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fef9ec] border border-[#e6b84a] text-[#7a5800]">
         <span>🛡 Remote images blocked to protect your privacy.</span>
-        <button @click="showRemoteImages = true"
-          class="px-3.5 py-1.5 bg-[#e6b84a] text-[#3a2800] border-none rounded-md text-xs cursor-pointer whitespace-nowrap ml-auto hover:bg-[#d4a830]">Show images</button>
+        <div class="flex gap-2 ml-auto">
+          <button @click="trustSender"
+            class="px-3.5 py-1.5 bg-[var(--color-surface)] border border-[#e6b84a] text-[#7a5800] rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[#fef0cc]">Always show from this sender</button>
+          <button @click="showRemoteImages = true"
+            class="px-3.5 py-1.5 bg-[#e6b84a] text-[#3a2800] border-none rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[#d4a830]">Show images</button>
+        </div>
       </div>
 
       <!-- Email authentication failure banner (SPF/DKIM/DMARC) -->
@@ -366,14 +370,25 @@ function reprocessCurrentMessage() {
   phishingCount.value = result.phishingCount
 }
 
+function senderEmail() {
+  return extractEmail(mail.currentMessage?.from ?? '').toLowerCase()
+}
+
 watch(
   () => mail.currentMessage?.uid,
   () => {
-    showRemoteImages.value = false
+    showRemoteImages.value = settings.trustedImageSenders.includes(senderEmail())
     reprocessCurrentMessage()
   },
   { immediate: true }
 )
+
+async function trustSender() {
+  const email = senderEmail()
+  if (!email) return
+  await settings.trustImageSender(email)
+  showRemoteImages.value = true
+}
 
 // Re-inject dark/light baseline when the theme is toggled.
 watch(dark, reprocessCurrentMessage)
