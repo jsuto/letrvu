@@ -69,6 +69,29 @@ export const useSettingsStore = defineStore('settings', () => {
     return isNaN(v) ? 30 : v
   })
 
+  // Per-sender image trust: array of lowercase email addresses the user has
+  // opted to always show remote images for.
+  const trustedImageSenders = computed(() => {
+    try {
+      return JSON.parse(settings.value.trusted_image_senders || '[]')
+    } catch {
+      return []
+    }
+  })
+
+  async function trustImageSender(email) {
+    const addr = email.toLowerCase()
+    const current = trustedImageSenders.value
+    if (current.includes(addr)) return
+    await saveSettings({ trusted_image_senders: JSON.stringify([...current, addr]) })
+  }
+
+  async function untrustImageSender(email) {
+    const addr = email.toLowerCase()
+    const updated = trustedImageSenders.value.filter(e => e !== addr)
+    await saveSettings({ trusted_image_senders: JSON.stringify(updated) })
+  }
+
   // Vacation autoresponder state.
   const vacationEnabled = computed(() => settings.value.vacation_enabled === 'true')
   const vacationSieveActive = computed(() => settings.value.vacation_sieve_active === 'true')
@@ -96,5 +119,5 @@ export const useSettingsStore = defineStore('settings', () => {
     return result
   }
 
-  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes, vacationEnabled, vacationSieveActive, saveVacation }
+  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes, vacationEnabled, vacationSieveActive, saveVacation, trustedImageSenders, trustImageSender, untrustImageSender }
 })

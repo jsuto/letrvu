@@ -219,6 +219,18 @@
 
         </div>
 
+        <!-- Trusted image senders -->
+        <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Trusted image senders</div>
+        <div class="flex flex-col gap-1.5">
+          <p v-if="settings.trustedImageSenders.length === 0" class="text-xs text-[var(--color-text-muted)]">No trusted senders. Remote images will be blocked for all senders.</p>
+          <div v-for="addr in settings.trustedImageSenders" :key="addr"
+            class="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[var(--color-bg)] border border-[var(--color-border)]">
+            <span class="flex-1 text-xs font-mono text-[var(--color-text)] truncate">{{ addr }}</span>
+            <button @click="revokeTrust(addr)"
+              class="bg-none border-none text-xs cursor-pointer text-[var(--color-text-muted)] px-1 hover:text-red-600">Revoke</button>
+          </div>
+        </div>
+
         <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Identities (From: addresses)</div>
         <div class="flex flex-col gap-2">
           <div v-for="(id, i) in form.identities" :key="i" class="flex gap-1.5 items-center">
@@ -407,6 +419,10 @@ async function enableNotifications() {
 
 async function disableNotifications() {
   await settings.saveSettings({ notifications_enabled: 'false' })
+}
+
+async function revokeTrust(email) {
+  await settings.untrustImageSender(email)
 }
 
 function addIdentity() {
