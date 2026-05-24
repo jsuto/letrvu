@@ -28,6 +28,7 @@ import (
 	"github.com/jsuto/letrvu/internal/calendar"
 	"github.com/jsuto/letrvu/internal/contacts"
 	"github.com/jsuto/letrvu/internal/db"
+	"github.com/jsuto/letrvu/internal/filters"
 	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
@@ -100,8 +101,9 @@ func newTestEnv(t *testing.T) *testEnv {
 	contactsStore := contacts.NewStore(database)
 	calendarStore := calendar.NewStore(database)
 	indexStore := index.NewStore(database)
+	filtersStore := filters.NewStore(database)
 
-	router := api.NewRouter(sessionStore, settingsStore, contactsStore, calendarStore, indexStore, api.ServerConfig{
+	router := api.NewRouter(sessionStore, settingsStore, contactsStore, calendarStore, indexStore, filtersStore, api.ServerConfig{
 		IMAPHost:         "127.0.0.1",
 		IMAPPort:         imapPort,
 		FolderCacheTTL:   0, // no caching — always fresh in tests
