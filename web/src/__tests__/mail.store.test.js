@@ -706,3 +706,28 @@ describe('mail store — threads computed', () => {
     expect(store.threads.length).toBeGreaterThan(0)
   })
 })
+
+describe('mail store — quota', () => {
+  it('initialises with zero quota', () => {
+    const store = useMailStore()
+    expect(store.quota).toEqual({ used: 0, limit: 0 })
+  })
+
+  it('fetchQuota updates quota from API response', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ used: 524288000, limit: 1073741824 }),
+    })
+    const store = useMailStore()
+    await store.fetchQuota()
+    expect(store.quota.used).toBe(524288000)
+    expect(store.quota.limit).toBe(1073741824)
+  })
+
+  it('fetchQuota does nothing when API fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false })
+    const store = useMailStore()
+    await store.fetchQuota()
+    expect(store.quota).toEqual({ used: 0, limit: 0 })
+  })
+})

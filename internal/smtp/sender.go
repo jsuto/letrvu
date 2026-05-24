@@ -49,6 +49,14 @@ type Attachment struct {
 	Data        []byte
 }
 
+// InlineImage is an image embedded inline in the HTML body via a cid: reference.
+// The HTML body must contain <img src="cid:<ContentID>"> for each entry.
+type InlineImage struct {
+	ContentID   string
+	ContentType string
+	Data        []byte
+}
+
 // Message is an outbound email.
 type Message struct {
 	// From is the RFC 5322 From: header value (what recipients see).
@@ -60,10 +68,12 @@ type Message struct {
 	EnvelopeFrom string
 	To           []string
 	CC           []string
+	BCC          []string // delivered via RCPT TO but not written to headers
 	Subject      string
 	Text         string       // plain text body
 	HTML         string       // optional HTML body; if set, sends multipart/alternative
-	Attachments  []Attachment // optional file attachments
+	Attachments  []Attachment  // optional file attachments
+	InlineImages []InlineImage // images embedded inline in HTML via cid: references
 
 	// Threading / identification headers (RFC 2822).
 	// MessageID is used as-is if non-empty; otherwise one is auto-generated
@@ -141,7 +151,12 @@ func Send(cfg Config, msg Message) error {
 		return fmt.Errorf("smtp mail from: %w", err)
 	}
 
-	for _, rcpt := range append(msg.To, msg.CC...) {
+	for _, rcpt := range append(append(msg.To, msg.CC...), msg.BCC...) {
+		// Reject addresses that contain CR or LF — these could inject extra
+		// SMTP commands (SMTP injection / email content injection).
+		if strings.ContainsAny(rcpt, "\r\n") {
+			return fmt.Errorf("smtp rcpt: address %q contains invalid characters", rcpt)
+		}
 		if err = c.Rcpt(rcpt); err != nil {
 			return fmt.Errorf("smtp rcpt %s: %w", rcpt, err)
 		}
@@ -151,6 +166,16 @@ func Send(cfg Config, msg Message) error {
 	if err != nil {
 		return fmt.Errorf("smtp data: %w", err)
 	}
+	// CodeQL go/email-injection: false positive. This is a webmail client —
+	// user-controlled content in the email body is the intended and correct
+	// behaviour; users are composing their own emails. The go/email-injection
+	// rule targets transactional emails (password resets, notifications) where
+	// server-generated content can be hijacked via header injection. That attack
+	// surface is separately mitigated: sanitizeHeader() strips CR/LF from every
+	// header field value in buildMIME (Subject, From, To, Cc, In-Reply-To,
+	// References, Disposition-Notification-To) and recipients are validated
+	// against \r\n before RCPT TO. The remaining finding is the email body,
+	// which is intentionally authored by the authenticated user.
 	if _, err = fmt.Fprint(wc, buildMIME(msg)); err != nil {
 		wc.Close()
 		return fmt.Errorf("smtp write: %w", err)
@@ -179,6 +204,18 @@ func randomToken(n int) string {
 	return hex.EncodeToString(b)
 }
 
+// sanitizeHeader strips CR and LF from a header field value to prevent
+// header injection. A newline in a subject or address field would allow an
+// attacker to append arbitrary headers to the outbound message.
+func sanitizeHeader(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\r' || r == '\n' {
+			return -1
+		}
+		return r
+	}, s)
+}
+
 func buildMIME(msg Message) string {
 	var sb strings.Builder
 
@@ -194,21 +231,21 @@ func buildMIME(msg Message) string {
 	sb.WriteString(fmt.Sprintf("Message-ID: %s\r\n", msgID))
 
 	if msg.InReplyTo != "" {
-		sb.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", msg.InReplyTo))
+		sb.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", sanitizeHeader(msg.InReplyTo)))
 	}
 	if msg.References != "" {
-		sb.WriteString(fmt.Sprintf("References: %s\r\n", msg.References))
+		sb.WriteString(fmt.Sprintf("References: %s\r\n", sanitizeHeader(msg.References)))
 	}
 
-	sb.WriteString(fmt.Sprintf("From: %s\r\n", msg.From))
-	sb.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(msg.To, ", ")))
+	sb.WriteString(fmt.Sprintf("From: %s\r\n", sanitizeHeader(msg.From)))
+	sb.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeHeader(strings.Join(msg.To, ", "))))
 	if len(msg.CC) > 0 {
-		sb.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(msg.CC, ", ")))
+		sb.WriteString(fmt.Sprintf("Cc: %s\r\n", sanitizeHeader(strings.Join(msg.CC, ", "))))
 	}
-	sb.WriteString(fmt.Sprintf("Subject: %s\r\n", msg.Subject))
+	sb.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeHeader(msg.Subject)))
 	sb.WriteString("X-Mailer: letrvu\r\n")
 	if msg.DispositionNotificationTo != "" {
-		sb.WriteString(fmt.Sprintf("Disposition-Notification-To: %s\r\n", msg.DispositionNotificationTo))
+		sb.WriteString(fmt.Sprintf("Disposition-Notification-To: %s\r\n", sanitizeHeader(msg.DispositionNotificationTo)))
 	}
 	sb.WriteString("MIME-Version: 1.0\r\n")
 
@@ -278,27 +315,60 @@ func buildMIME(msg Message) string {
 }
 
 // writeBodyPart writes the text/plain or multipart/alternative body section.
+// When msg.InlineImages is non-empty the HTML part is wrapped in a
+// multipart/related container per RFC 2387 so email clients render the images
+// inline via cid: references already present in msg.HTML.
 func writeBodyPart(sb *strings.Builder, msg Message) {
 	if msg.HTML != "" {
 		text := msg.Text
 		if text == "" {
 			text = stripHTML(msg.HTML)
 		}
-		boundary := "letrvu-boundary-001"
-		sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q\r\n", boundary))
-		sb.WriteString("\r\n")
-		sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+
+		const altBoundary = "letrvu-boundary-001"
+		sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q\r\n\r\n", altBoundary))
+
+		sb.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
 		sb.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
 		sb.WriteString(text)
 		sb.WriteString("\r\n")
-		sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-		sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
-		sb.WriteString(msg.HTML)
-		sb.WriteString("\r\n")
-		sb.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+
+		sb.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
+		if len(msg.InlineImages) > 0 {
+			const relBoundary = "letrvu-related-001"
+			sb.WriteString(fmt.Sprintf("Content-Type: multipart/related; boundary=%q\r\n\r\n", relBoundary))
+
+			sb.WriteString(fmt.Sprintf("--%s\r\n", relBoundary))
+			sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+			sb.WriteString(msg.HTML)
+			sb.WriteString("\r\n")
+
+			for _, img := range msg.InlineImages {
+				sb.WriteString(fmt.Sprintf("--%s\r\n", relBoundary))
+				sb.WriteString(fmt.Sprintf("Content-Type: %s\r\n", img.ContentType))
+				sb.WriteString(fmt.Sprintf("Content-ID: <%s>\r\n", img.ContentID))
+				sb.WriteString("Content-Disposition: inline\r\n")
+				sb.WriteString("Content-Transfer-Encoding: base64\r\n\r\n")
+				enc := base64.StdEncoding.EncodeToString(img.Data)
+				for i := 0; i < len(enc); i += 76 {
+					end := i + 76
+					if end > len(enc) {
+						end = len(enc)
+					}
+					sb.WriteString(enc[i:end])
+					sb.WriteString("\r\n")
+				}
+			}
+			sb.WriteString(fmt.Sprintf("--%s--\r\n", relBoundary))
+		} else {
+			sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+			sb.WriteString(msg.HTML)
+			sb.WriteString("\r\n")
+		}
+
+		sb.WriteString(fmt.Sprintf("--%s--\r\n", altBoundary))
 	} else {
-		sb.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-		sb.WriteString("\r\n")
+		sb.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
 		sb.WriteString(msg.Text)
 	}
 }
@@ -372,9 +442,9 @@ func SendMDN(cfg Config, from, notifyAddr, originalMsgID, originalSubject string
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	sb.WriteString(fmt.Sprintf("Message-ID: %s\r\n", msgID))
-	sb.WriteString(fmt.Sprintf("From: %s\r\n", from))
-	sb.WriteString(fmt.Sprintf("To: %s\r\n", notifyAddr))
-	sb.WriteString(fmt.Sprintf("Subject: Read: %s\r\n", originalSubject))
+	sb.WriteString(fmt.Sprintf("From: %s\r\n", sanitizeHeader(from)))
+	sb.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeHeader(notifyAddr)))
+	sb.WriteString(fmt.Sprintf("Subject: Read: %s\r\n", sanitizeHeader(originalSubject)))
 	sb.WriteString("X-Mailer: letrvu\r\n")
 	sb.WriteString("MIME-Version: 1.0\r\n")
 	sb.WriteString(fmt.Sprintf("Content-Type: multipart/report; report-type=disposition-notification; boundary=%q\r\n\r\n", boundary))

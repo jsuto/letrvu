@@ -45,6 +45,16 @@
       </li>
     </ul>
     <p v-else class="text-xs text-[var(--color-text-muted)] px-2 flex-1">Loading folders…</p>
+    <div v-if="mail.quota.limit > 0" class="mb-2 px-1">
+      <div class="w-full h-1.5 rounded-full bg-[var(--color-border)] overflow-hidden">
+        <div
+          class="h-full rounded-full transition-all"
+          :class="quotaPercent >= 90 ? 'bg-red-500' : quotaPercent >= 75 ? 'bg-amber-400' : 'bg-teal'"
+          :style="{ width: quotaPercent + '%' }"
+        ></div>
+      </div>
+      <p class="text-[10px] text-[var(--color-text-muted)] mt-0.5 text-right">{{ quotaUsedLabel }} of {{ quotaLimitLabel }}</p>
+    </div>
     <button
       class="w-full py-1.5 px-2 bg-none border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text-muted)] cursor-pointer mb-2 text-left hover:bg-[var(--color-teal-light)] hover:text-[var(--color-text)]"
       @click="manageFoldersModal?.open()"
@@ -96,10 +106,25 @@ const visibleFolders = computed(() => {
   return subscribed.length ? subscribed : mail.folders
 })
 
+const quotaPercent = computed(() => {
+  if (!mail.quota.limit) return 0
+  return Math.min(100, Math.round((mail.quota.used / mail.quota.limit) * 100))
+})
+
+function formatBytes(bytes) {
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB'
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB'
+  return (bytes / 1024).toFixed(0) + ' KB'
+}
+
+const quotaUsedLabel = computed(() => formatBytes(mail.quota.used))
+const quotaLimitLabel = computed(() => formatBytes(mail.quota.limit))
+
 onMounted(async () => {
   if (!mail.folders.length) {
     await mail.fetchFolders()
   }
+  mail.fetchQuota()
 })
 
 async function onDrop(e, destFolder) {

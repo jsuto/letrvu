@@ -22,6 +22,18 @@
         </label>
 
         <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+          Undo send
+          <select v-model.number="form.undo_send_delay"
+            class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal">
+            <option :value="0">Off</option>
+            <option :value="5">5 seconds</option>
+            <option :value="10">10 seconds</option>
+            <option :value="20">20 seconds</option>
+            <option :value="30">30 seconds</option>
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
           Poll interval
           <select v-model.number="form.poll_interval"
             class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal">
@@ -155,6 +167,107 @@
             </button>
           </div>
           <p v-if="logoutAllError" class="text-xs text-red-600">{{ logoutAllError }}</p>
+        </div>
+
+        <!-- 2FA -->
+        <div class="text-xs text-[var(--color-text-muted)] font-semibold pt-1 mt-1">Two-factor authentication</div>
+        <div class="flex flex-col gap-2">
+          <!-- Disabled state -->
+          <template v-if="!settings.totpEnabled && twofa.step === 'idle'">
+            <p class="text-xs text-[var(--color-text-muted)]">Add an extra layer of security with an authenticator app (Google Authenticator, Authy, 1Password, etc.).</p>
+            <div>
+              <button @click="start2FASetup" :disabled="twofa.busy"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] whitespace-nowrap hover:border-teal hover:text-teal disabled:opacity-50">
+                {{ twofa.busy ? 'Loading…' : 'Enable 2FA' }}
+              </button>
+            </div>
+          </template>
+
+          <!-- Enrollment: show QR + verify -->
+          <template v-else-if="twofa.step === 'enroll'">
+            <p class="text-xs text-[var(--color-text-muted)]">Scan this QR code with your authenticator app, then enter the 6-digit code to confirm.</p>
+            <img v-if="twofa.qrPng" :src="'data:image/png;base64,' + twofa.qrPng" alt="QR code" class="w-40 h-40 rounded border border-[var(--color-border)]" />
+            <p class="text-xs text-[var(--color-text-muted)]">Manual entry: <span class="font-mono text-[var(--color-text)]">{{ twofa.secret }}</span></p>
+            <div class="flex gap-2 items-center">
+              <input v-model="twofa.code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                pattern="[0-9]{6}" maxlength="6" placeholder="000000"
+                class="w-28 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal font-mono tracking-widest text-center" />
+              <button @click="confirm2FAEnroll" :disabled="twofa.busy || twofa.code.length !== 6"
+                class="px-3 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer disabled:opacity-50">
+                {{ twofa.busy ? 'Verifying…' : 'Verify' }}
+              </button>
+              <button @click="cancel2FA"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md text-xs cursor-pointer text-[var(--color-text)] hover:border-[var(--color-text)]">
+                Cancel
+              </button>
+            </div>
+            <p v-if="twofa.error" class="text-xs text-red-600">{{ twofa.error }}</p>
+          </template>
+
+          <!-- Recovery codes shown once after enrollment -->
+          <template v-else-if="twofa.step === 'recovery'">
+            <p class="text-xs font-medium text-[var(--color-text)]">2FA enabled! Save these recovery codes — you will not see them again.</p>
+            <div class="grid grid-cols-2 gap-1 p-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md">
+              <span v-for="c in twofa.recoveryCodes" :key="c" class="font-mono text-xs text-[var(--color-text)]">{{ c }}</span>
+            </div>
+            <button @click="twofa.step = 'idle'"
+              class="self-start px-3 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer">
+              Done
+            </button>
+          </template>
+
+          <!-- Enabled state -->
+          <template v-else-if="settings.totpEnabled && twofa.step === 'idle'">
+            <p class="text-xs text-teal font-medium">✓ Two-factor authentication is active.</p>
+            <div class="flex gap-2 flex-wrap">
+              <button @click="twofa.step = 'regen-confirm'"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] whitespace-nowrap hover:border-teal hover:text-teal">
+                Regenerate recovery codes
+              </button>
+              <button @click="twofa.step = 'disable-confirm'"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer whitespace-nowrap hover:border-red-500 hover:text-red-600">
+                Disable 2FA
+              </button>
+            </div>
+          </template>
+
+          <!-- Confirm disable -->
+          <template v-else-if="twofa.step === 'disable-confirm'">
+            <p class="text-xs text-[var(--color-text-muted)]">Enter your current authenticator code (or a recovery code) to disable 2FA.</p>
+            <div class="flex gap-2 items-center">
+              <input v-model="twofa.code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                placeholder="000000" maxlength="8"
+                class="w-28 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal font-mono tracking-widest text-center" />
+              <button @click="disable2FA" :disabled="twofa.busy || !twofa.code"
+                class="px-3 py-1.5 bg-red-600 text-white border-none rounded-md text-xs cursor-pointer disabled:opacity-50">
+                {{ twofa.busy ? 'Disabling…' : 'Disable' }}
+              </button>
+              <button @click="cancel2FA"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md text-xs cursor-pointer text-[var(--color-text)] hover:border-[var(--color-text)]">
+                Cancel
+              </button>
+            </div>
+            <p v-if="twofa.error" class="text-xs text-red-600">{{ twofa.error }}</p>
+          </template>
+
+          <!-- Confirm regen recovery codes -->
+          <template v-else-if="twofa.step === 'regen-confirm'">
+            <p class="text-xs text-[var(--color-text-muted)]">Enter your current authenticator code to regenerate recovery codes. Old codes will stop working immediately.</p>
+            <div class="flex gap-2 items-center">
+              <input v-model="twofa.code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                placeholder="000000" maxlength="6"
+                class="w-28 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal font-mono tracking-widest text-center" />
+              <button @click="regenRecoveryCodes" :disabled="twofa.busy || twofa.code.length !== 6"
+                class="px-3 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer disabled:opacity-50">
+                {{ twofa.busy ? 'Regenerating…' : 'Regenerate' }}
+              </button>
+              <button @click="cancel2FA"
+                class="px-3 py-1.5 border border-[var(--color-border)] rounded-md text-xs cursor-pointer text-[var(--color-text)] hover:border-[var(--color-text)]">
+                Cancel
+              </button>
+            </div>
+            <p v-if="twofa.error" class="text-xs text-red-600">{{ twofa.error }}</p>
+          </template>
         </div>
 
         <!-- PGP -->
@@ -315,13 +428,122 @@ const sessionsLoading = ref(false)
 const logoutAllBusy = ref(false)
 const logoutAllError = ref('')
 
+// 2FA state
+const twofa = reactive({
+  step: 'idle',  // 'idle' | 'enroll' | 'recovery' | 'disable-confirm' | 'regen-confirm'
+  busy: false,
+  error: '',
+  secret: '',
+  qrPng: '',
+  code: '',
+  recoveryCodes: [],
+})
+
+async function start2FASetup() {
+  twofa.busy = true
+  twofa.error = ''
+  try {
+    const res = await apiFetch('/api/2fa/setup')
+    if (!res.ok) throw new Error('Setup failed')
+    const data = await res.json()
+    twofa.secret = data.secret
+    twofa.qrPng = data.qr_png_b64
+    twofa.code = ''
+    twofa.step = 'enroll'
+  } catch (e) {
+    twofa.error = e.message
+  } finally {
+    twofa.busy = false
+  }
+}
+
+async function confirm2FAEnroll() {
+  twofa.busy = true
+  twofa.error = ''
+  try {
+    const res = await apiFetch('/api/2fa/enable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: twofa.code }),
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      throw new Error(d.error || 'Invalid code')
+    }
+    const data = await res.json()
+    twofa.recoveryCodes = data.recovery_codes
+    twofa.step = 'recovery'
+    settings.settings.totp_enabled = true
+  } catch (e) {
+    twofa.error = e.message
+    twofa.code = ''
+  } finally {
+    twofa.busy = false
+  }
+}
+
+async function disable2FA() {
+  twofa.busy = true
+  twofa.error = ''
+  try {
+    const res = await apiFetch('/api/2fa/disable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: twofa.code }),
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      throw new Error(d.error || 'Invalid code')
+    }
+    settings.settings.totp_enabled = false
+    twofa.step = 'idle'
+    twofa.code = ''
+  } catch (e) {
+    twofa.error = e.message
+    twofa.code = ''
+  } finally {
+    twofa.busy = false
+  }
+}
+
+async function regenRecoveryCodes() {
+  twofa.busy = true
+  twofa.error = ''
+  try {
+    const res = await apiFetch('/api/2fa/recovery-codes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: twofa.code }),
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      throw new Error(d.error || 'Invalid code')
+    }
+    const data = await res.json()
+    twofa.recoveryCodes = data.recovery_codes
+    twofa.step = 'recovery'
+    twofa.code = ''
+  } catch (e) {
+    twofa.error = e.message
+    twofa.code = ''
+  } finally {
+    twofa.busy = false
+  }
+}
+
+function cancel2FA() {
+  twofa.step = 'idle'
+  twofa.code = ''
+  twofa.error = ''
+}
+
 // PGP state
 const pgpMode = ref(null)  // null | 'generate' | 'import'
 const pgpBusy = ref(false)
 const pgpError = ref('')
 const pgpForm = reactive({ name: '', email: '', passphrase: '', passphrase2: '', armoredKey: '' })
 
-const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120, calendar_reminder_minutes: 30, read_receipt_policy: 'ask', vacation_enabled: false, vacation_subject: '', vacation_body: '', vacation_start: '', vacation_end: '' })
+const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120, undo_send_delay: 0, calendar_reminder_minutes: 30, read_receipt_policy: 'ask', vacation_enabled: false, vacation_subject: '', vacation_body: '', vacation_start: '', vacation_end: '' })
 const vacationStatus = ref(null) // { type: 'active'|'warn'|'error', message: string }
 
 async function open() {
@@ -330,6 +552,7 @@ async function open() {
   form.signature = settings.settings.signature ?? ''
   form.identities = settings.identities.map(id => ({ ...id }))
   form.poll_interval = settings.pollInterval
+  form.undo_send_delay = settings.undoSendDelay
   form.calendar_reminder_minutes = settings.reminderMinutes
   form.read_receipt_policy = settings.readReceiptPolicy
   notifPermission.value = typeof Notification !== 'undefined' ? Notification.permission : 'denied'
@@ -337,6 +560,9 @@ async function open() {
   error.value = ''
   logoutAllError.value = ''
   vacationStatus.value = null
+  twofa.step = 'idle'
+  twofa.code = ''
+  twofa.error = ''
   pgpMode.value = null
   pgpError.value = ''
   pgpForm.passphrase = ''
@@ -480,6 +706,7 @@ async function save() {
       signature: form.signature,
       identities: JSON.stringify(validIdentities),
       poll_interval: String(form.poll_interval),
+      undo_send_delay: String(form.undo_send_delay),
       calendar_reminder_minutes: String(form.calendar_reminder_minutes),
       read_receipt_policy: form.read_receipt_policy,
     })

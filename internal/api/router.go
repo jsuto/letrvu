@@ -6,14 +6,15 @@ import (
 	"github.com/jsuto/letrvu/internal/calendar"
 	"github.com/jsuto/letrvu/internal/contacts"
 	filtersstore "github.com/jsuto/letrvu/internal/filters"
-	templatesstore "github.com/jsuto/letrvu/internal/templates"
 	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
+	templatesstore "github.com/jsuto/letrvu/internal/templates"
+	totpstore "github.com/jsuto/letrvu/internal/totp"
 )
 
 // NewRouter wires all HTTP routes and returns the root handler.
-func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsStore *contacts.Store, calendarStore *calendar.Store, indexStore *index.Store, filtersStore *filtersstore.Store, templatesStore *templatesstore.Store, cfg ServerConfig) http.Handler {
+func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsStore *contacts.Store, calendarStore *calendar.Store, indexStore *index.Store, filtersStore *filtersstore.Store, templatesStore *templatesstore.Store, totpStore *totpstore.Store, pendingStore *totpstore.PendingStore, cfg ServerConfig) http.Handler {
 	mux := http.NewServeMux()
 	h := &handler{
 		sessions:     sessions,
@@ -23,6 +24,8 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 		index:        indexStore,
 		filters:      filtersStore,
 		templates:    templatesStore,
+		totp:         totpStore,
+		pending:      pendingStore,
 		config:       cfg,
 		folderCache:  newFolderCache(cfg.FolderCacheTTL),
 		loginLimiter: newLoginLimiter(cfg.LoginMaxAttempts, cfg.LoginWindow, cfg.LoginLockout),
@@ -37,8 +40,18 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	// Auth
 	mux.HandleFunc("POST /api/auth/login", h.login)
 	mux.HandleFunc("POST /api/auth/logout", h.logout)
+	mux.HandleFunc("POST /api/auth/totp/verify", h.totpVerify)
 	mux.HandleFunc("GET /api/auth/sessions", h.requireAuth(h.listSessions))
 	mux.HandleFunc("DELETE /api/auth/sessions", h.requireAuth(h.logoutAllSessions))
+
+	// 2FA management (requires full session)
+	mux.HandleFunc("GET /api/2fa/setup", h.requireAuth(h.totp2faSetup))
+	mux.HandleFunc("POST /api/2fa/enable", h.requireAuth(h.totp2faEnable))
+	mux.HandleFunc("POST /api/2fa/disable", h.requireAuth(h.totp2faDisable))
+	mux.HandleFunc("POST /api/2fa/recovery-codes", h.requireAuth(h.totp2faRecoveryCodes))
+
+	// Quota
+	mux.HandleFunc("GET /api/quota", h.requireAuth(h.getQuota))
 
 	// Folders
 	mux.HandleFunc("GET /api/folders", h.requireAuth(h.listFolders))
@@ -65,9 +78,11 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("POST /api/folders/{folder}/messages/read", h.requireAuth(h.markReadMessages))
 	mux.HandleFunc("POST /api/folders/{folder}/messages/spam", h.requireAuth(h.markSpam))
 	mux.HandleFunc("POST /api/folders/{folder}/messages/notspam", h.requireAuth(h.notSpam))
+	mux.HandleFunc("POST /api/folders/{folder}/messages/archive", h.requireAuth(h.archiveMessages))
 
 	// Compose
 	mux.HandleFunc("POST /api/send", h.requireAuth(h.sendMessage))
+	mux.HandleFunc("POST /api/unsubscribe", h.requireAuth(h.unsubscribe))
 	mux.HandleFunc("POST /api/draft", h.requireAuth(h.saveDraft))
 	mux.HandleFunc("POST /api/mdn", h.requireAuth(h.sendMDN))
 

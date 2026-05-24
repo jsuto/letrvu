@@ -183,6 +183,38 @@ func Migrate(db *DB) error {
 	)`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_mail_filters_owner ON mail_filters (owner, imap_host, position)`)
 
+	// TOTP / two-factor authentication tables (best-effort; already exist on upgrade).
+	for _, s := range []string{
+		`CREATE TABLE IF NOT EXISTS totp_credentials (
+			username         TEXT NOT NULL,
+			imap_host        TEXT NOT NULL,
+			encrypted_secret TEXT NOT NULL DEFAULT '',
+			enabled_at       TEXT NOT NULL DEFAULT '',
+			PRIMARY KEY (username, imap_host)
+		)`,
+		`CREATE TABLE IF NOT EXISTS totp_recovery_codes (
+			id         ` + db.PK() + `,
+			username   TEXT NOT NULL,
+			imap_host  TEXT NOT NULL,
+			code_hash  TEXT NOT NULL,
+			used_at    TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_totp_recovery ON totp_recovery_codes (username, imap_host)`,
+		`CREATE TABLE IF NOT EXISTS totp_pending (
+			id                 TEXT PRIMARY KEY,
+			username           TEXT NOT NULL,
+			imap_host          TEXT NOT NULL,
+			imap_port          INTEGER NOT NULL,
+			smtp_host          TEXT NOT NULL,
+			smtp_port          INTEGER NOT NULL,
+			encrypted_password TEXT NOT NULL,
+			user_agent         TEXT NOT NULL DEFAULT '',
+			expires_at         TEXT NOT NULL
+		)`,
+	} {
+		_, _ = db.Exec(s)
+	}
+
 	// Message index tables (best-effort; already exist on upgrade).
 	for _, s := range []string{
 		`CREATE TABLE IF NOT EXISTS message_index (

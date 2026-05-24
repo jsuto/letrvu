@@ -10,6 +10,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"strconv"
 	"strings"
@@ -20,11 +21,13 @@ import (
 	"github.com/jsuto/letrvu/internal/contacts"
 	filtersstore "github.com/jsuto/letrvu/internal/filters"
 	"github.com/jsuto/letrvu/internal/imap"
-	templatesstore "github.com/jsuto/letrvu/internal/templates"
 	"github.com/jsuto/letrvu/internal/index"
+	"github.com/jsuto/letrvu/internal/search"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
 	"github.com/jsuto/letrvu/internal/smtp"
+	templatesstore "github.com/jsuto/letrvu/internal/templates"
+	totpstore "github.com/jsuto/letrvu/internal/totp"
 )
 
 type contextKey int
@@ -77,6 +80,8 @@ type handler struct {
 	index        *index.Store
 	filters      *filtersstore.Store
 	templates    *templatesstore.Store
+	totp         *totpstore.Store
+	pending      *totpstore.PendingStore
 	config       ServerConfig
 	folderCache  *folderCache
 	loginLimiter *loginLimiter // per source IP
@@ -283,6 +288,27 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	c.Close()
 	h.loginLimiter.recordSuccess(ip)
 
+	// If 2FA is enabled for this user, issue a short-lived pending cookie and
+	// ask the frontend to prompt for the TOTP code before creating a full session.
+	if h.totp.IsEnabled(body.Username, body.IMAPHost) {
+		pendingVal, err := h.pending.Create(
+			body.IMAPHost, body.IMAPPort, body.SMTPHost, body.SMTPPort,
+			body.Username, body.Password, r.UserAgent(),
+		)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResp("could not create pending login"))
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name: "letrvu_totp_pending", Value: pendingVal, Path: "/",
+			HttpOnly: true, Secure: h.config.SecureCookies, SameSite: http.SameSiteStrictMode,
+			MaxAge: 600, // 10 minutes
+		})
+		log.Printf("audit: login_2fa_required user=%s ip=%s imap=%s", body.Username, ip, body.IMAPHost)
+		writeJSON(w, http.StatusAccepted, map[string]any{"totp_required": true})
+		return
+	}
+
 	cookieVal, err := h.sessions.Create(body.IMAPHost, body.IMAPPort, body.SMTPHost, body.SMTPPort, body.Username, body.Password, r.UserAgent())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("could not create session"))
@@ -412,6 +438,214 @@ func (h *handler) refreshFolderCache(imapHost string, imapPort int, username, pa
 	h.fetchAndCacheFolders(imapHost, imapPort, username, password, key) //nolint:errcheck
 }
 
+func (h *handler) getQuota(w http.ResponseWriter, r *http.Request) {
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+
+	quota, err := c.GetQuota("INBOX")
+	if err != nil || quota == nil {
+		// Server doesn't support QUOTA — return zeros so the UI knows to hide it.
+		writeJSON(w, http.StatusOK, map[string]int64{"used": 0, "limit": 0})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{"used": quota.UsedBytes, "limit": quota.LimitBytes})
+}
+
+// parseUnsubscribeURLs extracts the first HTTPS and mailto URLs from a
+// List-Unsubscribe header value such as:
+//
+//	<mailto:unsub@example.com?subject=unsubscribe>, <https://example.com/unsub>
+func parseUnsubscribeURLs(header string) (httpsURL, mailtoURI string) {
+	// URLs are enclosed in angle brackets, possibly separated by commas.
+	for i := 0; i < len(header); i++ {
+		if header[i] != '<' {
+			continue
+		}
+		end := strings.IndexByte(header[i+1:], '>')
+		if end < 0 {
+			break
+		}
+		u := strings.TrimSpace(header[i+1 : i+1+end])
+		i = i + 1 + end
+		switch {
+		case strings.HasPrefix(u, "https://") && httpsURL == "":
+			httpsURL = u
+		case strings.HasPrefix(u, "mailto:") && mailtoURI == "":
+			mailtoURI = u
+		}
+	}
+	return
+}
+
+// newSSRFSafeClient returns an *http.Client whose DialContext resolves the
+// target hostname and rejects any connection to a loopback, private, or
+// link-local address. The check happens at dial time — not in a separate
+// pre-flight — so there is no DNS-rebinding window between validation and use.
+// Redirects are not followed to avoid being redirected onto a private address.
+func newSSRFSafeClient() *http.Client {
+	baseDialer := &net.Dialer{Timeout: 5 * time.Second}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("ssrf-safe dial: invalid addr %q: %w", addr, err)
+			}
+			ips, err := net.DefaultResolver.LookupHost(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("ssrf-safe dial: DNS lookup %q: %w", host, err)
+			}
+			for _, a := range ips {
+				ip := net.ParseIP(a)
+				if ip == nil || ip.IsLoopback() || ip.IsPrivate() ||
+					ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+					return nil, fmt.Errorf("ssrf-safe dial: %q resolves to blocked address %s", host, a)
+				}
+			}
+			// Dial the first validated IP directly so a racing DNS change
+			// cannot redirect the connection to a private address.
+			return baseDialer.DialContext(ctx, network, net.JoinHostPort(ips[0], port))
+		},
+	}
+	return &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: transport,
+		// Never follow redirects; the redirect target is not validated.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+// parseMailtoURI extracts the recipient address, subject, and body from a
+// mailto: URI such as "mailto:unsub@example.com?subject=Unsubscribe".
+func parseMailtoURI(uri string) (addr, subject, body string) {
+	u, err := url.Parse(uri)
+	if err != nil || u.Scheme != "mailto" {
+		return
+	}
+	addr = u.Opaque
+	if addr == "" {
+		addr = u.Path
+	}
+	q := u.Query()
+	subject = q.Get("subject")
+	body = q.Get("body")
+	return
+}
+
+func (h *handler) unsubscribe(w http.ResponseWriter, r *http.Request) {
+	sess := h.sessionFrom(r)
+
+	var body struct {
+		ListUnsubscribe     string `json:"list_unsubscribe"`
+		ListUnsubscribePost string `json:"list_unsubscribe_post"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ListUnsubscribe == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("list_unsubscribe is required"))
+		return
+	}
+
+	httpsURL, mailtoURI := parseUnsubscribeURLs(body.ListUnsubscribe)
+	oneClick := strings.EqualFold(strings.TrimSpace(body.ListUnsubscribePost), "List-Unsubscribe=One-Click")
+
+	if oneClick && httpsURL != "" {
+		// RFC 8058 one-click: POST to the HTTPS URL with the prescribed body.
+		//
+		// SSRF mitigation: the destination URL comes from the email's
+		// List-Unsubscribe header and cannot be replaced with a fixed value.
+		// Safety is enforced by newSSRFSafeClient whose DialContext resolves the
+		// hostname and rejects any private/loopback/link-local IP *at connection
+		// time*, closing the DNS-rebinding window that a pre-flight check leaves
+		// open. The scheme is hardcoded to https and the URL is reconstructed
+		// from parsed components to strip userinfo/fragment.
+		// CodeQL go/request-forgery: this finding is a false positive — the
+		// runtime control in DialContext is the correct mitigation for this
+		// class of SSRF and cannot be expressed as a static allowlist.
+		// lgtm[go/request-forgery]
+		parsed, err := url.Parse(httpsURL)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+			writeJSON(w, http.StatusBadRequest, errorResp("unsubscribe URL not allowed"))
+			return
+		}
+		safeURL := (&url.URL{
+			Scheme:   "https",
+			Host:     parsed.Host,
+			Path:     parsed.EscapedPath(),
+			RawQuery: parsed.RawQuery,
+		}).String()
+		client := newSSRFSafeClient()
+		resp, err := client.PostForm(safeURL, url.Values{"List-Unsubscribe": {"One-Click"}}) //nolint:noctx
+		if err != nil {
+			log.Printf("unsubscribe one-click POST failed: %v", err)
+			writeJSON(w, http.StatusBadGateway, errorResp("unsubscribe request failed"))
+			return
+		}
+		resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			writeJSON(w, http.StatusBadGateway, errorResp("unsubscribe request failed"))
+			return
+		}
+		log.Printf("audit: unsubscribe_oneclick user=%s url=%s", sess.Username, safeURL)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+
+	if httpsURL != "" {
+		// No Post header — return the URL so the frontend can open it in a tab.
+		writeJSON(w, http.StatusOK, map[string]any{"status": "open", "url": httpsURL})
+		return
+	}
+
+	if mailtoURI != "" {
+		addr, subject, mailBody := parseMailtoURI(mailtoURI)
+		addr = strings.TrimSpace(addr)
+		if addr == "" || strings.ContainsAny(addr, "\r\n") {
+			writeJSON(w, http.StatusBadRequest, errorResp("invalid mailto URI"))
+			return
+		}
+		if _, err := mail.ParseAddress(addr); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResp("invalid mailto URI"))
+			return
+		}
+		if strings.ContainsAny(subject, "\r\n") {
+			writeJSON(w, http.StatusBadRequest, errorResp("invalid mailto subject"))
+			return
+		}
+		if subject == "" {
+			subject = "Unsubscribe"
+		}
+		// Normalize body newlines to prevent control-character injection in MIME.
+		mailBody = strings.ReplaceAll(strings.ReplaceAll(mailBody, "\r\n", "\n"), "\r", "\n")
+		smtpCfg := smtp.Config{
+			Host:     sess.SMTPHost,
+			Port:     sess.SMTPPort,
+			Username: sess.Username,
+			Password: sess.Password,
+		}
+		msg := smtp.Message{
+			From:    sess.Username,
+			To:      []string{addr},
+			Subject: subject,
+			Text:    mailBody,
+		}
+		if err := smtp.Send(smtpCfg, msg); err != nil {
+			log.Printf("unsubscribe mailto send failed: %v", err)
+			writeJSON(w, http.StatusBadGateway, errorResp("failed to send unsubscribe email"))
+			return
+		}
+		log.Printf("audit: unsubscribe_mailto user=%s to=%s", sess.Username, addr)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+
+	writeJSON(w, http.StatusBadRequest, errorResp("no supported unsubscribe method found"))
+}
+
 func (h *handler) searchGlobal(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
@@ -420,7 +654,7 @@ func (h *handler) searchGlobal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := h.sessionFrom(r)
-	msgs, err := h.index.Search(sess.Username, sess.IMAPHost, q)
+	msgs, err := h.index.Search(sess.Username, sess.IMAPHost, search.Parse(q))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -448,7 +682,7 @@ func (h *handler) listMessages(w http.ResponseWriter, r *http.Request) {
 
 	// Search mode when ?q= is provided.
 	if q := r.URL.Query().Get("q"); q != "" {
-		msgs, err := c.SearchMessages(folder, q)
+		msgs, err := c.SearchMessages(folder, search.Parse(q))
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 			return
@@ -776,6 +1010,37 @@ func (h *handler) notSpam(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "dest": inbox})
 }
 
+func (h *handler) archiveMessages(w http.ResponseWriter, r *http.Request) {
+	folder, err := url.PathUnescape(r.PathValue("folder"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid folder name"))
+		return
+	}
+	var body struct {
+		UIDs []uint32 `json:"uids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.UIDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, errorResp("uids required"))
+		return
+	}
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+
+	dest := c.ArchiveFolder()
+	if _, err := c.MoveMessages(folder, body.UIDs, dest); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	log.Printf("audit: archive user=%s ip=%s folder=%s count=%d dest=%s", sess.Username, h.clientIP(r), folder, len(body.UIDs), dest)
+	go h.index.Delete(sess.Username, sess.IMAPHost, folder, body.UIDs)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "dest": dest})
+}
+
 func (h *handler) deleteMessages(w http.ResponseWriter, r *http.Request) {
 	folder, err := url.PathUnescape(r.PathValue("folder"))
 	if err != nil {
@@ -843,6 +1108,7 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		FromEmail string   `json:"from_email"`
 		To        []string `json:"to"`
 		CC        []string `json:"cc"`
+		BCC       []string `json:"bcc,omitempty"`
 		Subject   string   `json:"subject"`
 		Text      string   `json:"text"`
 		HTML      string   `json:"html"`
@@ -853,6 +1119,11 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 			ContentType string `json:"content_type"`
 			Data        string `json:"data"` // base64-encoded
 		} `json:"attachments,omitempty"`
+		InlineImages []struct {
+			ContentID   string `json:"content_id"`
+			ContentType string `json:"content_type"`
+			Data        string `json:"data"` // base64-encoded
+		} `json:"inline_images,omitempty"`
 		PGPMimeSig *struct {
 			Signature string `json:"signature"`
 			MicAlg    string `json:"micalg"`
@@ -893,6 +1164,20 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	var inlineImages []smtp.InlineImage
+	for _, img := range body.InlineImages {
+		data, err := base64.StdEncoding.DecodeString(img.Data)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResp("invalid inline image data"))
+			return
+		}
+		inlineImages = append(inlineImages, smtp.InlineImage{
+			ContentID:   img.ContentID,
+			ContentType: img.ContentType,
+			Data:        data,
+		})
+	}
+
 	// Generate Message-ID here so the same value is used in both the SMTP
 	// DATA command and the IMAP APPEND to the Sent folder.
 	msgIDRnd, _ := randomHex(8)
@@ -903,10 +1188,12 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		EnvelopeFrom:              fromEmail, // use the selected From address for SPF alignment
 		To:                        body.To,
 		CC:                        body.CC,
+		BCC:                       body.BCC,
 		Subject:                   body.Subject,
 		Text:                      body.Text,
 		HTML:                      body.HTML,
 		Attachments:               attachments,
+		InlineImages:              inlineImages,
 		MessageID:                 msgID,
 		InReplyTo:                 body.InReplyTo,
 		References:                body.References,
@@ -1114,6 +1401,7 @@ func (h *handler) saveDraft(w http.ResponseWriter, r *http.Request) {
 		FromEmail string   `json:"from_email"`
 		To        []string `json:"to"`
 		CC        []string `json:"cc"`
+		BCC       []string `json:"bcc,omitempty"`
 		Subject   string   `json:"subject"`
 		Text      string   `json:"text"`
 		HTML      string   `json:"html"`
@@ -1159,6 +1447,7 @@ func (h *handler) saveDraft(w http.ResponseWriter, r *http.Request) {
 		From:        fromHeader,
 		To:          body.To,
 		CC:          body.CC,
+		BCC:         body.BCC,
 		Subject:     body.Subject,
 		Text:        body.Text,
 		HTML:        body.HTML,
@@ -1252,6 +1541,8 @@ func (h *handler) getSettings(w http.ResponseWriter, r *http.Request) {
 	// Inject whether ManageSieve is configured so the UI can show/hide
 	// the mail filters feature.
 	out["sieve_configured"] = h.config.SieveHost != ""
+	// Inject whether TOTP 2FA is currently active for this user.
+	out["totp_enabled"] = h.totp.IsEnabled(sess.Username, sess.IMAPHost)
 	writeJSON(w, http.StatusOK, out)
 }
 

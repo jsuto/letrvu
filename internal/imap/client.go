@@ -369,6 +369,13 @@ type MessageFull struct {
 	// DispositionNotificationTo is set when the sender requested a read receipt
 	// via the Disposition-Notification-To header (RFC 3798).
 	DispositionNotificationTo string `json:"disposition_notification_to,omitempty"`
+
+	// List-Unsubscribe headers (RFC 2369, RFC 8058). ListUnsubscribe contains
+	// the raw header value (comma-separated bracketed URLs). ListUnsubscribePost
+	// is set to "List-Unsubscribe=One-Click" when the sender supports RFC 8058
+	// one-click unsubscribe via HTTP POST.
+	ListUnsubscribe     string `json:"list_unsubscribe,omitempty"`
+	ListUnsubscribePost string `json:"list_unsubscribe_post,omitempty"`
 }
 
 // GetMessage fetches the full content of a single message by UID.
@@ -552,6 +559,14 @@ func parseMIMEBody(raw []byte, full *MessageFull) error {
 				break
 			}
 		}
+	}
+
+	// List-Unsubscribe / List-Unsubscribe-Post (RFC 2369, RFC 8058).
+	if vals := rh["list-unsubscribe"]; len(vals) > 0 {
+		full.ListUnsubscribe = strings.TrimSpace(vals[0])
+	}
+	if vals := rh["list-unsubscribe-post"]; len(vals) > 0 {
+		full.ListUnsubscribePost = strings.TrimSpace(vals[0])
 	}
 
 	for _, v := range rh["authentication-results"] {
@@ -790,14 +805,14 @@ func (c *Client) FetchMessageSummaries(folder string, uids []uint32) ([]Message,
 
 // SearchMessages runs a server-side TEXT search in folder and returns matching
 // message summaries, newest first.
-func (c *Client) SearchMessages(folder, query string) ([]Message, error) {
+// SearchMessages runs a server-side search in folder using the structured Query
+// and returns matching message summaries, newest first.
+func (c *Client) SearchMessages(folder string, q searchQuery) ([]Message, error) {
 	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
 		return nil, fmt.Errorf("select %q: %w", folder, err)
 	}
 
-	criteria := &goimap.SearchCriteria{
-		Text: []string{query},
-	}
+	criteria := buildIMAPCriteria(q)
 	searchData, err := c.c.UIDSearch(criteria, nil).Wait()
 	if err != nil {
 		return nil, fmt.Errorf("uid search: %w", err)
@@ -850,9 +865,78 @@ func (c *Client) SearchMessages(folder, query string) ([]Message, error) {
 		if buf.BodyStructure != nil {
 			msg.HasAttachments = bodyHasAttachments(buf.BodyStructure)
 		}
+		// Post-filter: has:attachment cannot be expressed as a standard IMAP
+		// criterion, so we filter after fetching the body structure.
+		if q.GetHasAttachment() && !msg.HasAttachments {
+			continue
+		}
 		result = append(result, msg)
 	}
 	return result, nil
+}
+
+// searchQuery is a minimal interface so the imap package does not import the
+// search package (avoiding a circular dependency). The handler converts
+// search.Query → searchQuery via the adapter below.
+type searchQuery interface {
+	GetText() []string
+	GetFrom() string
+	GetTo() string
+	GetSubject() string
+	GetHasAttachment() bool
+	GetIsRead() *bool
+	GetIsFlagged() *bool
+	GetBefore() time.Time
+	GetAfter() time.Time
+}
+
+// buildIMAPCriteria converts a searchQuery into a go-imap SearchCriteria.
+func buildIMAPCriteria(q searchQuery) *goimap.SearchCriteria {
+	c := &goimap.SearchCriteria{}
+
+	for _, t := range q.GetText() {
+		c.Text = append(c.Text, t)
+	}
+	if v := q.GetFrom(); v != "" {
+		c.Header = append(c.Header, goimap.SearchCriteriaHeaderField{Key: "From", Value: v})
+	}
+	if v := q.GetTo(); v != "" {
+		// Search To and Cc headers using OR.
+		toCC := goimap.SearchCriteria{
+			Or: [][2]goimap.SearchCriteria{
+				{
+					{Header: []goimap.SearchCriteriaHeaderField{{Key: "To", Value: v}}},
+					{Header: []goimap.SearchCriteriaHeaderField{{Key: "Cc", Value: v}}},
+				},
+			},
+		}
+		c.And(&toCC)
+	}
+	if v := q.GetSubject(); v != "" {
+		c.Header = append(c.Header, goimap.SearchCriteriaHeaderField{Key: "Subject", Value: v})
+	}
+	if r := q.GetIsRead(); r != nil {
+		if *r {
+			c.Flag = append(c.Flag, goimap.FlagSeen)
+		} else {
+			c.NotFlag = append(c.NotFlag, goimap.FlagSeen)
+		}
+	}
+	if f := q.GetIsFlagged(); f != nil {
+		if *f {
+			c.Flag = append(c.Flag, goimap.FlagFlagged)
+		} else {
+			c.NotFlag = append(c.NotFlag, goimap.FlagFlagged)
+		}
+	}
+	if !q.GetBefore().IsZero() {
+		c.SentBefore = q.GetBefore()
+	}
+	if !q.GetAfter().IsZero() {
+		c.SentSince = q.GetAfter()
+	}
+	// has:attachment is handled post-fetch; no IMAP criterion emitted here.
+	return c
 }
 
 // DeleteMessage sets \Deleted on the message and expunges it.
@@ -1004,6 +1088,17 @@ func (c *Client) JunkFolder() string {
 	return folder
 }
 
+// ArchiveFolder returns the name of the Archive mailbox. It checks for the
+// \Archive special-use attribute first, then falls back to common name
+// patterns, and finally returns "Archive" if nothing else matches.
+func (c *Client) ArchiveFolder() string {
+	folder := c.findSpecialFolder(goimap.MailboxAttrArchive, []string{"archive", "archives", "all mail"})
+	if folder == "" {
+		folder = "Archive"
+	}
+	return folder
+}
+
 // SaveSent appends a raw RFC 2822 message to the Sent mailbox with the \Seen
 // flag. The folder is discovered by special-use attribute first, then by
 // common name patterns; falls back to "Sent".
@@ -1036,6 +1131,34 @@ func (c *Client) appendMessage(folder string, flags []goimap.Flag, msg []byte) e
 // special-use attribute (e.g. \Drafts, \Sent). If no attribute match is found,
 // it falls back to the first mailbox whose lowercased name appears in
 // fallbackNames. Returns "" when nothing matches.
+// QuotaResult holds the STORAGE quota for a mailbox.
+// Usage and Limit are in bytes. Limit == 0 means no limit is set.
+type QuotaResult struct {
+	UsedBytes  int64
+	LimitBytes int64
+}
+
+// GetQuota fetches the STORAGE quota for mailbox via GETQUOTAROOT.
+// Returns nil, nil when the server does not support the QUOTA extension or
+// does not report a STORAGE resource for the mailbox.
+func (c *Client) GetQuota(mailbox string) (*QuotaResult, error) {
+	data, err := c.c.GetQuotaRoot(mailbox).Wait()
+	if err != nil {
+		// Server doesn't support QUOTA — treat as "not available".
+		return nil, nil //nolint:nilerr
+	}
+	for _, qd := range data {
+		if res, ok := qd.Resources[goimap.QuotaResourceStorage]; ok {
+			// RFC 9208 §4.3: STORAGE is in units of 1024-byte blocks.
+			return &QuotaResult{
+				UsedBytes:  res.Usage * 1024,
+				LimitBytes: res.Limit * 1024,
+			}, nil
+		}
+	}
+	return nil, nil // QUOTA supported but no STORAGE resource
+}
+
 func (c *Client) findSpecialFolder(attr goimap.MailboxAttr, fallbackNames []string) string {
 	mailboxes, err := c.c.List("", "*", nil).Collect()
 	if err != nil {

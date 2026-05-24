@@ -38,6 +38,7 @@
     </nav>
 
     <ComposeModal ref="composeModal" />
+    <UndoSendToast />
     <KeyboardShortcutsModal />
   </div>
 </template>
@@ -54,6 +55,7 @@ import MessageList from '../components/MessageList.vue'
 import MessageView from '../components/MessageView.vue'
 import ThreadView from '../components/ThreadView.vue'
 import ComposeModal from '../components/ComposeModal.vue'
+import UndoSendToast from '../components/UndoSendToast.vue'
 import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal.vue'
 
 const mail = useMailStore()
@@ -100,6 +102,12 @@ function onKeydown(e) {
       if (mail.currentMessage) {
         e.preventDefault()
         messageView.value?.reply()
+      }
+      break
+    case 'e':
+      if (mail.currentMessage) {
+        e.preventDefault()
+        messageView.value?.archive()
       }
       break
     case 'd':

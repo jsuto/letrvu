@@ -24,6 +24,7 @@ var allowed = map[string]bool{
 	"vacation_sieve_active":      true,
 	"trusted_image_senders":      true,
 	"read_receipt_policy":        true,
+	"undo_send_delay":            true,
 }
 
 // Store persists per-user settings keyed by (username, imap_host).

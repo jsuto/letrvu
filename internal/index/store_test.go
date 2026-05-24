@@ -6,6 +6,7 @@ import (
 
 	"github.com/jsuto/letrvu/internal/db"
 	"github.com/jsuto/letrvu/internal/imap"
+	"github.com/jsuto/letrvu/internal/search"
 )
 
 const (
@@ -105,7 +106,7 @@ func TestUpsert_IsIdempotent(t *testing.T) {
 	if err := s.Upsert(username, imapHost, "INBOX", []imap.Message{msg}); err != nil {
 		t.Fatalf("second Upsert: %v", err)
 	}
-	results, err := s.Search(username, imapHost, "Updated")
+	results, err := s.Search(username, imapHost, search.Parse("Updated"))
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -211,7 +212,7 @@ func TestSearch_MatchesSubject(t *testing.T) {
 		makeMsg(1, "Project budget Q1", "cfo@example.com", time.Now()),
 		makeMsg(2, "Team lunch Friday", "hr@example.com", time.Now()),
 	})
-	results, err := s.Search(username, imapHost, "budget")
+	results, err := s.Search(username, imapHost, search.Parse("budget"))
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -229,7 +230,7 @@ func TestSearch_MatchesSender(t *testing.T) {
 		makeMsg(1, "Hello", "alice@corp.example.com", time.Now()),
 		makeMsg(2, "Hi", "bob@other.example.com", time.Now()),
 	})
-	results, err := s.Search(username, imapHost, "corp.example")
+	results, err := s.Search(username, imapHost, search.Parse("corp.example"))
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -243,7 +244,7 @@ func TestSearch_CaseInsensitive(t *testing.T) {
 	_ = s.Upsert(username, imapHost, "INBOX", []imap.Message{
 		makeMsg(1, "Invoice OVERDUE", "billing@x.com", time.Now()),
 	})
-	results, _ := s.Search(username, imapHost, "overdue")
+	results, _ := s.Search(username, imapHost, search.Parse("overdue"))
 	if len(results) != 1 {
 		t.Errorf("case-insensitive search: want 1 result, got %d", len(results))
 	}
@@ -257,7 +258,7 @@ func TestSearch_ReturnsResultsFromMultipleFolders(t *testing.T) {
 	_ = s.Upsert(username, imapHost, "Archive", []imap.Message{
 		makeMsg(10, "Report Q2", "b@x.com", time.Now()),
 	})
-	results, _ := s.Search(username, imapHost, "Report")
+	results, _ := s.Search(username, imapHost, search.Parse("Report"))
 	if len(results) != 2 {
 		t.Errorf("want 2 cross-folder results, got %d", len(results))
 	}
@@ -268,7 +269,7 @@ func TestSearch_ResultsIncludeFolderField(t *testing.T) {
 	_ = s.Upsert(username, imapHost, "Sent", []imap.Message{
 		makeMsg(5, "My sent mail", "me@x.com", time.Now()),
 	})
-	results, _ := s.Search(username, imapHost, "sent mail")
+	results, _ := s.Search(username, imapHost, search.Parse("sent mail"))
 	if len(results) != 1 {
 		t.Fatalf("want 1 result, got %d", len(results))
 	}
@@ -285,7 +286,7 @@ func TestSearch_SortedNewestFirst(t *testing.T) {
 		makeMsg(1, "old report", "a@x.com", old),
 		makeMsg(2, "new report", "b@x.com", recent),
 	})
-	results, _ := s.Search(username, imapHost, "report")
+	results, _ := s.Search(username, imapHost, search.Parse("report"))
 	if len(results) != 2 {
 		t.Fatalf("want 2 results, got %d", len(results))
 	}
@@ -299,7 +300,7 @@ func TestSearch_NoResultsReturnsEmptySlice(t *testing.T) {
 	_ = s.Upsert(username, imapHost, "INBOX", []imap.Message{
 		makeMsg(1, "Hello world", "a@x.com", time.Now()),
 	})
-	results, err := s.Search(username, imapHost, "zzznomatch")
+	results, err := s.Search(username, imapHost, search.Parse("zzznomatch"))
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -313,7 +314,7 @@ func TestSearch_DoesNotReturnOtherUsersMessages(t *testing.T) {
 	_ = s.Upsert("alice", imapHost, "INBOX", []imap.Message{
 		makeMsg(1, "Secret report", "a@x.com", time.Now()),
 	})
-	results, _ := s.Search("bob", imapHost, "report")
+	results, _ := s.Search("bob", imapHost, search.Parse("report"))
 	if len(results) != 0 {
 		t.Errorf("bob should not see alice's messages, got %d results", len(results))
 	}
@@ -331,7 +332,7 @@ func TestUpdateRead_ChangesReadFlag(t *testing.T) {
 
 	s.UpdateRead(username, imapHost, "INBOX", 1, true)
 
-	results, _ := s.Search(username, imapHost, "Test")
+	results, _ := s.Search(username, imapHost, search.Parse("Test"))
 	if len(results) != 1 || !results[0].Read {
 		t.Error("UpdateRead should have set read=true")
 	}
@@ -345,7 +346,7 @@ func TestUpdateRead_DoesNotChangeFlaggedField(t *testing.T) {
 
 	s.UpdateRead(username, imapHost, "INBOX", 1, false)
 
-	results, _ := s.Search(username, imapHost, "Test")
+	results, _ := s.Search(username, imapHost, search.Parse("Test"))
 	if len(results) != 1 || !results[0].Flagged {
 		t.Error("UpdateRead should not have changed the flagged field")
 	}
@@ -359,7 +360,7 @@ func TestUpdateFlagged_ChangesFlaggedField(t *testing.T) {
 
 	s.UpdateFlagged(username, imapHost, "INBOX", 1, true)
 
-	results, _ := s.Search(username, imapHost, "Test")
+	results, _ := s.Search(username, imapHost, search.Parse("Test"))
 	if len(results) != 1 || !results[0].Flagged {
 		t.Error("UpdateFlagged should have set flagged=true")
 	}
@@ -373,7 +374,7 @@ func TestUpdateFlagged_DoesNotChangeReadField(t *testing.T) {
 
 	s.UpdateFlagged(username, imapHost, "INBOX", 1, false)
 
-	results, _ := s.Search(username, imapHost, "Test")
+	results, _ := s.Search(username, imapHost, search.Parse("Test"))
 	if len(results) != 1 || !results[0].Read {
 		t.Error("UpdateFlagged should not have changed the read field")
 	}

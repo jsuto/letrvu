@@ -297,6 +297,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Calendar outgoing invites (attach iCal to composed email)
 - [ ] Multi-account support
 - [x] Move messages between folders
+- [x] Forward as .eml attachment
 - [x] Show message source
 - [x] Flag messages
 - [x] Multiple identities
@@ -312,7 +313,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Mobile-responsive layout
 - [x] Mark as spam (move to Junk folder)
 - [x] Cross-folder search
-- [ ] Undo send (configurable delay before SMTP submission)
+- [x] Undo send (configurable delay before SMTP submission)
 - [x] Vacation / autoresponder (Sieve)
 - [x] Contact groups / distribution lists
 - [x] Per-sender image trust ("always show images from this sender")
@@ -325,7 +326,19 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Spam/phishing warning banners (suspicious sender analysis)
 - [x] Read receipts (send and suppress)
 - [x] Message templates / canned responses
+- [x] Two-factor authentication (TOTP / authenticator app)
+- [x] One-click unsubscribe (List-Unsubscribe header)
+- [x] Mailbox quota display (IMAP GETQUOTA)
+- [x] Inline image paste in compose
+- [ ] Scheduled send
+- [ ] Snooze / remind me later
+- [ ] Mbox/EML mailbox import-export
 - [ ] S/MIME support
+- [x] BCC field in compose
+- [x] Archive action (one-click, keyboard shortcut)
+- [x] Advanced search syntax (from:, to:, subject:, has:attachment, date ranges)
+- [ ] OAuth2 / XOAUTH2 authentication (Gmail / Google Workspace support)
+- [ ] i18n / localization
 
 ## Releasing
 
@@ -355,6 +368,32 @@ The workflow will build Linux binaries (`amd64`, `arm64`), run a Docker Scout CV
 | `Esc` | Close modal / overlay (compose, attachment preview, message source) |
 
 Shortcuts are disabled when focus is inside a text field or the compose window is open.
+
+## Advanced search syntax
+
+The search box supports structured queries in addition to plain text:
+
+| Syntax | Description | Example |
+|--------|-------------|---------|
+| `from:value` | Sender contains value | `from:alice` |
+| `to:value` | Any recipient contains value | `to:bob` |
+| `cc:value` | CC field contains value (maps to `to:`) | `cc:team` |
+| `subject:value` | Subject contains value | `subject:invoice` |
+| `has:attachment` | Has one or more file attachments | `has:attachment` |
+| `is:unread` | Only unread messages | `is:unread` |
+| `is:read` | Only read messages | `is:read` |
+| `is:flagged` / `is:starred` | Only flagged messages | `is:flagged` |
+| `before:YYYY-MM-DD` | Sent before the given date | `before:2024-01-01` |
+| `after:YYYY-MM-DD` | Sent on or after the given date | `after:2023-06-01` |
+| bare words | Match subject or sender | `budget report` |
+
+Multiple tokens are ANDed together. Values containing spaces must be quoted:
+
+```
+from:"alice smith" subject:"Q4 report" is:unread
+from:billing has:attachment after:2024-01-01
+subject:invoice before:2024-06-01 is:unread
+```
 
 ## License
 

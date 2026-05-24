@@ -3,7 +3,7 @@
     v-if="visible"
     class="fixed inset-0 z-[100] flex items-end justify-end p-8 pointer-events-none"
   >
-    <div class="pointer-events-auto w-[560px] max-h-[620px] flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl" @paste="onPasteImage">
+    <div class="pointer-events-auto w-[560px] max-h-[620px] flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
 
       <!-- Header -->
       <div class="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
@@ -25,8 +25,17 @@
             <option v-for="(opt, i) in fromOptions" :key="i" :value="i">{{ opt.label }}</option>
           </select>
         </div>
-        <AddressInput v-model="form.to" placeholder="To" />
+        <div class="flex items-center border-b border-[var(--color-border)]">
+          <AddressInput v-model="form.to" placeholder="To" class="flex-1" />
+          <button
+            v-if="!showBcc"
+            @click="showBcc = true"
+            class="shrink-0 px-3 py-2 text-[12px] text-[var(--color-text-muted)] bg-transparent border-none cursor-pointer hover:text-[var(--color-text)]"
+            title="Add BCC"
+          >BCC</button>
+        </div>
         <AddressInput v-model="form.cc" placeholder="CC" />
+        <AddressInput v-if="showBcc" v-model="form.bcc" placeholder="BCC" />
         <input
           v-model="form.subject"
           type="text"
@@ -203,12 +212,14 @@ import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
+import Image from '@tiptap/extension-image'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import { useCalendarStore } from '../stores/calendar'
 import { usePGPStore } from '../stores/pgp'
 import { useTemplatesStore } from '../stores/templates'
 import { apiFetch } from '../api'
+import { useUndoSend } from '../composables/useUndoSend'
 import AddressInput from './AddressInput.vue'
 
 const mail = useMailStore()
@@ -216,6 +227,7 @@ const settings = useSettingsStore()
 const calendarStore = useCalendarStore()
 const pgp = usePGPStore()
 const templatesStore = useTemplatesStore()
+const undoSend = useUndoSend()
 
 const visible = ref(false)
 const sending = ref(false)
@@ -225,8 +237,9 @@ const error = ref('')
 const textareaEl = ref(null)
 const fileInputEl = ref(null)
 const plainTextMode = ref(false)
+const showBcc = ref(false)
 
-const form = reactive({ fromIndex: 0, to: '', cc: '', subject: '', plainBody: '' })
+const form = reactive({ fromIndex: 0, to: '', cc: '', bcc: '', subject: '', plainBody: '' })
 const attachments = ref([])
 const originalDraft = ref(null)
 const inReplyTo = ref('')
@@ -255,9 +268,41 @@ const editor = useEditor({
     Link.configure({ openOnClick: false, autolink: true }),
     Underline,
     Placeholder.configure({ placeholder: 'Write your message…' }),
+    Image.configure({ inline: true, allowBase64: true }),
   ],
   content: '',
   onUpdate: () => scheduleAutoSave(),
+  editorProps: {
+    handlePaste(_, event) {
+      const items = event.clipboardData?.items
+      if (!items) return false
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (!file) continue
+          const reader = new FileReader()
+          reader.onload = e => editor.value?.chain().focus().setImage({ src: e.target.result }).run()
+          reader.readAsDataURL(file)
+          return true
+        }
+      }
+      return false
+    },
+    handleDrop(_, event) {
+      const files = event.dataTransfer?.files
+      if (!files?.length) return false
+      let handled = false
+      for (const file of Array.from(files)) {
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader()
+          reader.onload = e => editor.value?.chain().focus().setImage({ src: e.target.result }).run()
+          reader.readAsDataURL(file)
+          handled = true
+        }
+      }
+      return handled
+    },
+  },
 })
 
 onBeforeUnmount(() => editor.value?.destroy())
@@ -321,7 +366,7 @@ function scheduleAutoSave() {
   autoSaveTimer = setTimeout(() => { if (visible.value) saveDraft() }, 30_000)
 }
 
-watch(() => [form.to, form.cc, form.subject, form.plainBody], scheduleAutoSave)
+watch(() => [form.to, form.cc, form.bcc, form.subject, form.plainBody], scheduleAutoSave)
 
 // Resolve a public key for a single recipient: stored contact key first, WKD fallback.
 async function resolveRecipientKey(email) {
@@ -331,11 +376,12 @@ async function resolveRecipientKey(email) {
 }
 
 // Check whether all recipients have a resolvable public key (enables Encrypt toggle).
-watch(() => [form.to, form.cc], async () => {
+watch(() => [form.to, form.cc, form.bcc], async () => {
   if (!pgp.isUnlocked) return
   const recipients = [
     ...form.to.split(',').map(s => s.trim()).filter(Boolean),
     ...form.cc.split(',').map(s => s.trim()).filter(Boolean),
+    ...form.bcc.split(',').map(s => s.trim()).filter(Boolean),
   ]
   if (!recipients.length) { pgpEncryptable.value = false; return }
   const results = await Promise.all(recipients.map(r => resolveRecipientKey(r)))
@@ -351,6 +397,7 @@ function buildPayload() {
     from_email: selectedFrom?.email ?? '',
     to: form.to.split(',').map(s => s.trim()).filter(Boolean),
     cc: form.cc.split(',').map(s => s.trim()).filter(Boolean),
+    bcc: form.bcc.split(',').map(s => s.trim()).filter(Boolean) || undefined,
     subject: form.subject,
     attachments: attachments.value.length ? attachments.value : undefined,
     disposition_notification_to: requestReadReceipt.value ? (selectedFrom?.email ?? '') : undefined,
@@ -358,7 +405,26 @@ function buildPayload() {
   if (plainTextMode.value) {
     return { ...base, text: form.plainBody }
   }
-  return { ...base, html: editor.value?.getHTML() ?? '' }
+
+  // Extract inline images (data: URIs) from the editor HTML before sending.
+  // Replace each with a cid: reference and pass the binary data separately so
+  // the backend can build a proper multipart/related MIME structure.
+  const inlineImages = []
+  const html = (editor.value?.getHTML() ?? '').replace(
+    /src="data:([^;]+);base64,([^"]+)"/g,
+    (_, contentType, b64) => {
+      const n = inlineImages.length + 1
+      const cid = `img${String(n).padStart(3, '0')}@letrvu`
+      inlineImages.push({ content_id: cid, content_type: contentType, data: b64 })
+      return `src="cid:${cid}"`
+    }
+  )
+
+  return {
+    ...base,
+    html,
+    inline_images: inlineImages.length ? inlineImages : undefined,
+  }
 }
 
 async function saveDraft() {
@@ -443,7 +509,8 @@ async function open(prefill = {}) {
   inReplyTo.value = _irt || ''
   references.value = _refs || ''
 
-  Object.assign(form, { fromIndex, to: '', cc: '', subject: '', plainBody: '', ...rest, fromIndex })
+  showBcc.value = !!(rest.bcc)
+  Object.assign(form, { fromIndex, to: '', cc: '', bcc: '', subject: '', plainBody: '', ...rest, fromIndex })
 
   attachments.value = _a ? [..._a] : []
   pendingInvite.value = _inv ?? null
@@ -480,6 +547,7 @@ async function open(prefill = {}) {
 function close() {
   clearTimeout(autoSaveTimer)
   visible.value = false
+  showBcc.value = false
   error.value = ''
   pgpError.value = ''
   draftSaved.value = false
@@ -513,25 +581,6 @@ function onFileInput(e) {
   e.target.value = '' // reset so the same file can be picked again
 }
 
-function onPasteImage(e) {
-  const items = e.clipboardData?.items
-  if (!items) return
-  for (const item of items) {
-    if (!item.type.startsWith('image/')) continue
-    const file = item.getAsFile()
-    if (!file) continue
-    e.preventDefault()
-    const ext = item.type.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png'
-    const filename = `image-${Date.now()}.${ext}`
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const base64 = ev.target.result.split(',')[1]
-      attachments.value.push({ filename, content_type: item.type, data: base64 })
-    }
-    reader.readAsDataURL(file)
-    break // one image per paste
-  }
-}
 
 // --- event picker ---
 
@@ -626,13 +675,56 @@ async function send() {
       }
     }
 
-    await mail.sendMessage({
+    const finalPayload = {
       ...payload,
       in_reply_to: inReplyTo.value || undefined,
       references: references.value || undefined,
-    })
-    if (originalDraft.value) {
-      await mail.deleteMessage(originalDraft.value.folder, originalDraft.value.uid).catch(() => {})
+    }
+    const draft = originalDraft.value
+
+    const delay = settings.undoSendDelay
+    if (delay > 0) {
+      // Capture enough state to reopen compose if the user hits Undo.
+      // We save the raw editor HTML (not the processed payload HTML which has
+      // cid: references instead of data: URIs) so images are editable again.
+      const undoState = {
+        to: form.to,
+        cc: form.cc,
+        bcc: form.bcc,
+        subject: form.subject,
+        html: editor.value?.getHTML() ?? '',
+        _fromEmail: fromOptions.value[form.fromIndex]?.email,
+        _inReplyTo: inReplyTo.value || undefined,
+        _references: references.value || undefined,
+        _attachments: attachments.value.length ? [...attachments.value] : undefined,
+        _noSignature: true, // signature already in the body — don't add another
+        _draftFolder: draft?.folder,
+        _draftUid: draft?.uid,
+      }
+      close()
+      sending.value = false
+      try {
+        await undoSend.schedule(delay)
+      } catch (e) {
+        if (e.message === 'undo') {
+          open(undoState)
+        }
+        return
+      }
+      // Timer expired — send for real (outside sending spinner, best-effort)
+      try {
+        await mail.sendMessage(finalPayload)
+        if (draft) await mail.deleteMessage(draft.folder, draft.uid).catch(() => {})
+      } catch {
+        // Reopen compose so the user doesn't lose their message
+        open(undoState)
+      }
+      return
+    }
+
+    await mail.sendMessage(finalPayload)
+    if (draft) {
+      await mail.deleteMessage(draft.folder, draft.uid).catch(() => {})
       originalDraft.value = null
     }
     close()
@@ -672,6 +764,7 @@ defineExpose({ open, close, visible })
 .ProseMirror ul, .ProseMirror ol { padding-left: 1.5em; margin: 0.3em 0; }
 .ProseMirror hr { border: none; border-top: 0.5px solid var(--color-border); margin: 0.8em 0; }
 .ProseMirror a { color: var(--color-teal); }
+.ProseMirror img { max-width: 100%; height: auto; display: inline-block; }
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   color: var(--color-text-muted);

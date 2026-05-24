@@ -28,7 +28,25 @@ export const useAuthStore = defineStore('auth', () => {
         password,
       }),
     })
+    if (res.status === 202) {
+      const data = await res.json()
+      if (data.totp_required) return { totpRequired: true }
+    }
     if (!res.ok) throw new Error('Login failed')
+    loggedIn.value = true
+    return { totpRequired: false }
+  }
+
+  async function verifyTOTP(code) {
+    const res = await apiFetch('/api/auth/totp/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || 'Invalid code')
+    }
     loggedIn.value = true
   }
 
@@ -37,5 +55,5 @@ export const useAuthStore = defineStore('auth', () => {
     loggedIn.value = false
   }
 
-  return { loggedIn, checkSession, login, logout }
+  return { loggedIn, checkSession, login, verifyTOTP, logout }
 })
