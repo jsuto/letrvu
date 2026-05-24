@@ -2,73 +2,74 @@
   <div class="h-full overflow-y-auto">
     <ConfirmDialog
       v-model:visible="confirmDeleteVisible"
-      :message="`Delete &quot;${mail.currentMessage?.subject || '(no subject)'}&quot;?`"
+      :message="t('messageView.deleteConfirm', { subject: mail.currentMessage?.subject || t('threadView.noSubject') })"
       @confirm="doDelete"
     />
     <div v-if="!mail.currentMessage" class="h-full flex items-center justify-center text-[var(--color-text-muted)] text-sm">
-      <p>Select a message to read</p>
+      <p>{{ $t('messageView.selectMessage') }}</p>
     </div>
     <div v-else class="px-4 py-5 md:px-8 md:py-8 md:max-w-[80%] md:mx-auto">
       <button
         class="md:hidden mb-4 flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] bg-none border-none cursor-pointer p-0 hover:text-[var(--color-text)]"
         @click="setMobilePanel('list')"
-      >← Back</button>
+        :title="$t('messageView.backTitle')"
+      >{{ $t('messageView.back') }}</button>
       <div class="mb-6">
         <h2 class="text-lg font-medium mb-2">{{ mail.currentMessage.subject || '(no subject)' }}</h2>
         <div class="text-sm text-[var(--color-text-muted)] mb-4 flex gap-4 items-center">
           <span>{{ mail.currentMessage.from }}</span>
-          <span v-if="isExternal" class="inline-block px-1.5 py-px rounded text-[11px] font-medium tracking-wide whitespace-nowrap bg-[#fff4e5] border border-[#e09030] text-[#7a4000]" title="Sender is outside your organisation — authentication passed">External</span>
-          <span v-else-if="isUnverified" class="inline-block px-1.5 py-px rounded text-[11px] font-medium tracking-wide whitespace-nowrap bg-[#f2f2f2] border border-[#b0b0b0] text-[#555]" title="Sender appears to be outside your organisation — no authentication results available">Unverified</span>
+          <span v-if="isExternal" class="inline-block px-1.5 py-px rounded text-[11px] font-medium tracking-wide whitespace-nowrap bg-[#fff4e5] border border-[#e09030] text-[#7a4000]" :title="$t('messageView.externalTitle')">{{ $t('messageView.external') }}</span>
+          <span v-else-if="isUnverified" class="inline-block px-1.5 py-px rounded text-[11px] font-medium tracking-wide whitespace-nowrap bg-[#f2f2f2] border border-[#b0b0b0] text-[#555]" :title="$t('messageView.unverifiedTitle')">{{ $t('messageView.unverified') }}</span>
           <button class="bg-none border border-[var(--color-border)] rounded px-1.5 py-px cursor-pointer text-sm font-semibold text-teal hover:bg-[var(--color-teal-light)]" title="Save to address book" @click="saveContact">+</button>
           <span>{{ formatDate(mail.currentMessage.date) }}</span>
         </div>
         <div class="flex gap-2 flex-wrap">
           <button v-if="isDraftsFolder" @click="editDraft"
-            class="px-3.5 py-1.5 border border-teal rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-teal font-medium">Edit Draft</button>
+            class="px-3.5 py-1.5 border border-teal rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-teal font-medium">{{ $t('messageView.editDraft') }}</button>
           <div v-if="!isDraftsFolder" class="relative" ref="replyWrapEl">
-            <button @click="replyMenuOpen = !replyMenuOpen" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Reply ▾</button>
+            <button @click="replyMenuOpen = !replyMenuOpen" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">{{ $t('messageView.reply') }} ▾</button>
             <ul v-if="replyMenuOpen" class="absolute top-[calc(100%+4px)] left-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 min-w-[160px] z-50 shadow-lg">
-              <li @click="reply" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">Reply</li>
-              <li @click="replyAll" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">Reply All</li>
+              <li @click="reply" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">{{ $t('messageView.reply') }}</li>
+              <li @click="replyAll" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">{{ $t('messageView.replyAll') }}</li>
             </ul>
           </div>
           <div v-if="!isDraftsFolder" class="relative" ref="forwardWrapEl">
-            <button @click="forwardMenuOpen = !forwardMenuOpen" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Forward ▾</button>
+            <button @click="forwardMenuOpen = !forwardMenuOpen" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">{{ $t('messageView.forward') }} ▾</button>
             <ul v-if="forwardMenuOpen" class="absolute top-[calc(100%+4px)] left-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 min-w-[160px] z-50 shadow-lg">
-              <li @click="forwardInline" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">Inline</li>
-              <li @click="forwardAsAttachment" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">As .eml attachment</li>
+              <li @click="forwardInline" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">{{ $t('messageView.forwardInline') }}</li>
+              <li @click="forwardAsAttachment" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">{{ $t('messageView.forwardAsAttachment') }}</li>
             </ul>
           </div>
           <button
             :class="['px-3.5 py-1.5 border rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]', mail.currentMessage.flagged ? 'text-orange-400 border-[#f5c6a0] bg-[#fef9ec]' : 'border-[var(--color-border)]']"
-            :title="mail.currentMessage.flagged ? 'Unflag' : 'Flag as important'"
+            :title="mail.currentMessage.flagged ? $t('messageView.unflagTitle') : $t('messageView.flagTitle')"
             @click="toggleFlagged"
-          >{{ mail.currentMessage.flagged ? '★' : '☆' }} Flag</button>
+          >{{ mail.currentMessage.flagged ? '★' : '☆' }} {{ $t('messageView.flag') }}</button>
           <button
-            :title="mail.currentMessage.read ? 'Mark as unread' : 'Mark as read'"
+            :title="mail.currentMessage.read ? $t('messageView.markUnreadTitle') : $t('messageView.markReadTitle')"
             @click="toggleRead"
             class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]"
-          >{{ mail.currentMessage.read ? 'Mark unread' : 'Mark read' }}</button>
+          >{{ mail.currentMessage.read ? $t('messageView.markUnread') : $t('messageView.markRead') }}</button>
           <div class="relative" ref="moveWrapEl">
-            <button @click="moveOpen = !moveOpen" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Move to…</button>
+            <button @click="moveOpen = !moveOpen" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">{{ $t('messageView.moveTo') }}</button>
             <ul v-if="moveOpen" class="absolute top-[calc(100%+4px)] left-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 min-w-[160px] max-h-[260px] overflow-y-auto z-50 shadow-lg">
               <li v-for="f in otherFolders" :key="f.name" @click="moveTo(f.name)" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">{{ f.name }}</li>
             </ul>
           </div>
-          <button v-if="!isJunkFolder" @click="spam" title="Move to Junk" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Spam</button>
-          <button v-if="isJunkFolder" @click="notSpam" title="Move to Inbox" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Not spam</button>
-          <button v-if="!isDraftsFolder && !isArchiveFolder" @click="archive" title="Archive (E)" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Archive</button>
+          <button v-if="!isJunkFolder" @click="spam" :title="$t('messageView.spamTitle')" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">{{ $t('messageView.spam') }}</button>
+          <button v-if="isJunkFolder" @click="notSpam" :title="$t('messageView.notSpamTitle')" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">{{ $t('messageView.notSpam') }}</button>
+          <button v-if="!isDraftsFolder && !isArchiveFolder" @click="archive" :title="$t('messageView.archiveTitle')" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">{{ $t('messageView.archive') }}</button>
           <button
             v-if="!isDraftsFolder && mail.currentMessage.list_unsubscribe"
             @click="doUnsubscribe"
             :disabled="unsubState === 'loading'"
             :class="['px-3.5 py-1.5 border rounded-md bg-[var(--color-surface)] text-sm cursor-pointer',
               unsubState === 'done' ? 'border-teal text-teal' : 'border-[var(--color-border)] hover:bg-[var(--color-bg)]']"
-            title="Unsubscribe from this mailing list"
-          >{{ unsubState === 'done' ? 'Unsubscribed ✓' : 'Unsubscribe' }}</button>
-          <button @click="confirmDeleteVisible = true" class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]">Delete</button>
-          <button @click="printMessage" title="Print message" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer ml-auto hover:bg-[var(--color-bg)]">🖨</button>
-          <button @click="viewSource" title="View message source" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs font-mono cursor-pointer hover:bg-[var(--color-bg)]">&lt;/&gt;</button>
+            :title="$t('messageView.unsubscribeTitle')"
+          >{{ unsubState === 'done' ? $t('messageView.unsubscribed') : $t('messageView.unsubscribe') }}</button>
+          <button @click="confirmDeleteVisible = true" class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]">{{ $t('messageView.delete') }}</button>
+          <button @click="printMessage" :title="$t('messageView.printTitle')" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer ml-auto hover:bg-[var(--color-bg)]">🖨</button>
+          <button @click="viewSource" :title="$t('messageView.sourceTitle')" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs font-mono cursor-pointer hover:bg-[var(--color-bg)]">&lt;/&gt;</button>
         </div>
       </div>
 
@@ -76,8 +77,8 @@
       <div v-if="sourceOpen" class="fixed inset-0 bg-black/45 z-[200] flex items-center justify-center" @click.self="sourceOpen = false">
         <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl flex flex-col shadow-2xl" style="width: min(860px, 92vw); height: min(640px, 85vh)">
           <div class="flex items-center gap-2 px-3.5 py-2.5 border-b border-[var(--color-border)] shrink-0">
-            <span class="text-sm font-medium flex-1">Message source</span>
-            <button @click="copySource" class="px-3 py-1 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:bg-[var(--color-bg)]">{{ sourceCopied ? 'Copied!' : 'Copy' }}</button>
+            <span class="text-sm font-medium flex-1">{{ $t('messageView.messageSource') }}</span>
+            <button @click="copySource" class="px-3 py-1 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:bg-[var(--color-bg)]">{{ sourceCopied ? $t('messageView.copied') : $t('messageView.copy') }}</button>
             <button @click="sourceOpen = false" class="px-3 py-1 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:bg-[var(--color-bg)]">✕</button>
           </div>
           <pre class="flex-1 overflow-auto m-0 px-4 py-3.5 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all text-[var(--color-text)]">{{ sourceText }}</pre>
@@ -86,36 +87,36 @@
 
       <!-- Calendar invite banner -->
       <div v-if="mail.currentMessage.ical_invite" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[var(--color-teal-light)] border border-teal">
-        <span>📅 This message contains a calendar invite.</span>
+        <span>{{ $t('messageView.calendarInvite') }}</span>
         <button @click="addToCalendar" :disabled="inviteAdding"
           class="px-3.5 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed ml-auto">
-          {{ inviteAdded ? 'Added ✓' : inviteAdding ? 'Adding…' : 'Add to calendar' }}
+          {{ inviteAdded ? $t('messageView.added') : inviteAdding ? $t('messageView.adding') : $t('messageView.addToCalendar') }}
         </button>
       </div>
 
       <!-- Remote image blocking banner -->
       <div v-if="hasRemoteImages && !showRemoteImages" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fef9ec] border border-[#e6b84a] text-[#7a5800]">
-        <span>🛡 Remote images blocked to protect your privacy.</span>
+        <span>{{ $t('messageView.remoteImagesBlocked') }}</span>
         <div class="flex gap-2 ml-auto">
           <button @click="trustSender"
-            class="px-3.5 py-1.5 bg-transparent border border-[#e6b84a] rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[#e6b84a]/20">Always show from this sender</button>
+            class="px-3.5 py-1.5 bg-transparent border border-[#e6b84a] rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[#e6b84a]/20">{{ $t('messageView.alwaysShowFromSender') }}</button>
           <button @click="showRemoteImages = true"
-            class="px-3.5 py-1.5 bg-[#e6b84a] text-[#3a2800] border-none rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[#d4a830]">Show images</button>
+            class="px-3.5 py-1.5 bg-[#e6b84a] text-[#3a2800] border-none rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[#d4a830]">{{ $t('messageView.showImages') }}</button>
         </div>
       </div>
 
       <!-- Read receipt request banner -->
       <div v-if="showMdnBanner" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[var(--color-teal-light)] border border-teal text-[var(--color-text)]">
-        <span>✉ The sender requested a read receipt.</span>
+        <span>{{ $t('messageView.readReceiptRequest') }}</span>
         <div class="flex gap-2 ml-auto">
           <button @click="sendMDN"
             :disabled="mdnSending || mdnSent"
             class="px-3.5 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer whitespace-nowrap disabled:opacity-60">
-            {{ mdnSent ? 'Sent ✓' : mdnSending ? 'Sending…' : 'Send receipt' }}
+            {{ mdnSent ? $t('messageView.receiptSent') : mdnSending ? $t('messageView.receiptSending') : $t('messageView.sendReceipt') }}
           </button>
           <button @click="dismissMDN"
             class="px-3.5 py-1.5 border border-teal text-[var(--color-text)] rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">
-            Don't send
+            {{ $t('messageView.dontSend') }}
           </button>
         </div>
       </div>
@@ -129,7 +130,7 @@
       <div v-if="authMediumRisk && !authWarnDismissed" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fff4e5] border border-[#e09030] text-[#7a4000]">
         <span>⚠ Suspicious message — {{ authMediumReasons }}.</span>
         <button @click="authWarnDismissed = true"
-          class="ml-auto shrink-0 px-2 py-0.5 border border-[#e09030] rounded text-xs cursor-pointer bg-transparent hover:bg-[#e09030]/20">Dismiss</button>
+          class="ml-auto shrink-0 px-2 py-0.5 border border-[#e09030] rounded text-xs cursor-pointer bg-transparent hover:bg-[#e09030]/20">{{ $t('messageView.dismiss') }}</button>
       </div>
 
       <!-- PGP banner -->
@@ -137,7 +138,7 @@
         <span>{{ pgpStatus.icon }} {{ pgpStatus.label }}</span>
         <button v-if="pgpStatus.action" @click="pgpStatus.action.fn" :disabled="pgpBusy"
           class="ml-auto px-3 py-1 border border-current rounded-md text-xs cursor-pointer disabled:opacity-50 whitespace-nowrap">
-          {{ pgpBusy ? 'Working…' : pgpStatus.action.label }}
+          {{ pgpBusy ? $t('messageView.working') : pgpStatus.action.label }}
         </button>
       </div>
 
@@ -163,7 +164,7 @@
       </template>
 
       <div v-if="mail.currentMessage.attachments?.length" class="mt-6 border-t border-[var(--color-border)] pt-4">
-        <p class="text-xs text-[var(--color-text-muted)] mb-2">Attachments</p>
+        <p class="text-xs text-[var(--color-text-muted)] mb-2">{{ $t('messageView.attachments') }}</p>
         <div
           v-for="att in mail.currentMessage.attachments"
           :key="att.index"
@@ -174,7 +175,7 @@
             @click="isPreviewable(att) && openPreview(att)"
           >📎 {{ att.filename || 'attachment' }}</span>
           <span class="text-[var(--color-text-muted)]">{{ formatSize(att.size) }}</span>
-          <a :href="attachmentUrl(att)" download class="text-[var(--color-text-muted)] no-underline text-sm px-0.5 hover:text-[var(--color-text)]" title="Download">↓</a>
+          <a :href="attachmentUrl(att)" download class="text-[var(--color-text-muted)] no-underline text-sm px-0.5 hover:text-[var(--color-text)]" :title="$t('messageView.download')">↓</a>
         </div>
       </div>
 
@@ -183,7 +184,7 @@
         <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl flex flex-col shadow-2xl" style="width: min(900px, 94vw); height: min(700px, 90vh)">
           <div class="flex items-center gap-2 px-3.5 py-2.5 border-b border-[var(--color-border)] shrink-0">
             <span class="text-sm font-medium flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{{ previewAtt.filename || 'attachment' }}</span>
-            <a :href="attachmentUrl(previewAtt)" download class="px-3 py-1 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer no-underline text-[var(--color-text)] hover:bg-[var(--color-bg)]">Download</a>
+            <a :href="attachmentUrl(previewAtt)" download class="px-3 py-1 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer no-underline text-[var(--color-text)] hover:bg-[var(--color-bg)]">{{ $t('messageView.download') }}</a>
             <button @click="previewAtt = null" class="px-3 py-1 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer hover:bg-[var(--color-bg)]">✕</button>
           </div>
           <div class="flex-1 overflow-auto flex items-center justify-center p-3 bg-[var(--color-bg)] rounded-b-xl">
@@ -208,6 +209,7 @@
 
 <script setup>
 import { inject, ref, watch, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { useMailStore } from '../stores/mail'
 import { useContactsStore } from '../stores/contacts'
@@ -219,6 +221,7 @@ import { extractEmail, buildReplyAllCc, isPreviewable } from '../utils/mail.js'
 import { apiFetch } from '../api'
 import ConfirmDialog from './ConfirmDialog.vue'
 
+const { t } = useI18n()
 const mail = useMailStore()
 const contacts = useContactsStore()
 const calendar = useCalendarStore()

@@ -6,17 +6,17 @@
     <button
       class="w-full py-2 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer mb-4 hover:opacity-90"
       @click="compose?.open()"
-    >Compose</button>
+    >{{ $t('folders.compose') }}</button>
     <RouterLink
       to="/contacts"
       class="block px-2 py-1.5 rounded-md text-sm text-[var(--color-text)] no-underline mb-2 hover:bg-[var(--color-teal-light)]"
       active-class="!bg-[var(--color-teal-light)] font-medium"
-    >Contacts</RouterLink>
+    >{{ $t('folders.contacts') }}</RouterLink>
     <RouterLink
       to="/calendar"
       class="block px-2 py-1.5 rounded-md text-sm text-[var(--color-text)] no-underline mb-2 hover:bg-[var(--color-teal-light)]"
       active-class="!bg-[var(--color-teal-light)] font-medium"
-    >Calendar</RouterLink>
+    >{{ $t('folders.calendar') }}</RouterLink>
     <ul v-if="visibleFolders.length" class="list-none flex-1 overflow-y-auto mt-1">
       <li
         v-for="folder in visibleFolders"
@@ -44,7 +44,7 @@
         >{{ folder.unseen }}</span>
       </li>
     </ul>
-    <p v-else class="text-xs text-[var(--color-text-muted)] px-2 flex-1">Loading folders…</p>
+    <p v-else class="text-xs text-[var(--color-text-muted)] px-2 flex-1">{{ $t('folders.loadingFolders') }}</p>
     <div v-if="mail.quota.limit > 0" class="mb-2 px-1">
       <div class="w-full h-1.5 rounded-full bg-[var(--color-border)] overflow-hidden">
         <div
@@ -58,7 +58,7 @@
     <button
       class="w-full py-1.5 px-2 bg-none border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text-muted)] cursor-pointer mb-2 text-left hover:bg-[var(--color-teal-light)] hover:text-[var(--color-text)]"
       @click="manageFoldersModal?.open()"
-    >Manage folders</button>
+    >{{ $t('folders.manageFolders') }}</button>
     <div class="flex items-center justify-between pt-3 border-t border-[var(--color-border)] mt-3">
       <button
         class="bg-none border-none cursor-pointer text-sm text-[var(--color-text-muted)] px-1.5 py-1 rounded hover:bg-[var(--color-teal-light)]"
@@ -72,9 +72,9 @@
       >⚙</button>
       <button
         class="bg-none border-none cursor-pointer text-sm text-[var(--color-text-muted)] px-1.5 py-1 rounded hover:bg-[var(--color-teal-light)]"
-        title="Sign out"
+        :title="$t('folders.signOut')"
         @click="handleLogout"
-      >Sign out</button>
+      >{{ $t('folders.signOut') }}</button>
     </div>
   </nav>
   <SettingsModal ref="settingsModal" />

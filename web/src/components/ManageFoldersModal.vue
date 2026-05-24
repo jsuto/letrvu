@@ -4,7 +4,7 @@
 
       <!-- Header -->
       <div class="flex justify-between items-center px-4 py-3 border-b border-[var(--color-border)] text-sm font-medium shrink-0">
-        <span>Manage folders</span>
+        <span>{{ $t('manageFolders.title') }}</span>
         <button @click="close" class="bg-none border-none text-lg cursor-pointer text-[var(--color-text-muted)]">×</button>
       </div>
 
@@ -14,18 +14,18 @@
         <!-- Create new folder -->
         <div class="flex gap-2 mb-3 flex-wrap">
           <select v-model="newParent" class="px-2 py-1.5 border border-[var(--color-border)] rounded-md text-xs bg-[var(--color-bg)] text-[var(--color-text)] outline-none max-w-[140px] focus:border-teal">
-            <option value="">— Top level —</option>
+            <option value="">{{ $t('manageFolders.topLevel') }}</option>
             <option v-for="f in mail.folders" :key="f.name" :value="f.name">{{ f.name }}</option>
           </select>
           <input
             v-model="newName"
             type="text"
-            placeholder="New folder name…"
+            :placeholder="$t('manageFolders.newFolderPlaceholder')"
             class="flex-1 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal"
             @keydown.enter="create"
           />
           <button @click="create" :disabled="!newName.trim() || !!busy"
-            class="px-3.5 py-1.5 bg-teal text-white border-none rounded-md text-sm cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">Create</button>
+            class="px-3.5 py-1.5 bg-teal text-white border-none rounded-md text-sm cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">{{ $t('manageFolders.create') }}</button>
         </div>
 
         <p v-if="error" class="text-xs text-red-600 mb-2.5">{{ error }}</p>
@@ -51,17 +51,17 @@
                   ]"
                   :disabled="busy === folder.name"
                   @click="toggle(folder)"
-                  :title="folder.subscribed ? 'Unsubscribe (hide from sidebar)' : 'Subscribe (show in sidebar)'"
-                >{{ busy === folder.name ? '…' : folder.subscribed ? 'Subscribed' : 'Subscribe' }}</button>
+                  :title="folder.subscribed ? $t('manageFolders.unsubscribeTitle') : $t('manageFolders.subscribeTitle')"
+                >{{ busy === folder.name ? '…' : folder.subscribed ? $t('manageFolders.subscribed') : $t('manageFolders.subscribe') }}</button>
                 <button
                   class="px-1.5 py-1 border border-[var(--color-border)] rounded text-sm bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Rename"
+                  :title="$t('common.edit')"
                   :disabled="!!busy"
                   @click="startRename(folder.name)"
                 >✎</button>
                 <button
                   class="px-1.5 py-1 border border-[var(--color-border)] rounded text-sm bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-red-600 hover:border-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Delete folder"
+                  :title="$t('common.delete')"
                   :disabled="!!busy"
                   @click="confirmDelete(folder.name)"
                 >🗑</button>
@@ -78,8 +78,8 @@
                 ref="renameInputEl"
               />
               <div class="flex gap-1 items-center">
-                <button class="px-1.5 py-1 border border-[var(--color-border)] rounded text-sm bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)] disabled:opacity-40" title="Save" :disabled="!renameValue.trim()" @click="commitRename">✓</button>
-                <button class="px-1.5 py-1 border border-[var(--color-border)] rounded text-sm bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]" title="Cancel" @click="cancelRename">✕</button>
+                <button class="px-1.5 py-1 border border-[var(--color-border)] rounded text-sm bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)] disabled:opacity-40" :title="$t('common.save')" :disabled="!renameValue.trim()" @click="commitRename">✓</button>
+                <button class="px-1.5 py-1 border border-[var(--color-border)] rounded text-sm bg-transparent cursor-pointer text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]" :title="$t('common.cancel')" @click="cancelRename">✕</button>
               </div>
             </template>
           </li>
@@ -90,7 +90,7 @@
 
   <ConfirmDialog
     :visible="!!deleteTarget"
-    :message="`Delete &quot;${deleteTarget}&quot; and all its messages?`"
+    :message="t('manageFolders.deleteMessage', { name: deleteTarget })"
     :busy="!!busy"
     @confirm="doDelete"
     @cancel="deleteTarget = null"
@@ -100,9 +100,11 @@
 
 <script setup>
 import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useMailStore } from '../stores/mail'
 import ConfirmDialog from './ConfirmDialog.vue'
 
+const { t } = useI18n()
 const mail = useMailStore()
 const visible = ref(false)
 const busy = ref(null)
@@ -157,7 +159,7 @@ async function toggle(folder) {
       await mail.subscribeFolder(folder.name)
     }
   } catch {
-    error.value = `Could not update subscription for "${folder.name}".`
+    error.value = t('manageFolders.errorSubscription', { name: folder.name })
   } finally {
     busy.value = null
   }
@@ -181,7 +183,7 @@ async function create() {
     newName.value = ''
     newParent.value = ''
   } catch (e) {
-    error.value = `Could not create folder: ${e.message}`
+    error.value = t('manageFolders.errorCreate', { error: e.message })
   } finally {
     busy.value = null
   }
@@ -212,7 +214,7 @@ async function commitRename() {
     renamingFolder.value = null
     renameValue.value = ''
   } catch (e) {
-    error.value = `Could not rename folder: ${e.message}`
+    error.value = t('manageFolders.errorRename', { error: e.message })
   } finally {
     busy.value = null
   }
@@ -231,7 +233,7 @@ async function doDelete() {
     await mail.deleteFolder(deleteTarget.value)
     deleteTarget.value = null
   } catch (e) {
-    error.value = `Could not delete folder: ${e.message}`
+    error.value = t('manageFolders.errorDelete', { error: e.message })
   } finally {
     busy.value = null
   }

@@ -25,6 +25,7 @@ var allowed = map[string]bool{
 	"trusted_image_senders":      true,
 	"read_receipt_policy":        true,
 	"undo_send_delay":            true,
+	"locale":                     true,
 }
 
 // Store persists per-user settings keyed by (username, imap_host).

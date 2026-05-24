@@ -4,16 +4,16 @@
 
       <!-- Header -->
       <div class="flex justify-between items-center px-4 py-3 border-b border-[var(--color-border)] text-sm font-medium shrink-0">
-        <span>Mail Filters</span>
+        <span>{{ $t('filters.title') }}</span>
         <button @click="close" class="bg-none border-none text-lg cursor-pointer text-[var(--color-text-muted)]">×</button>
       </div>
 
       <!-- Filter list -->
       <div class="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2">
 
-        <p v-if="!filters.loaded && !filtersStore.filters.length" class="text-xs text-[var(--color-text-muted)]">Loading…</p>
+        <p v-if="!filters.loaded && !filtersStore.filters.length" class="text-xs text-[var(--color-text-muted)]">{{ $t('filters.loading') }}</p>
         <p v-else-if="filtersStore.filters.length === 0 && !showEditor" class="text-xs text-[var(--color-text-muted)]">
-          No filters yet. Filters run in order — first matching filter wins.
+          {{ $t('filters.noFilters') }}
         </p>
 
         <!-- Filter rows -->
@@ -32,7 +32,7 @@
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-[var(--color-text)] truncate">{{ f.name }}</span>
-              <span v-if="!f.enabled" class="text-[10px] text-[var(--color-text-muted)] border border-[var(--color-border)] rounded px-1">disabled</span>
+              <span v-if="!f.enabled" class="text-[10px] text-[var(--color-text-muted)] border border-[var(--color-border)] rounded px-1">{{ $t('filters.disabled') }}</span>
             </div>
             <div class="text-xs text-[var(--color-text-muted)] mt-0.5">
               {{ summaryText(f) }}
@@ -42,84 +42,84 @@
           <!-- Actions -->
           <div class="flex items-center gap-1 shrink-0">
             <button @click="startEdit(f)"
-              class="px-2 py-1 text-xs border border-[var(--color-border)] rounded bg-[var(--color-surface)] cursor-pointer hover:border-teal hover:text-teal">Edit</button>
+              class="px-2 py-1 text-xs border border-[var(--color-border)] rounded bg-[var(--color-surface)] cursor-pointer hover:border-teal hover:text-teal">{{ $t('filters.edit') }}</button>
             <button @click="removeFilter(f.id)"
-              class="px-2 py-1 text-xs border border-[var(--color-border)] rounded bg-[var(--color-surface)] cursor-pointer text-[var(--color-text-muted)] hover:border-red-500 hover:text-red-600">Delete</button>
+              class="px-2 py-1 text-xs border border-[var(--color-border)] rounded bg-[var(--color-surface)] cursor-pointer text-[var(--color-text-muted)] hover:border-red-500 hover:text-red-600">{{ $t('filters.delete') }}</button>
           </div>
         </div>
 
         <!-- Inline editor -->
         <div v-if="showEditor" class="flex flex-col gap-3 p-3 border border-[var(--color-border)] rounded-md bg-[var(--color-bg)]">
-          <p class="text-xs font-medium text-[var(--color-text)]">{{ editId ? 'Edit filter' : 'New filter' }}</p>
+          <p class="text-xs font-medium text-[var(--color-text)]">{{ editId ? $t('filters.editFilter') : $t('filters.newFilter') }}</p>
 
           <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
-            Name
-            <input v-model="form.name" type="text" placeholder="e.g. Invoices"
+            {{ $t('filters.name') }}
+            <input v-model="form.name" type="text" :placeholder="$t('filters.namePlaceholder')"
               class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-teal" />
           </label>
 
           <div class="flex items-center gap-2 text-sm">
-            <span class="text-[var(--color-text)]">Match</span>
+            <span class="text-[var(--color-text)]">{{ $t('filters.match') }}</span>
             <select v-model="form.match_all"
               class="px-2 py-1.5 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-teal">
-              <option :value="true">all conditions (AND)</option>
-              <option :value="false">any condition (OR)</option>
+              <option :value="true">{{ $t('filters.matchAll') }}</option>
+              <option :value="false">{{ $t('filters.matchAny') }}</option>
             </select>
           </div>
 
           <!-- Conditions -->
           <div class="flex flex-col gap-1.5">
-            <div class="text-xs text-[var(--color-text-muted)] font-medium">Conditions</div>
+            <div class="text-xs text-[var(--color-text-muted)] font-medium">{{ $t('filters.conditions') }}</div>
             <div v-for="(c, i) in form.conditions" :key="i" class="flex items-center gap-1.5 flex-wrap">
               <select v-model="c.field"
                 class="px-2 py-1.5 border border-[var(--color-border)] rounded-md text-xs bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-teal">
-                <option value="subject">Subject</option>
-                <option value="from">From</option>
-                <option value="to">To</option>
-                <option value="body">Body</option>
-                <option value="has_attachment">Has attachment</option>
+                <option value="subject">{{ $t('filters.fieldSubject') }}</option>
+                <option value="from">{{ $t('filters.fieldFrom') }}</option>
+                <option value="to">{{ $t('filters.fieldTo') }}</option>
+                <option value="body">{{ $t('filters.fieldBody') }}</option>
+                <option value="has_attachment">{{ $t('filters.fieldHasAttachment') }}</option>
               </select>
               <select v-model="c.op"
                 class="px-2 py-1.5 border border-[var(--color-border)] rounded-md text-xs bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-teal">
-                <option value="contains">contains</option>
-                <option value="not_contains">does not contain</option>
-                <option value="equals">equals</option>
-                <option value="not_equals">does not equal</option>
-                <option value="matches">matches regex</option>
+                <option value="contains">{{ $t('filters.opContains') }}</option>
+                <option value="not_contains">{{ $t('filters.opNotContains') }}</option>
+                <option value="equals">{{ $t('filters.opEquals') }}</option>
+                <option value="not_equals">{{ $t('filters.opNotEquals') }}</option>
+                <option value="matches">{{ $t('filters.opMatches') }}</option>
               </select>
-              <input v-if="c.field !== 'has_attachment'" v-model="c.value" type="text" placeholder="value"
+              <input v-if="c.field !== 'has_attachment'" v-model="c.value" type="text" :placeholder="$t('filters.valuePlaceholder')"
                 class="flex-1 min-w-[100px] px-2 py-1.5 border border-[var(--color-border)] rounded-md text-xs bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-teal" />
               <button @click="removeCondition(i)"
                 class="px-1.5 py-1 border border-[var(--color-border)] rounded text-xs cursor-pointer text-[var(--color-text-muted)] hover:border-red-500 hover:text-red-600 bg-transparent">×</button>
             </div>
             <button @click="addCondition"
-              class="self-start text-xs border border-dashed border-[var(--color-border)] rounded-md px-2 py-1 cursor-pointer text-[var(--color-text-muted)] bg-transparent hover:border-teal hover:text-teal">+ Add condition</button>
+              class="self-start text-xs border border-dashed border-[var(--color-border)] rounded-md px-2 py-1 cursor-pointer text-[var(--color-text-muted)] bg-transparent hover:border-teal hover:text-teal">{{ $t('filters.addCondition') }}</button>
           </div>
 
           <!-- Actions -->
           <div class="flex flex-col gap-1.5">
-            <div class="text-xs text-[var(--color-text-muted)] font-medium">Actions</div>
+            <div class="text-xs text-[var(--color-text-muted)] font-medium">{{ $t('filters.actions') }}</div>
             <div v-for="(a, i) in form.actions" :key="i" class="flex items-center gap-1.5">
               <select v-model="a.type"
                 class="px-2 py-1.5 border border-[var(--color-border)] rounded-md text-xs bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-teal">
-                <option value="move">Move to folder</option>
-                <option value="mark_read">Mark as read</option>
-                <option value="mark_flagged">Mark as flagged</option>
-                <option value="delete">Delete (discard)</option>
-                <option value="stop">Stop processing</option>
+                <option value="move">{{ $t('filters.actionMove') }}</option>
+                <option value="mark_read">{{ $t('filters.actionMarkRead') }}</option>
+                <option value="mark_flagged">{{ $t('filters.actionMarkFlagged') }}</option>
+                <option value="delete">{{ $t('filters.actionDelete') }}</option>
+                <option value="stop">{{ $t('filters.actionStop') }}</option>
               </select>
-              <input v-if="a.type === 'move'" v-model="a.value" type="text" placeholder="Folder name"
+              <input v-if="a.type === 'move'" v-model="a.value" type="text" :placeholder="$t('filters.folderPlaceholder')"
                 class="flex-1 px-2 py-1.5 border border-[var(--color-border)] rounded-md text-xs bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-teal" />
               <button @click="removeAction(i)"
                 class="px-1.5 py-1 border border-[var(--color-border)] rounded text-xs cursor-pointer text-[var(--color-text-muted)] hover:border-red-500 hover:text-red-600 bg-transparent">×</button>
             </div>
             <button @click="addAction"
-              class="self-start text-xs border border-dashed border-[var(--color-border)] rounded-md px-2 py-1 cursor-pointer text-[var(--color-text-muted)] bg-transparent hover:border-teal hover:text-teal">+ Add action</button>
+              class="self-start text-xs border border-dashed border-[var(--color-border)] rounded-md px-2 py-1 cursor-pointer text-[var(--color-text-muted)] bg-transparent hover:border-teal hover:text-teal">{{ $t('filters.addAction') }}</button>
           </div>
 
           <!-- Enabled toggle -->
           <div class="flex items-center gap-2">
-            <span class="text-sm text-[var(--color-text)]">Enabled</span>
+            <span class="text-sm text-[var(--color-text)]">{{ $t('filters.enabled') }}</span>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="form.enabled" class="sr-only peer" />
               <div class="w-9 h-5 bg-[var(--color-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal"></div>
@@ -131,10 +131,10 @@
           <div class="flex gap-2">
             <button @click="saveFilter" :disabled="editorBusy"
               class="px-4 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer disabled:opacity-60">
-              {{ editorBusy ? 'Saving…' : 'Save filter' }}
+              {{ editorBusy ? $t('filters.saving') : $t('filters.saveFilter') }}
             </button>
             <button @click="cancelEdit"
-              class="px-3 py-1.5 border border-[var(--color-border)] rounded-md text-xs cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)]">Cancel</button>
+              class="px-3 py-1.5 border border-[var(--color-border)] rounded-md text-xs cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)]">{{ $t('filters.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -143,7 +143,7 @@
       <div class="px-4 py-3 border-t border-[var(--color-border)] flex items-center gap-3 shrink-0">
         <button v-if="!showEditor" @click="startNew"
           class="px-4 py-1.5 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer">
-          + New filter
+          {{ $t('filters.newFilterBtn') }}
         </button>
       </div>
     </div>
@@ -152,7 +152,10 @@
 
 <script setup>
 import { ref, reactive, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFiltersStore } from '../stores/filters'
+
+const { t } = useI18n()
 
 const props = defineProps({
   visible: Boolean,
@@ -236,15 +239,15 @@ function removeAction(i) {
 
 async function saveFilter() {
   if (!form.name.trim()) {
-    editorError.value = 'Name is required'
+    editorError.value = t('filters.nameRequired')
     return
   }
   if (form.conditions.length === 0) {
-    editorError.value = 'At least one condition is required'
+    editorError.value = t('filters.conditionRequired')
     return
   }
   if (form.actions.length === 0) {
-    editorError.value = 'At least one action is required'
+    editorError.value = t('filters.actionRequired')
     return
   }
   editorError.value = ''

@@ -7,7 +7,7 @@
       <form v-if="step === 'credentials'" @submit.prevent="handleLogin">
         <template v-if="!serverLocked">
           <div class="mb-4">
-            <label class="block text-xs text-[var(--color-text-muted)] mb-1">IMAP server</label>
+            <label class="block text-xs text-[var(--color-text-muted)] mb-1">{{ $t('login.imapServer') }}</label>
             <div class="flex gap-2">
               <input v-model="form.imapHost" type="text" placeholder="mail.example.com" required
                 class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
@@ -16,7 +16,7 @@
             </div>
           </div>
           <div class="mb-4">
-            <label class="block text-xs text-[var(--color-text-muted)] mb-1">SMTP server</label>
+            <label class="block text-xs text-[var(--color-text-muted)] mb-1">{{ $t('login.smtpServer') }}</label>
             <div class="flex gap-2">
               <input v-model="form.smtpHost" type="text" placeholder="smtp.example.com" required
                 class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
@@ -26,30 +26,30 @@
           </div>
         </template>
         <div class="mb-4">
-          <label class="block text-xs text-[var(--color-text-muted)] mb-1">Email address</label>
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">{{ $t('login.emailAddress') }}</label>
           <input v-model="form.username" type="email" placeholder="you@example.com" required
             class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
         </div>
         <div class="mb-4">
-          <label class="block text-xs text-[var(--color-text-muted)] mb-1">Password</label>
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">{{ $t('login.password') }}</label>
           <input v-model="form.password" type="password" placeholder="••••••••" required
             class="w-full px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] focus:border-teal" />
         </div>
         <p v-if="error" class="text-xs text-red-600 mt-2">{{ error }}</p>
         <button type="submit" :disabled="loading"
           class="w-full mt-5 py-2.5 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
-          {{ loading ? 'Connecting…' : 'Sign in' }}
+          {{ loading ? $t('login.connecting') : $t('login.signIn') }}
         </button>
       </form>
 
       <!-- Step 2: TOTP verification -->
       <form v-else-if="step === 'totp'" @submit.prevent="handleTOTP">
         <p class="text-sm text-[var(--color-text-muted)] mb-6 text-center">
-          Enter the code from your authenticator app.
+          {{ $t('login.totpPrompt') }}
         </p>
         <div class="mb-4">
           <label class="block text-xs text-[var(--color-text-muted)] mb-1">
-            {{ useRecovery ? 'Recovery code' : 'Authenticator code' }}
+            {{ useRecovery ? $t('login.recoveryCode') : $t('login.authenticatorCode') }}
           </label>
           <input
             v-if="!useRecovery"
@@ -78,16 +78,16 @@
         <p v-if="error" class="text-xs text-red-600 mt-2">{{ error }}</p>
         <button type="submit" :disabled="loading"
           class="w-full mt-4 py-2.5 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
-          {{ loading ? 'Verifying…' : 'Verify' }}
+          {{ loading ? $t('login.verifying') : $t('login.verify') }}
         </button>
         <div class="mt-4 flex justify-between text-xs text-[var(--color-text-muted)]">
           <button type="button" @click="backToCredentials"
             class="cursor-pointer hover:text-[var(--color-text)] bg-transparent border-none p-0">
-            ← Back
+            {{ $t('login.backBtn') }}
           </button>
           <button type="button" @click="toggleRecovery"
             class="cursor-pointer hover:text-[var(--color-text)] bg-transparent border-none p-0">
-            {{ useRecovery ? 'Use authenticator app' : 'Use recovery code' }}
+            {{ useRecovery ? $t('login.useAuthApp') : $t('login.useRecovery') }}
           </button>
         </div>
       </form>
@@ -98,9 +98,11 @@
 <script setup>
 import { ref, reactive, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
 import { apiFetch } from '../api'
 
+const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 
@@ -148,7 +150,7 @@ async function handleLogin() {
       router.push('/mail')
     }
   } catch {
-    error.value = 'Could not connect. Check your server details and credentials.'
+    error.value = t('login.loginError')
   } finally {
     loading.value = false
   }
@@ -161,7 +163,7 @@ async function handleTOTP() {
     await auth.verifyTOTP(totpCode.value)
     router.push('/mail')
   } catch (e) {
-    error.value = e.message || 'Invalid code. Try again.'
+    error.value = e.message || t('login.totpError')
     totpCode.value = ''
     await nextTick()
     totpInput.value?.focus()

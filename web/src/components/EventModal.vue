@@ -4,33 +4,33 @@
 
       <!-- Header -->
       <div class="flex justify-between items-center px-4 py-3 border-b border-[var(--color-border)] text-sm font-medium">
-        <span>{{ isEdit ? 'Edit event' : 'New event' }}</span>
+        <span>{{ isEdit ? $t('eventModal.editTitle') : $t('eventModal.newTitle') }}</span>
         <button @click="close" class="bg-none border-none text-lg cursor-pointer text-[var(--color-text-muted)]">×</button>
       </div>
 
       <!-- Body -->
       <div class="px-4 py-4 overflow-y-auto flex-1 flex flex-col gap-3">
         <div class="flex flex-col gap-1">
-          <label class="text-xs text-[var(--color-text-muted)]">Title</label>
-          <input v-model="form.title" type="text" placeholder="Event title"
+          <label class="text-xs text-[var(--color-text-muted)]">{{ $t('eventModal.titleLabel') }}</label>
+          <input v-model="form.title" type="text" :placeholder="$t('eventModal.titlePlaceholder')"
             class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
         </div>
         <div class="flex flex-col gap-1">
           <label class="flex items-center gap-1.5 text-sm text-[var(--color-text)] cursor-pointer">
             <input v-model="form.all_day" type="checkbox" class="w-auto" />
-            All-day event
+            {{ $t('eventModal.allDay') }}
           </label>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div class="flex flex-col gap-1">
-            <label class="text-xs text-[var(--color-text-muted)]">Start</label>
+            <label class="text-xs text-[var(--color-text-muted)]">{{ $t('eventModal.start') }}</label>
             <input v-model="form.starts_date" type="date"
               class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
             <input v-if="!form.all_day" v-model="form.starts_time" type="time"
               class="mt-1.5 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-xs text-[var(--color-text-muted)]">End</label>
+            <label class="text-xs text-[var(--color-text-muted)]">{{ $t('eventModal.end') }}</label>
             <input v-model="form.ends_date" type="date"
               class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
             <input v-if="!form.all_day" v-model="form.ends_time" type="time"
@@ -38,31 +38,31 @@
           </div>
         </div>
         <div class="flex flex-col gap-1">
-          <label class="text-xs text-[var(--color-text-muted)]">Location</label>
-          <input v-model="form.location" type="text" placeholder="Optional location"
+          <label class="text-xs text-[var(--color-text-muted)]">{{ $t('eventModal.location') }}</label>
+          <input v-model="form.location" type="text" :placeholder="$t('eventModal.locationPlaceholder')"
             class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border focus:border-teal" />
         </div>
         <div class="flex flex-col gap-1">
-          <label class="text-xs text-[var(--color-text-muted)]">Description</label>
-          <textarea v-model="form.description" rows="3" placeholder="Optional description"
+          <label class="text-xs text-[var(--color-text-muted)]">{{ $t('eventModal.description') }}</label>
+          <textarea v-model="form.description" rows="3" :placeholder="$t('eventModal.descriptionPlaceholder')"
             class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none w-full box-border resize-y focus:border-teal" />
         </div>
 
         <!-- Recurrence -->
         <div class="flex flex-col gap-1">
-          <label class="text-xs text-[var(--color-text-muted)]">Repeat</label>
+          <label class="text-xs text-[var(--color-text-muted)]">{{ $t('eventModal.repeat') }}</label>
           <select v-model="form.rrule_freq" @change="onFreqChange"
             class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none bg-[var(--color-surface)] text-[var(--color-text)] w-full box-border focus:border-teal">
-            <option value="">Does not repeat</option>
-            <option value="DAILY">Daily</option>
-            <option value="WEEKLY">Weekly</option>
-            <option value="MONTHLY">Monthly</option>
-            <option value="YEARLY">Yearly</option>
+            <option value="">{{ $t('eventModal.noRepeat') }}</option>
+            <option value="DAILY">{{ $t('eventModal.daily') }}</option>
+            <option value="WEEKLY">{{ $t('eventModal.weekly') }}</option>
+            <option value="MONTHLY">{{ $t('eventModal.monthly') }}</option>
+            <option value="YEARLY">{{ $t('eventModal.yearly') }}</option>
           </select>
         </div>
         <template v-if="form.rrule_freq">
           <div class="flex flex-col gap-1">
-            <label class="text-xs text-[var(--color-text-muted)] mb-1">Every</label>
+            <label class="text-xs text-[var(--color-text-muted)] mb-1">{{ $t('eventModal.every') }}</label>
             <div class="flex items-center gap-2">
               <input v-model.number="form.rrule_interval" type="number" min="1" max="99"
                 class="w-14 text-center px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal" />
@@ -70,7 +70,7 @@
             </div>
           </div>
           <div v-if="form.rrule_freq === 'WEEKLY'" class="flex flex-col gap-1">
-            <label class="text-xs text-[var(--color-text-muted)]">On</label>
+            <label class="text-xs text-[var(--color-text-muted)]">{{ $t('eventModal.on') }}</label>
             <div class="flex gap-1 flex-wrap">
               <button
                 v-for="d in weekdays"
@@ -87,25 +87,25 @@
             </div>
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-xs text-[var(--color-text-muted)]">Ends</label>
+            <label class="text-xs text-[var(--color-text-muted)]">{{ $t('eventModal.ends') }}</label>
             <div class="flex flex-col gap-1.5">
               <label class="flex items-center gap-1.5 text-sm cursor-pointer">
-                <input type="radio" v-model="form.rrule_end" value="never" class="w-auto" /> Never
+                <input type="radio" v-model="form.rrule_end" value="never" class="w-auto" /> {{ $t('eventModal.never') }}
               </label>
               <label class="flex items-center gap-1.5 text-sm cursor-pointer">
                 <input type="radio" v-model="form.rrule_end" value="count" class="w-auto" />
-                After
+                {{ $t('eventModal.after') }}
                 <input
                   v-model.number="form.rrule_count"
                   type="number" min="1" max="999"
                   class="w-14 text-center px-1.5 py-1 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal"
                   @focus="form.rrule_end = 'count'"
                 />
-                occurrence{{ form.rrule_count === 1 ? '' : 's' }}
+                {{ form.rrule_count === 1 ? $t('eventModal.occurrence') : $t('eventModal.occurrences') }}
               </label>
               <label class="flex items-center gap-1.5 text-sm cursor-pointer">
                 <input type="radio" v-model="form.rrule_end" value="until" class="w-auto" />
-                On
+                {{ $t('eventModal.on') }}
                 <input
                   type="date"
                   v-model="form.rrule_until"
@@ -115,13 +115,13 @@
               </label>
             </div>
           </div>
-          <div v-if="isEdit" class="text-[11px] text-[var(--color-text-muted)] bg-[var(--color-teal-light)] border border-teal rounded px-2 py-1">Editing changes all occurrences.</div>
+          <div v-if="isEdit" class="text-[11px] text-[var(--color-text-muted)] bg-[var(--color-teal-light)] border border-teal rounded px-2 py-1">{{ $t('eventModal.editingAllOccurrences') }}</div>
         </template>
       </div>
 
       <ConfirmDialog
         :visible="confirmDeleteVisible"
-        message="Delete this event?"
+        :message="$t('eventModal.deleteEvent')"
         @confirm="doDelete"
         @cancel="confirmDeleteVisible = false"
         @update:visible="confirmDeleteVisible = $event"
@@ -131,16 +131,16 @@
       <div class="px-4 py-2.5 border-t border-[var(--color-border)] flex items-center gap-2.5">
         <button v-if="isEdit"
           class="px-3.5 py-2 bg-none border border-red-200 rounded-md text-sm text-red-600 cursor-pointer"
-          @click="confirmDeleteVisible = true">Delete</button>
+          @click="confirmDeleteVisible = true">{{ $t('eventModal.delete') }}</button>
         <span class="flex-1" />
         <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
         <button v-if="isEdit" @click="sendInvite"
           class="px-3.5 py-2 bg-none border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] cursor-pointer hover:border-teal hover:text-teal">
-          Send as invite
+          {{ $t('eventModal.sendAsInvite') }}
         </button>
         <button @click="save" :disabled="saving"
           class="px-5 py-2 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
-          {{ saving ? 'Saving…' : 'Save' }}
+          {{ saving ? $t('eventModal.saving') : $t('eventModal.save') }}
         </button>
       </div>
     </div>
@@ -149,8 +149,11 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useCalendarStore } from '../stores/calendar'
 import ConfirmDialog from './ConfirmDialog.vue'
+
+const { t } = useI18n()
 
 const emit = defineEmits(['saved', 'deleted', 'send-invite'])
 const cal = useCalendarStore()
@@ -169,7 +172,7 @@ const weekdays = [
 ]
 
 const freqLabel = computed(() => {
-  const map = { DAILY: 'day(s)', WEEKLY: 'week(s)', MONTHLY: 'month(s)', YEARLY: 'year(s)' }
+  const map = { DAILY: t('eventModal.dayUnit'), WEEKLY: t('eventModal.weekUnit'), MONTHLY: t('eventModal.monthUnit'), YEARLY: t('eventModal.yearUnit') }
   return map[form.rrule_freq] ?? ''
 })
 
@@ -285,7 +288,7 @@ function close() {
 
 async function save() {
   if (!form.title.trim()) {
-    error.value = 'Title is required.'
+    error.value = t('eventModal.titleRequired')
     return
   }
   saving.value = true

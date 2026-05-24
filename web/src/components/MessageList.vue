@@ -2,7 +2,7 @@
   <div class="h-full flex flex-col">
     <ConfirmDialog
       v-model:visible="confirmBulkDeleteVisible"
-      :message="`Delete ${mail.selectedUids.size} selected ${mail.selectedUids.size === 1 ? 'message' : 'messages'}?`"
+      :message="mail.selectedUids.size === 1 ? $t('messageList.deleteConfirmSingle') : $t('messageList.deleteConfirmPlural', { count: mail.selectedUids.size })"
       @confirm="doBulkDelete"
     />
     <div class="px-4 py-2.5 border-b border-[var(--color-border)] flex items-center gap-2">
@@ -11,7 +11,7 @@
         <input
           v-model="query"
           type="search"
-          placeholder="Search… (from: to: subject: has:attachment is:unread)"
+          :placeholder="$t('messageList.searchPlaceholder')"
           class="flex-1 px-2 py-1.5 border border-[var(--color-border)] rounded-md text-xs outline-none bg-[var(--color-bg)] focus:border-teal"
           @input="onSearchInput"
         />
@@ -24,8 +24,8 @@
               : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border-[var(--color-border)]',
           ]"
           @click="searchAllFolders = !searchAllFolders"
-          title="Search all folders"
-        >All</button>
+          :title="$t('messageList.searchAllTitle')"
+        >{{ $t('messageList.searchAll') }}</button>
       </form>
     </div>
 
@@ -35,19 +35,19 @@
         <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" class="[accent-color:var(--color-teal)] cursor-pointer" />
       </label>
       <span class="text-teal font-medium whitespace-nowrap mr-1">{{ mail.selectedUids.size }}</span>
-      <button class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkMarkRead(true)" title="Mark as read">✓</button>
-      <button class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkMarkRead(false)" title="Mark as unread">◯</button>
+      <button class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkMarkRead(true)" :title="$t('messageList.markRead')">✓</button>
+      <button class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkMarkRead(false)" :title="$t('messageList.markUnread')">◯</button>
       <div class="relative" ref="bulkMoveWrapEl">
-        <button class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkMoveOpen = !bulkMoveOpen" title="Move to…">⤷</button>
+        <button class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkMoveOpen = !bulkMoveOpen" :title="$t('messageList.moveTo')">⤷</button>
         <ul v-if="bulkMoveOpen" class="absolute top-[calc(100%+4px)] left-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 min-w-[160px] max-h-60 overflow-y-auto z-50 shadow-lg">
           <li v-for="f in otherFolders" :key="f.name" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]" @click="bulkMove(f.name)">{{ f.name }}</li>
         </ul>
       </div>
-      <button v-if="!isJunkFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkSpam" title="Mark as spam">⊘ Spam</button>
-      <button v-if="isJunkFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkNotSpam" title="Move to Inbox">Not spam</button>
-      <button v-if="!isArchiveFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkArchive" title="Archive">Archive</button>
-      <button class="px-2.5 py-1 border border-red-300 rounded bg-transparent text-xs cursor-pointer text-red-600 whitespace-nowrap hover:bg-red-600 hover:text-white hover:border-red-600" @click="confirmBulkDeleteVisible = true" title="Delete">🗑</button>
-      <button class="px-2.5 py-1 border-transparent border rounded bg-transparent text-xs cursor-pointer text-[var(--color-text-muted)] whitespace-nowrap ml-auto hover:text-[var(--color-text)]" @click="mail.clearSelection()" title="Clear selection">✕</button>
+      <button v-if="!isJunkFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkSpam" :title="$t('messageList.spam')">⊘ {{ $t('messageList.spam') }}</button>
+      <button v-if="isJunkFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkNotSpam" :title="$t('messageList.notSpam')">{{ $t('messageList.notSpam') }}</button>
+      <button v-if="!isArchiveFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkArchive" :title="$t('messageList.archive')">{{ $t('messageList.archive') }}</button>
+      <button class="px-2.5 py-1 border border-red-300 rounded bg-transparent text-xs cursor-pointer text-red-600 whitespace-nowrap hover:bg-red-600 hover:text-white hover:border-red-600" @click="confirmBulkDeleteVisible = true" :title="$t('messageList.delete')">🗑</button>
+      <button class="px-2.5 py-1 border-transparent border rounded bg-transparent text-xs cursor-pointer text-[var(--color-text-muted)] whitespace-nowrap ml-auto hover:text-[var(--color-text)]" @click="mail.clearSelection()" :title="$t('messageList.clearSelection')">✕</button>
     </div>
 
     <div v-if="mail.loading" class="py-8 px-4 text-[var(--color-text-muted)] text-sm text-center">Loading…</div>
@@ -102,6 +102,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useMailStore } from '../stores/mail'
 import ConfirmDialog from './ConfirmDialog.vue'
 

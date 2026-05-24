@@ -4,15 +4,15 @@
       <button
         class="md:hidden bg-none border border-[var(--color-border)] rounded-md px-2.5 py-1 text-sm cursor-pointer text-[var(--color-text-muted)] shrink-0 hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
         @click="setMobilePanel('list')"
-        title="Back to messages"
+        :title="$t('threadView.backToMessages')"
       >←</button>
       <button
         class="hidden md:block bg-none border border-[var(--color-border)] rounded-md px-2.5 py-1 text-sm cursor-pointer text-[var(--color-text-muted)] shrink-0 hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
         @click="mail.currentThread = null"
-        title="Back to message"
+        :title="$t('threadView.backToMessage')"
       >←</button>
-      <h2 class="text-[15px] font-semibold flex-1 m-0 overflow-hidden text-ellipsis whitespace-nowrap">{{ thread.latest.subject || '(no subject)' }}</h2>
-      <span class="text-xs text-[var(--color-text-muted)] shrink-0">{{ thread.messages.length }} messages</span>
+      <h2 class="text-[15px] font-semibold flex-1 m-0 overflow-hidden text-ellipsis whitespace-nowrap">{{ thread.latest.subject || $t('threadView.noSubject') }}</h2>
+      <span class="text-xs text-[var(--color-text-muted)] shrink-0">{{ $t('threadView.messages', { count: thread.messages.length }) }}</span>
     </div>
 
     <div class="px-5 py-3 flex flex-col gap-2">
@@ -37,7 +37,7 @@
 
         <!-- Expanded body -->
         <div v-if="expandedUids.has(msg.uid)" class="border-t border-[var(--color-border)]">
-          <div v-if="loadingUids.has(msg.uid)" class="px-3.5 py-4 text-sm text-[var(--color-text-muted)]">Loading…</div>
+          <div v-if="loadingUids.has(msg.uid)" class="px-3.5 py-4 text-sm text-[var(--color-text-muted)]">{{ $t('threadView.loading') }}</div>
           <template v-else-if="fullMessages[msg.uid]">
             <div class="px-3.5 pt-2 text-xs text-[var(--color-text-muted)]">
               <span v-if="fullMessages[msg.uid].to?.length">
@@ -95,6 +95,7 @@
 
 <script setup>
 import { ref, computed, inject } from 'vue'
+import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
@@ -102,6 +103,7 @@ import { useDarkMode } from '../composables/useDarkMode'
 import { extractEmail, buildReplyAllCc } from '../utils/mail.js'
 import ConfirmDialog from './ConfirmDialog.vue'
 
+const { t } = useI18n()
 const mail = useMailStore()
 const settings = useSettingsStore()
 const compose = inject('compose')
