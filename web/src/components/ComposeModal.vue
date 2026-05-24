@@ -55,24 +55,6 @@
             v-html="item.label"
           />
         </template>
-        <template v-if="templatesStore.templates.length">
-          <span class="mx-1 h-4 w-px shrink-0 bg-[var(--color-border)]" />
-          <div class="relative">
-            <button
-              @mousedown.prevent="showTemplatePicker = !showTemplatePicker"
-              title="Insert template"
-              :class="['min-w-[26px] rounded px-1.5 py-0.5 text-[13px] leading-snug transition-colors', showTemplatePicker ? 'bg-teal-light text-teal' : 'text-[var(--color-text)] hover:bg-[var(--color-bg)]']"
-            >📋</button>
-            <div v-if="showTemplatePicker"
-              class="absolute left-0 top-full mt-1 z-50 min-w-[180px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg py-1">
-              <button
-                v-for="t in templatesStore.templates" :key="t.id"
-                @mousedown.prevent="insertTemplate(t)"
-                class="w-full text-left px-3 py-1.5 text-[13px] text-[var(--color-text)] hover:bg-[var(--color-bg)] border-none bg-transparent cursor-pointer truncate"
-              >{{ t.name }}</button>
-            </div>
-          </div>
-        </template>
       </div>
 
       <!-- Rich editor -->
@@ -162,6 +144,22 @@
           title="Attach calendar invite"
           :class="['text-[18px] leading-none transition-colors', showEventPicker ? 'text-teal' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]']"
         >📅</button>
+
+        <div v-if="templatesStore.templates.length" class="relative">
+          <button
+            @click="showTemplatePicker = !showTemplatePicker"
+            title="Insert template"
+            :class="['text-[12px] transition-colors px-2 py-1 rounded border', showTemplatePicker ? 'border-teal text-teal bg-[var(--color-teal-light)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]']"
+          >📋 Templates</button>
+          <div v-if="showTemplatePicker"
+            class="absolute bottom-full mb-1 left-0 z-50 min-w-[180px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg py-1">
+            <button
+              v-for="t in templatesStore.templates" :key="t.id"
+              @click="insertTemplate(t)"
+              class="w-full text-left px-3 py-1.5 text-[13px] text-[var(--color-text)] hover:bg-[var(--color-bg)] border-none bg-transparent cursor-pointer truncate"
+            >{{ t.name }}</button>
+          </div>
+        </div>
 
         <button
           v-if="pgp.isUnlocked"
