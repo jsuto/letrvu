@@ -11,7 +11,7 @@
         <input
           v-model="query"
           type="search"
-          placeholder="Search…"
+          placeholder="Search… (from: to: subject: has:attachment is:unread)"
           class="flex-1 px-2 py-1.5 border border-[var(--color-border)] rounded-md text-xs outline-none bg-[var(--color-bg)] focus:border-teal"
           @input="onSearchInput"
         />

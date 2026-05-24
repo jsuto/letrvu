@@ -21,6 +21,7 @@ import (
 	filtersstore "github.com/jsuto/letrvu/internal/filters"
 	"github.com/jsuto/letrvu/internal/imap"
 	"github.com/jsuto/letrvu/internal/index"
+	"github.com/jsuto/letrvu/internal/search"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
 	"github.com/jsuto/letrvu/internal/smtp"
@@ -579,7 +580,7 @@ func (h *handler) searchGlobal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := h.sessionFrom(r)
-	msgs, err := h.index.Search(sess.Username, sess.IMAPHost, q)
+	msgs, err := h.index.Search(sess.Username, sess.IMAPHost, search.Parse(q))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -607,7 +608,7 @@ func (h *handler) listMessages(w http.ResponseWriter, r *http.Request) {
 
 	// Search mode when ?q= is provided.
 	if q := r.URL.Query().Get("q"); q != "" {
-		msgs, err := c.SearchMessages(folder, q)
+		msgs, err := c.SearchMessages(folder, search.Parse(q))
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 			return

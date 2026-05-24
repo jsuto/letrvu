@@ -336,7 +336,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [ ] S/MIME support
 - [x] BCC field in compose
 - [x] Archive action (one-click, keyboard shortcut)
-- [ ] Advanced search syntax (from:, to:, subject:, has:attachment, date ranges)
+- [x] Advanced search syntax (from:, to:, subject:, has:attachment, date ranges)
 - [ ] OAuth2 / XOAUTH2 authentication (Gmail / Google Workspace support)
 - [ ] i18n / localization
 
@@ -368,6 +368,32 @@ The workflow will build Linux binaries (`amd64`, `arm64`), run a Docker Scout CV
 | `Esc` | Close modal / overlay (compose, attachment preview, message source) |
 
 Shortcuts are disabled when focus is inside a text field or the compose window is open.
+
+## Advanced search syntax
+
+The search box supports structured queries in addition to plain text:
+
+| Syntax | Description | Example |
+|--------|-------------|---------|
+| `from:value` | Sender contains value | `from:alice` |
+| `to:value` | Any recipient contains value | `to:bob` |
+| `cc:value` | CC field contains value (maps to `to:`) | `cc:team` |
+| `subject:value` | Subject contains value | `subject:invoice` |
+| `has:attachment` | Has one or more file attachments | `has:attachment` |
+| `is:unread` | Only unread messages | `is:unread` |
+| `is:read` | Only read messages | `is:read` |
+| `is:flagged` / `is:starred` | Only flagged messages | `is:flagged` |
+| `before:YYYY-MM-DD` | Sent before the given date | `before:2024-01-01` |
+| `after:YYYY-MM-DD` | Sent on or after the given date | `after:2023-06-01` |
+| bare words | Match subject or sender | `budget report` |
+
+Multiple tokens are ANDed together. Values containing spaces must be quoted:
+
+```
+from:"alice smith" subject:"Q4 report" is:unread
+from:billing has:attachment after:2024-01-01
+subject:invoice before:2024-06-01 is:unread
+```
 
 ## License
 

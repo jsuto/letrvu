@@ -10,6 +10,7 @@ import (
 
 	"github.com/jsuto/letrvu/internal/db"
 	"github.com/jsuto/letrvu/internal/imap"
+	"github.com/jsuto/letrvu/internal/search"
 )
 
 // Store is the message index data layer.
@@ -156,38 +157,65 @@ func (s *Store) SetUIDValidity(username, imapHost, folder string, v uint32) {
 	}
 }
 
-// Search returns messages whose subject or sender matches query, newest first.
-func (s *Store) Search(username, imapHost, query string) ([]imap.Message, error) {
-	pattern := "%" + query + "%"
-	var rows interface {
-		Next() bool
-		Scan(...any) error
-		Close() error
-		Err() error
-	}
-	var err error
+// Search returns messages matching q from the local index, newest first.
+func (s *Store) Search(username, imapHost string, q search.Query) ([]imap.Message, error) {
+	// Build WHERE clause dynamically using ? placeholders (translated to $N for
+	// Postgres by s.db.Q() at query time).
+	where := []string{"username=? AND imap_host=?"}
+	args := []any{username, imapHost}
 
+	like := "LIKE"
 	if s.db.Driver == "postgres" {
-		rows, err = s.db.Query(
-			`SELECT folder, uid, subject, from_addr, date, read, flagged, has_attachments,
-				size, message_id, in_reply_to, refs
-			 FROM message_index
-			 WHERE username=$1 AND imap_host=$2 AND (subject ILIKE $3 OR from_addr ILIKE $3)
-			 ORDER BY date DESC
-			 LIMIT 200`,
-			username, imapHost, pattern,
-		)
-	} else {
-		rows, err = s.db.Query(
-			`SELECT folder, uid, subject, from_addr, date, read, flagged, has_attachments,
-				size, message_id, in_reply_to, refs
-			 FROM message_index
-			 WHERE username=? AND imap_host=? AND (subject LIKE ? OR from_addr LIKE ?)
-			 ORDER BY date DESC
-			 LIMIT 200`,
-			username, imapHost, pattern, pattern,
-		)
+		like = "ILIKE"
 	}
+
+	// Bare text terms search subject and from_addr.
+	for _, t := range q.Text {
+		pat := "%" + t + "%"
+		where = append(where, "(subject "+like+" ? OR from_addr "+like+" ?)")
+		args = append(args, pat, pat)
+	}
+	if q.From != "" {
+		where = append(where, "from_addr "+like+" ?")
+		args = append(args, "%"+q.From+"%")
+	}
+	if q.Subject != "" {
+		where = append(where, "subject "+like+" ?")
+		args = append(args, "%"+q.Subject+"%")
+	}
+	if q.HasAttachment {
+		where = append(where, "has_attachments=1")
+	}
+	if q.IsRead != nil {
+		if *q.IsRead {
+			where = append(where, "read=1")
+		} else {
+			where = append(where, "read=0")
+		}
+	}
+	if q.IsFlagged != nil {
+		if *q.IsFlagged {
+			where = append(where, "flagged=1")
+		} else {
+			where = append(where, "flagged=0")
+		}
+	}
+	if !q.Before.IsZero() {
+		where = append(where, "date < ?")
+		args = append(args, q.Before.UTC().Format(time.RFC3339))
+	}
+	if !q.After.IsZero() {
+		where = append(where, "date >= ?")
+		args = append(args, q.After.UTC().Format(time.RFC3339))
+	}
+
+	sql := s.db.Q(`SELECT folder, uid, subject, from_addr, date, read, flagged, has_attachments,
+		size, message_id, in_reply_to, refs
+		FROM message_index
+		WHERE ` + strings.Join(where, " AND ") + `
+		ORDER BY date DESC LIMIT 200`)
+
+	rows, err := s.db.Query(sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search index: %w", err)
 	}

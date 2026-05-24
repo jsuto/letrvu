@@ -805,14 +805,14 @@ func (c *Client) FetchMessageSummaries(folder string, uids []uint32) ([]Message,
 
 // SearchMessages runs a server-side TEXT search in folder and returns matching
 // message summaries, newest first.
-func (c *Client) SearchMessages(folder, query string) ([]Message, error) {
+// SearchMessages runs a server-side search in folder using the structured Query
+// and returns matching message summaries, newest first.
+func (c *Client) SearchMessages(folder string, q searchQuery) ([]Message, error) {
 	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
 		return nil, fmt.Errorf("select %q: %w", folder, err)
 	}
 
-	criteria := &goimap.SearchCriteria{
-		Text: []string{query},
-	}
+	criteria := buildIMAPCriteria(q)
 	searchData, err := c.c.UIDSearch(criteria, nil).Wait()
 	if err != nil {
 		return nil, fmt.Errorf("uid search: %w", err)
@@ -865,9 +865,78 @@ func (c *Client) SearchMessages(folder, query string) ([]Message, error) {
 		if buf.BodyStructure != nil {
 			msg.HasAttachments = bodyHasAttachments(buf.BodyStructure)
 		}
+		// Post-filter: has:attachment cannot be expressed as a standard IMAP
+		// criterion, so we filter after fetching the body structure.
+		if q.GetHasAttachment() && !msg.HasAttachments {
+			continue
+		}
 		result = append(result, msg)
 	}
 	return result, nil
+}
+
+// searchQuery is a minimal interface so the imap package does not import the
+// search package (avoiding a circular dependency). The handler converts
+// search.Query → searchQuery via the adapter below.
+type searchQuery interface {
+	GetText() []string
+	GetFrom() string
+	GetTo() string
+	GetSubject() string
+	GetHasAttachment() bool
+	GetIsRead() *bool
+	GetIsFlagged() *bool
+	GetBefore() time.Time
+	GetAfter() time.Time
+}
+
+// buildIMAPCriteria converts a searchQuery into a go-imap SearchCriteria.
+func buildIMAPCriteria(q searchQuery) *goimap.SearchCriteria {
+	c := &goimap.SearchCriteria{}
+
+	for _, t := range q.GetText() {
+		c.Text = append(c.Text, t)
+	}
+	if v := q.GetFrom(); v != "" {
+		c.Header = append(c.Header, goimap.SearchCriteriaHeaderField{Key: "From", Value: v})
+	}
+	if v := q.GetTo(); v != "" {
+		// Search To and Cc headers using OR.
+		toCC := goimap.SearchCriteria{
+			Or: [][2]goimap.SearchCriteria{
+				{
+					{Header: []goimap.SearchCriteriaHeaderField{{Key: "To", Value: v}}},
+					{Header: []goimap.SearchCriteriaHeaderField{{Key: "Cc", Value: v}}},
+				},
+			},
+		}
+		c.And(&toCC)
+	}
+	if v := q.GetSubject(); v != "" {
+		c.Header = append(c.Header, goimap.SearchCriteriaHeaderField{Key: "Subject", Value: v})
+	}
+	if r := q.GetIsRead(); r != nil {
+		if *r {
+			c.Flag = append(c.Flag, goimap.FlagSeen)
+		} else {
+			c.NotFlag = append(c.NotFlag, goimap.FlagSeen)
+		}
+	}
+	if f := q.GetIsFlagged(); f != nil {
+		if *f {
+			c.Flag = append(c.Flag, goimap.FlagFlagged)
+		} else {
+			c.NotFlag = append(c.NotFlag, goimap.FlagFlagged)
+		}
+	}
+	if !q.GetBefore().IsZero() {
+		c.SentBefore = q.GetBefore()
+	}
+	if !q.GetAfter().IsZero() {
+		c.SentSince = q.GetAfter()
+	}
+	// has:attachment is handled post-fetch; no IMAP criterion emitted here.
+	return c
 }
 
 // DeleteMessage sets \Deleted on the message and expunges it.
