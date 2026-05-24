@@ -1036,6 +1036,34 @@ func (c *Client) appendMessage(folder string, flags []goimap.Flag, msg []byte) e
 // special-use attribute (e.g. \Drafts, \Sent). If no attribute match is found,
 // it falls back to the first mailbox whose lowercased name appears in
 // fallbackNames. Returns "" when nothing matches.
+// QuotaResult holds the STORAGE quota for a mailbox.
+// Usage and Limit are in bytes. Limit == 0 means no limit is set.
+type QuotaResult struct {
+	UsedBytes  int64
+	LimitBytes int64
+}
+
+// GetQuota fetches the STORAGE quota for mailbox via GETQUOTAROOT.
+// Returns nil, nil when the server does not support the QUOTA extension or
+// does not report a STORAGE resource for the mailbox.
+func (c *Client) GetQuota(mailbox string) (*QuotaResult, error) {
+	data, err := c.c.GetQuotaRoot(mailbox).Wait()
+	if err != nil {
+		// Server doesn't support QUOTA — treat as "not available".
+		return nil, nil //nolint:nilerr
+	}
+	for _, qd := range data {
+		if res, ok := qd.Resources[goimap.QuotaResourceStorage]; ok {
+			// RFC 9208 §4.3: STORAGE is in units of 1024-byte blocks.
+			return &QuotaResult{
+				UsedBytes:  res.Usage * 1024,
+				LimitBytes: res.Limit * 1024,
+			}, nil
+		}
+	}
+	return nil, nil // QUOTA supported but no STORAGE resource
+}
+
 func (c *Client) findSpecialFolder(attr goimap.MailboxAttr, fallbackNames []string) string {
 	mailboxes, err := c.c.List("", "*", nil).Collect()
 	if err != nil {

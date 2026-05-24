@@ -15,6 +15,14 @@ export const useMailStore = defineStore('mail', () => {
   // true when messages are cross-folder search results
   const globalSearchMode = ref(false)
 
+  const quota = ref({ used: 0, limit: 0 })
+
+  async function fetchQuota() {
+    const res = await fetch('/api/quota')
+    if (!res.ok) return
+    quota.value = await res.json()
+  }
+
   async function fetchFolders() {
     const res = await fetch('/api/folders')
     if (!res.ok) return
@@ -389,5 +397,7 @@ export const useMailStore = defineStore('mail', () => {
     openThread,
     renameFolder,
     deleteFolder,
+    quota,
+    fetchQuota,
   }
 })

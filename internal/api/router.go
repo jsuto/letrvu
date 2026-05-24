@@ -50,6 +50,9 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("POST /api/2fa/disable", h.requireAuth(h.totp2faDisable))
 	mux.HandleFunc("POST /api/2fa/recovery-codes", h.requireAuth(h.totp2faRecoveryCodes))
 
+	// Quota
+	mux.HandleFunc("GET /api/quota", h.requireAuth(h.getQuota))
+
 	// Folders
 	mux.HandleFunc("GET /api/folders", h.requireAuth(h.listFolders))
 	mux.HandleFunc("POST /api/folders", h.requireAuth(h.createFolder))

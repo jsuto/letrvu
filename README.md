@@ -328,7 +328,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Message templates / canned responses
 - [x] Two-factor authentication (TOTP / authenticator app)
 - [ ] One-click unsubscribe (List-Unsubscribe header)
-- [ ] Mailbox quota display (IMAP GETQUOTA)
+- [x] Mailbox quota display (IMAP GETQUOTA)
 - [x] Inline image paste in compose
 - [ ] Scheduled send
 - [ ] Snooze / remind me later

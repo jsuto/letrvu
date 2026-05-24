@@ -503,3 +503,15 @@ func TestRawHeaders_FoldedReferences(t *testing.T) {
 		}
 	}
 }
+
+// --- QuotaResult -------------------------------------------------------------
+
+func TestQuotaResult_FieldsExist(t *testing.T) {
+	q := QuotaResult{UsedBytes: 512 * 1024, LimitBytes: 1024 * 1024 * 1024}
+	if q.UsedBytes != 524288 {
+		t.Errorf("UsedBytes: got %d, want 524288", q.UsedBytes)
+	}
+	if q.LimitBytes != 1073741824 {
+		t.Errorf("LimitBytes: got %d, want 1073741824", q.LimitBytes)
+	}
+}

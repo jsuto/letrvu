@@ -436,6 +436,24 @@ func (h *handler) refreshFolderCache(imapHost string, imapPort int, username, pa
 	h.fetchAndCacheFolders(imapHost, imapPort, username, password, key) //nolint:errcheck
 }
 
+func (h *handler) getQuota(w http.ResponseWriter, r *http.Request) {
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+
+	quota, err := c.GetQuota("INBOX")
+	if err != nil || quota == nil {
+		// Server doesn't support QUOTA — return zeros so the UI knows to hide it.
+		writeJSON(w, http.StatusOK, map[string]int64{"used": 0, "limit": 0})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{"used": quota.UsedBytes, "limit": quota.LimitBytes})
+}
+
 func (h *handler) searchGlobal(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
