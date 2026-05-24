@@ -113,7 +113,7 @@
 
       <!-- High-risk: likely forged/spoofed — red, not dismissible -->
       <div v-if="authHighRisk" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fdf0f0] border border-[#e07070] text-[#7a1a1a]">
-        <span>🚨 This message failed authentication and is likely forged or spoofed. Do not click links or reply.</span>
+        <span>🚨 {{ displayNameSpoofing ? 'The sender\'s display name impersonates a different domain. This is likely a spoofing attempt.' : 'This message failed authentication and is likely forged or spoofed. Do not click links or reply.' }}</span>
       </div>
 
       <!-- Medium-risk: suspicious signals — amber, dismissible -->
@@ -121,11 +121,6 @@
         <span>⚠ Suspicious message — {{ authMediumReasons }}.</span>
         <button @click="authWarnDismissed = true"
           class="ml-auto shrink-0 px-2 py-0.5 border border-[#e09030] rounded text-xs cursor-pointer bg-transparent hover:bg-[#e09030]/20">Dismiss</button>
-      </div>
-
-      <!-- Phishing link warning banner -->
-      <div v-if="phishingCount > 0" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fdf0f0] border border-[#e07070] text-[#7a1a1a]">
-        <span>⚠ {{ phishingCount }} misleading {{ phishingCount === 1 ? 'link' : 'links' }} detected — the visible text shows a different domain than the actual destination.</span>
       </div>
 
       <!-- PGP banner -->
@@ -507,7 +502,7 @@ function debugLog(...args) {
 const authHighRisk = computed(() => {
   const msg = mail.currentMessage
   if (!msg) return false
-  return msg.dmarc === 'fail' || (msg.spf === 'fail' && msg.dkim === 'fail')
+  return msg.dmarc === 'fail' || (msg.spf === 'fail' && msg.dkim === 'fail') || displayNameSpoofing.value
 })
 
 // Display name contains an @domain that doesn't match the actual From domain.
@@ -544,7 +539,7 @@ const authMediumRisk = computed(() => {
   const msg = mail.currentMessage
   if (!msg) return false
   return msg.spf === 'fail' || msg.spf === 'softfail' || msg.dkim === 'fail' ||
-    displayNameSpoofing.value || replyToMismatch.value
+    replyToMismatch.value || phishingCount.value > 0
 })
 
 const authMediumReasons = computed(() => {
@@ -553,8 +548,8 @@ const authMediumReasons = computed(() => {
   const reasons = []
   if (msg.spf === 'fail' || msg.spf === 'softfail') reasons.push('SPF failed')
   if (msg.dkim === 'fail') reasons.push('DKIM failed')
-  if (displayNameSpoofing.value) reasons.push('display name does not match the sender address')
   if (replyToMismatch.value) reasons.push('Reply-To is on a different domain')
+  if (phishingCount.value > 0) reasons.push(`${phishingCount.value} misleading ${phishingCount.value === 1 ? 'link' : 'links'} detected`)
   return reasons.join('; ')
 })
 
