@@ -89,7 +89,7 @@
         <span>🛡 Remote images blocked to protect your privacy.</span>
         <div class="flex gap-2 ml-auto">
           <button @click="trustSender"
-            class="px-3.5 py-1.5 bg-[var(--color-surface)] border border-[#e6b84a] text-[#7a5800] rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[#fef0cc]">Always show from this sender</button>
+            class="px-3.5 py-1.5 bg-transparent border border-[#e6b84a] rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[#e6b84a]/20">Always show from this sender</button>
           <button @click="showRemoteImages = true"
             class="px-3.5 py-1.5 bg-[#e6b84a] text-[#3a2800] border-none rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[#d4a830]">Show images</button>
         </div>
