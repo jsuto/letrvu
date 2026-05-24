@@ -49,6 +49,14 @@ type Attachment struct {
 	Data        []byte
 }
 
+// InlineImage is an image embedded inline in the HTML body via a cid: reference.
+// The HTML body must contain <img src="cid:<ContentID>"> for each entry.
+type InlineImage struct {
+	ContentID   string
+	ContentType string
+	Data        []byte
+}
+
 // Message is an outbound email.
 type Message struct {
 	// From is the RFC 5322 From: header value (what recipients see).
@@ -63,7 +71,8 @@ type Message struct {
 	Subject      string
 	Text         string       // plain text body
 	HTML         string       // optional HTML body; if set, sends multipart/alternative
-	Attachments  []Attachment // optional file attachments
+	Attachments  []Attachment  // optional file attachments
+	InlineImages []InlineImage // images embedded inline in HTML via cid: references
 
 	// Threading / identification headers (RFC 2822).
 	// MessageID is used as-is if non-empty; otherwise one is auto-generated
@@ -278,27 +287,60 @@ func buildMIME(msg Message) string {
 }
 
 // writeBodyPart writes the text/plain or multipart/alternative body section.
+// When msg.InlineImages is non-empty the HTML part is wrapped in a
+// multipart/related container per RFC 2387 so email clients render the images
+// inline via cid: references already present in msg.HTML.
 func writeBodyPart(sb *strings.Builder, msg Message) {
 	if msg.HTML != "" {
 		text := msg.Text
 		if text == "" {
 			text = stripHTML(msg.HTML)
 		}
-		boundary := "letrvu-boundary-001"
-		sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q\r\n", boundary))
-		sb.WriteString("\r\n")
-		sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+
+		const altBoundary = "letrvu-boundary-001"
+		sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q\r\n\r\n", altBoundary))
+
+		sb.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
 		sb.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
 		sb.WriteString(text)
 		sb.WriteString("\r\n")
-		sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-		sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
-		sb.WriteString(msg.HTML)
-		sb.WriteString("\r\n")
-		sb.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+
+		sb.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
+		if len(msg.InlineImages) > 0 {
+			const relBoundary = "letrvu-related-001"
+			sb.WriteString(fmt.Sprintf("Content-Type: multipart/related; boundary=%q\r\n\r\n", relBoundary))
+
+			sb.WriteString(fmt.Sprintf("--%s\r\n", relBoundary))
+			sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+			sb.WriteString(msg.HTML)
+			sb.WriteString("\r\n")
+
+			for _, img := range msg.InlineImages {
+				sb.WriteString(fmt.Sprintf("--%s\r\n", relBoundary))
+				sb.WriteString(fmt.Sprintf("Content-Type: %s\r\n", img.ContentType))
+				sb.WriteString(fmt.Sprintf("Content-ID: <%s>\r\n", img.ContentID))
+				sb.WriteString("Content-Disposition: inline\r\n")
+				sb.WriteString("Content-Transfer-Encoding: base64\r\n\r\n")
+				enc := base64.StdEncoding.EncodeToString(img.Data)
+				for i := 0; i < len(enc); i += 76 {
+					end := i + 76
+					if end > len(enc) {
+						end = len(enc)
+					}
+					sb.WriteString(enc[i:end])
+					sb.WriteString("\r\n")
+				}
+			}
+			sb.WriteString(fmt.Sprintf("--%s--\r\n", relBoundary))
+		} else {
+			sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+			sb.WriteString(msg.HTML)
+			sb.WriteString("\r\n")
+		}
+
+		sb.WriteString(fmt.Sprintf("--%s--\r\n", altBoundary))
 	} else {
-		sb.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-		sb.WriteString("\r\n")
+		sb.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
 		sb.WriteString(msg.Text)
 	}
 }

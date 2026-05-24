@@ -3,7 +3,7 @@
     v-if="visible"
     class="fixed inset-0 z-[100] flex items-end justify-end p-8 pointer-events-none"
   >
-    <div class="pointer-events-auto w-[560px] max-h-[620px] flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl" @paste="onPasteImage">
+    <div class="pointer-events-auto w-[560px] max-h-[620px] flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
 
       <!-- Header -->
       <div class="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
@@ -203,6 +203,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
+import Image from '@tiptap/extension-image'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import { useCalendarStore } from '../stores/calendar'
@@ -255,9 +256,41 @@ const editor = useEditor({
     Link.configure({ openOnClick: false, autolink: true }),
     Underline,
     Placeholder.configure({ placeholder: 'Write your message…' }),
+    Image.configure({ inline: true, allowBase64: true }),
   ],
   content: '',
   onUpdate: () => scheduleAutoSave(),
+  editorProps: {
+    handlePaste(_, event) {
+      const items = event.clipboardData?.items
+      if (!items) return false
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (!file) continue
+          const reader = new FileReader()
+          reader.onload = e => editor.value?.chain().focus().setImage({ src: e.target.result }).run()
+          reader.readAsDataURL(file)
+          return true
+        }
+      }
+      return false
+    },
+    handleDrop(_, event) {
+      const files = event.dataTransfer?.files
+      if (!files?.length) return false
+      let handled = false
+      for (const file of Array.from(files)) {
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader()
+          reader.onload = e => editor.value?.chain().focus().setImage({ src: e.target.result }).run()
+          reader.readAsDataURL(file)
+          handled = true
+        }
+      }
+      return handled
+    },
+  },
 })
 
 onBeforeUnmount(() => editor.value?.destroy())
@@ -358,7 +391,26 @@ function buildPayload() {
   if (plainTextMode.value) {
     return { ...base, text: form.plainBody }
   }
-  return { ...base, html: editor.value?.getHTML() ?? '' }
+
+  // Extract inline images (data: URIs) from the editor HTML before sending.
+  // Replace each with a cid: reference and pass the binary data separately so
+  // the backend can build a proper multipart/related MIME structure.
+  const inlineImages = []
+  const html = (editor.value?.getHTML() ?? '').replace(
+    /src="data:([^;]+);base64,([^"]+)"/g,
+    (_, contentType, b64) => {
+      const n = inlineImages.length + 1
+      const cid = `img${String(n).padStart(3, '0')}@letrvu`
+      inlineImages.push({ content_id: cid, content_type: contentType, data: b64 })
+      return `src="cid:${cid}"`
+    }
+  )
+
+  return {
+    ...base,
+    html,
+    inline_images: inlineImages.length ? inlineImages : undefined,
+  }
 }
 
 async function saveDraft() {
@@ -513,25 +565,6 @@ function onFileInput(e) {
   e.target.value = '' // reset so the same file can be picked again
 }
 
-function onPasteImage(e) {
-  const items = e.clipboardData?.items
-  if (!items) return
-  for (const item of items) {
-    if (!item.type.startsWith('image/')) continue
-    const file = item.getAsFile()
-    if (!file) continue
-    e.preventDefault()
-    const ext = item.type.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png'
-    const filename = `image-${Date.now()}.${ext}`
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const base64 = ev.target.result.split(',')[1]
-      attachments.value.push({ filename, content_type: item.type, data: base64 })
-    }
-    reader.readAsDataURL(file)
-    break // one image per paste
-  }
-}
 
 // --- event picker ---
 
@@ -672,6 +705,7 @@ defineExpose({ open, close, visible })
 .ProseMirror ul, .ProseMirror ol { padding-left: 1.5em; margin: 0.3em 0; }
 .ProseMirror hr { border: none; border-top: 0.5px solid var(--color-border); margin: 0.8em 0; }
 .ProseMirror a { color: var(--color-teal); }
+.ProseMirror img { max-width: 100%; height: auto; display: inline-block; }
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   color: var(--color-text-muted);

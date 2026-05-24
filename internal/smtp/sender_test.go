@@ -662,3 +662,53 @@ func TestNormalizeCRLF_NoLineEndings(t *testing.T) {
 		t.Errorf("no newlines: got %q", got)
 	}
 }
+
+// --- Inline image (data: URI → CID) ------------------------------------------
+
+func TestBuildMIME_InlineImage_UsesMultipartRelated(t *testing.T) {
+	data := []byte("pixel")
+	html := `<p>Look:</p><img src="cid:img001@letrvu">`
+
+	out := buildMIME(Message{
+		From:    "a@example.com",
+		To:      []string{"b@example.com"},
+		Subject: "test",
+		HTML:    html,
+		InlineImages: []InlineImage{
+			{ContentID: "img001@letrvu", ContentType: "image/png", Data: data},
+		},
+	})
+
+	mustContain(t, out, "multipart/related", "multipart/related")
+	mustContain(t, out, `src="cid:img001@letrvu"`, "cid reference in html")
+	mustContain(t, out, "Content-ID: <img001@letrvu>", "Content-ID header")
+	mustContain(t, out, "Content-Disposition: inline", "inline disposition")
+}
+
+func TestBuildMIME_MultipleInlineImages(t *testing.T) {
+	html := `<img src="cid:img001@letrvu"><img src="cid:img002@letrvu">`
+
+	out := buildMIME(Message{
+		From:    "a@example.com",
+		To:      []string{"b@example.com"},
+		Subject: "test",
+		HTML:    html,
+		InlineImages: []InlineImage{
+			{ContentID: "img001@letrvu", ContentType: "image/png", Data: []byte("a")},
+			{ContentID: "img002@letrvu", ContentType: "image/jpeg", Data: []byte("b")},
+		},
+	})
+
+	mustContain(t, out, "Content-ID: <img001@letrvu>", "first image Content-ID")
+	mustContain(t, out, "Content-ID: <img002@letrvu>", "second image Content-ID")
+}
+
+func TestBuildMIME_NoInlineImage_NoMultipartRelated(t *testing.T) {
+	out := buildMIME(Message{
+		From:    "a@example.com",
+		To:      []string{"b@example.com"},
+		Subject: "test",
+		HTML:    "<p>Plain HTML, no images.</p>",
+	})
+	mustNotContain(t, out, "multipart/related", "no related when no images")
+}

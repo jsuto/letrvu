@@ -877,6 +877,11 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 			ContentType string `json:"content_type"`
 			Data        string `json:"data"` // base64-encoded
 		} `json:"attachments,omitempty"`
+		InlineImages []struct {
+			ContentID   string `json:"content_id"`
+			ContentType string `json:"content_type"`
+			Data        string `json:"data"` // base64-encoded
+		} `json:"inline_images,omitempty"`
 		PGPMimeSig *struct {
 			Signature string `json:"signature"`
 			MicAlg    string `json:"micalg"`
@@ -917,6 +922,20 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	var inlineImages []smtp.InlineImage
+	for _, img := range body.InlineImages {
+		data, err := base64.StdEncoding.DecodeString(img.Data)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResp("invalid inline image data"))
+			return
+		}
+		inlineImages = append(inlineImages, smtp.InlineImage{
+			ContentID:   img.ContentID,
+			ContentType: img.ContentType,
+			Data:        data,
+		})
+	}
+
 	// Generate Message-ID here so the same value is used in both the SMTP
 	// DATA command and the IMAP APPEND to the Sent folder.
 	msgIDRnd, _ := randomHex(8)
@@ -931,6 +950,7 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		Text:                      body.Text,
 		HTML:                      body.HTML,
 		Attachments:               attachments,
+		InlineImages:              inlineImages,
 		MessageID:                 msgID,
 		InReplyTo:                 body.InReplyTo,
 		References:                body.References,
