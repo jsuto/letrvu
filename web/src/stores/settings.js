@@ -89,6 +89,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // Read receipt policy: 'ask' (default) | 'always' | 'never'
   const readReceiptPolicy = computed(() => settings.value.read_receipt_policy || 'ask')
 
+  // Whether the server has ManageSieve configured (injected by /api/settings).
+  const sieveConfigured = computed(() => settings.value.sieve_configured === true)
+
   async function untrustImageSender(email) {
     const addr = email.toLowerCase()
     const updated = trustedImageSenders.value.filter(e => e !== addr)
@@ -122,5 +125,5 @@ export const useSettingsStore = defineStore('settings', () => {
     return result
   }
 
-  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes, vacationEnabled, vacationSieveActive, saveVacation, trustedImageSenders, trustImageSender, untrustImageSender, readReceiptPolicy }
+  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes, vacationEnabled, vacationSieveActive, saveVacation, trustedImageSenders, trustImageSender, untrustImageSender, readReceiptPolicy, sieveConfigured }
 })

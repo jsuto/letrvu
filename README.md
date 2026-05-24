@@ -321,7 +321,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Docker scout scanning
 - [x] Session timeout / logout all devices
 - [x] Spam flag feedback (`$Junk` IMAP flag)
-- [ ] Email filters / rules (auto-move, auto-label by sender/subject)
+- [x] Email filters / rules (auto-move, auto-label by sender/subject)
 - [ ] Spam/phishing warning banners (suspicious sender analysis)
 - [x] Read receipts (send and suppress)
 - [ ] Message templates / canned responses

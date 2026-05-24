@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/jsuto/letrvu/internal/filters"
 	"github.com/jsuto/letrvu/internal/sieve"
 )
 
@@ -82,10 +83,7 @@ func (h *handler) setVacation(w http.ResponseWriter, r *http.Request) {
 	var sieveActive bool
 	var sieveErrMsg string
 	if sieveConfigured {
-		sieveActive, sieveErrMsg = uploadVacationSieve(
-			h.config.SieveHost, sess.Username, sess.Password,
-			body.Enabled, body.Subject, body.Body, body.Start, body.End,
-		)
+		sieveActive, sieveErrMsg = h.rebuildAndUploadSieve(sess.Username, sess.IMAPHost, sess.Password)
 	}
 
 	sieveActiveStr := "false"
@@ -111,13 +109,13 @@ func (h *handler) setVacation(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// uploadVacationSieve connects to ManageSieve and injects or removes the
-// vacation rule from the user's active script. The existing script content
-// (fileinto rules, etc.) is preserved. Returns (true, "") on success.
-func uploadVacationSieve(sieveHost, username, password string, enabled bool, subject, body, start, end string) (active bool, errMsg string) {
-	c, err := sieve.Connect(sieveHost, username, password)
+// rebuildAndUploadSieve reads the current vacation and filters settings from DB,
+// rebuilds the combined Sieve script, and uploads it to ManageSieve.
+// Returns (active, errMsg). active is true when the script was successfully uploaded.
+func (h *handler) rebuildAndUploadSieve(username, imapHost, password string) (active bool, errMsg string) {
+	c, err := sieve.Connect(h.config.SieveHost, username, password)
 	if err != nil {
-		log.Printf("sieve: connect failed user=%s host=%s: %v", username, sieveHost, err)
+		log.Printf("sieve: connect failed user=%s host=%s: %v", username, h.config.SieveHost, err)
 		return false, "ManageSieve not available: " + err.Error()
 	}
 	defer c.Close()
@@ -137,76 +135,69 @@ func uploadVacationSieve(sieveHost, username, password string, enabled bool, sub
 		}
 	}
 
-	if enabled {
-		// Read existing active script content (empty string if none).
-		existing := ""
-		if activeScript != "" {
-			existing, err = c.GetScript(activeScript)
-			if err != nil {
-				log.Printf("sieve: getscript failed user=%s script=%s: %v", username, activeScript, err)
-				return false, "failed to read existing script: " + err.Error()
-			}
+	// Read existing active script content.
+	existing := ""
+	if activeScript != "" {
+		existing, err = c.GetScript(activeScript)
+		if err != nil {
+			log.Printf("sieve: getscript failed user=%s script=%s: %v", username, activeScript, err)
+			return false, "failed to read existing script: " + err.Error()
 		}
-
-		// Write to the active script so fileinto rules stay in place.
-		// Fall back to a new "letrvu-vacation" script if nothing is active.
-		target := activeScript
-		if target == "" {
-			target = "letrvu-vacation"
-		}
-
-		merged := sieve.InjectVacation(existing, subject, body, start, end, []string{username})
-		if err := c.PutScript(target, merged); err != nil {
-			log.Printf("sieve: putscript failed user=%s: %v", username, err)
-			return false, "failed to upload script: " + err.Error()
-		}
-		// Activate only if nothing was active before (i.e. we created a new script).
-		if activeScript == "" {
-			if err := c.SetActive(target); err != nil {
-				log.Printf("sieve: setactive failed user=%s: %v", username, err)
-				return false, "failed to activate script: " + err.Error()
-			}
-		}
-		log.Printf("sieve: vacation injected user=%s script=%s host=%s", username, target, sieveHost)
-		return true, ""
 	}
 
-	// Disabling: remove the vacation markers from the active script.
-	if activeScript == "" {
-		log.Printf("sieve: no active script found, nothing to remove user=%s", username)
-		return false, ""
+	// Load vacation settings from DB.
+	vals, _ := h.settings.Get(username, imapHost)
+	vacEnabled := vals["vacation_enabled"] == "true"
+	vacSubject := vals["vacation_subject"]
+	vacBody := vals["vacation_body"]
+	vacStart := vals["vacation_start"]
+	vacEnd := vals["vacation_end"]
+
+	// Load filters from DB.
+	var filterList []filters.Filter
+	if h.filters != nil {
+		filterList, _ = h.filters.List(username, imapHost)
 	}
 
-	existing, err := c.GetScript(activeScript)
-	if err != nil {
-		log.Printf("sieve: getscript failed user=%s: %v", username, err)
-		return false, "failed to read script: " + err.Error()
+	// Strip both managed blocks so we start clean, preserving user rules.
+	base := sieve.RemoveVacation(sieve.RemoveFilters(existing))
+
+	// Re-inject filters block (before vacation so filters run first).
+	filtersBlock := filters.BuildSieveBlock(filterList)
+	filtersExts := filters.RequiredExtensions(filterList)
+	base = sieve.InjectFilters(base, filtersBlock, filtersExts)
+
+	// Re-inject vacation block.
+	if vacEnabled {
+		base = sieve.InjectVacation(base, vacSubject, vacBody, vacStart, vacEnd, []string{username})
 	}
 
-	cleaned := sieve.RemoveVacation(existing)
-	if cleaned == existing {
-		// No letrvu markers found. This is the old "letrvu-vacation" standalone
-		// script from before the injection approach. Restore the previous script
-		// by finding any other non-vacation script and activating it.
-		if activeScript == "letrvu-vacation" {
-			for _, s := range scripts {
-				if s.Name != "letrvu-vacation" {
-					if err := c.SetActive(s.Name); err != nil {
-						log.Printf("sieve: setactive fallback failed user=%s script=%s: %v", username, s.Name, err)
-					} else {
-						log.Printf("sieve: restored previous script %s user=%s host=%s", s.Name, username, sieveHost)
-					}
-					break
-				}
-			}
+	// If nothing is managed, nothing to upload. Remove our blocks from the
+	// active script only if they were there before.
+	if !vacEnabled && filtersBlock == "" {
+		if existing == base {
+			// Nothing changed — no-op.
+			return false, ""
 		}
-		return false, ""
+		// Cleaned — upload the stripped script.
 	}
 
-	if err := c.PutScript(activeScript, cleaned); err != nil {
+	target := activeScript
+	if target == "" {
+		target = "letrvu"
+	}
+
+	if err := c.PutScript(target, base); err != nil {
 		log.Printf("sieve: putscript failed user=%s: %v", username, err)
-		return false, "failed to update script: " + err.Error()
+		return false, "failed to upload script: " + err.Error()
 	}
-	log.Printf("sieve: vacation removed user=%s script=%s host=%s", username, activeScript, sieveHost)
-	return false, ""
+	if activeScript == "" {
+		if err := c.SetActive(target); err != nil {
+			log.Printf("sieve: setactive failed user=%s: %v", username, err)
+			return false, "failed to activate script: " + err.Error()
+		}
+	}
+	log.Printf("sieve: script rebuilt user=%s script=%s host=%s vacation=%v filters=%d",
+		username, target, h.config.SieveHost, vacEnabled, len(filterList))
+	return true, ""
 }

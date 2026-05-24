@@ -8,6 +8,9 @@ import (
 const (
 	markerStart = "# === letrvu-vacation-start ==="
 	markerEnd   = "# === letrvu-vacation-end ==="
+
+	filtersMarkerStart = "# === letrvu-filters-start ==="
+	filtersMarkerEnd   = "# === letrvu-filters-end ==="
 )
 
 // InjectVacation adds the vacation rule into an existing Sieve script.
@@ -95,4 +98,37 @@ func buildRequireStatement(exts []string) string {
 		quoted[i] = `"` + e + `"`
 	}
 	return "require [" + strings.Join(quoted, ", ") + "];"
+}
+
+// InjectFilters adds (or replaces) the filters block in an existing Sieve script.
+// block is the raw Sieve fragment to inject (from filters.BuildSieveBlock).
+// exts is the list of required extensions (from filters.RequiredExtensions).
+// If block is empty the function removes any existing filters block instead.
+func InjectFilters(existing, block string, exts []string) string {
+	cleaned := RemoveFilters(existing)
+	if block == "" {
+		return cleaned
+	}
+
+	withReqs := mergeRequiresInScript(cleaned, exts)
+
+	return strings.TrimRight(withReqs, "\n") + "\n\n" +
+		filtersMarkerStart + "\n" + block + filtersMarkerEnd + "\n"
+}
+
+// RemoveFilters strips the letrvu-injected filters block from a script,
+// leaving all other rules intact. Returns the script unchanged if no markers
+// are found.
+func RemoveFilters(script string) string {
+	si := strings.Index(script, filtersMarkerStart)
+	ei := strings.Index(script, filtersMarkerEnd)
+	if si < 0 || ei < 0 || ei <= si {
+		return script
+	}
+	before := strings.TrimRight(script[:si], "\n")
+	after := strings.TrimLeft(script[ei+len(filtersMarkerEnd):], "\n")
+	if after == "" {
+		return before + "\n"
+	}
+	return before + "\n" + after
 }

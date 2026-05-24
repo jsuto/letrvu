@@ -18,6 +18,7 @@ import (
 
 	"github.com/jsuto/letrvu/internal/calendar"
 	"github.com/jsuto/letrvu/internal/contacts"
+	filtersstore "github.com/jsuto/letrvu/internal/filters"
 	"github.com/jsuto/letrvu/internal/imap"
 	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
@@ -73,6 +74,7 @@ type handler struct {
 	contacts     *contacts.Store
 	calendar     *calendar.Store
 	index        *index.Store
+	filters      *filtersstore.Store
 	config       ServerConfig
 	folderCache  *folderCache
 	loginLimiter *loginLimiter // per source IP
@@ -1245,6 +1247,9 @@ func (h *handler) getSettings(w http.ResponseWriter, r *http.Request) {
 	// Inject the server-configured internal domains so the client can flag
 	// messages from outside the organisation.
 	out["internal_domains"] = h.config.InternalDomains
+	// Inject whether ManageSieve is configured so the UI can show/hide
+	// the mail filters feature.
+	out["sieve_configured"] = h.config.SieveHost != ""
 	writeJSON(w, http.StatusOK, out)
 }
 
