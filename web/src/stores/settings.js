@@ -92,6 +92,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // Whether the server has ManageSieve configured (injected by /api/settings).
   const sieveConfigured = computed(() => settings.value.sieve_configured === true)
 
+  // Whether TOTP 2FA is currently active for this user (injected by /api/settings).
+  const totpEnabled = computed(() => settings.value.totp_enabled === true)
+
   async function untrustImageSender(email) {
     const addr = email.toLowerCase()
     const updated = trustedImageSenders.value.filter(e => e !== addr)
@@ -125,5 +128,5 @@ export const useSettingsStore = defineStore('settings', () => {
     return result
   }
 
-  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes, vacationEnabled, vacationSieveActive, saveVacation, trustedImageSenders, trustImageSender, untrustImageSender, readReceiptPolicy, sieveConfigured }
+  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes, vacationEnabled, vacationSieveActive, saveVacation, trustedImageSenders, trustImageSender, untrustImageSender, readReceiptPolicy, sieveConfigured, totpEnabled }
 })

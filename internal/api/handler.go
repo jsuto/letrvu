@@ -20,11 +20,12 @@ import (
 	"github.com/jsuto/letrvu/internal/contacts"
 	filtersstore "github.com/jsuto/letrvu/internal/filters"
 	"github.com/jsuto/letrvu/internal/imap"
-	templatesstore "github.com/jsuto/letrvu/internal/templates"
 	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
 	"github.com/jsuto/letrvu/internal/smtp"
+	templatesstore "github.com/jsuto/letrvu/internal/templates"
+	totpstore "github.com/jsuto/letrvu/internal/totp"
 )
 
 type contextKey int
@@ -77,6 +78,8 @@ type handler struct {
 	index        *index.Store
 	filters      *filtersstore.Store
 	templates    *templatesstore.Store
+	totp         *totpstore.Store
+	pending      *totpstore.PendingStore
 	config       ServerConfig
 	folderCache  *folderCache
 	loginLimiter *loginLimiter // per source IP
@@ -282,6 +285,27 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	c.Close()
 	h.loginLimiter.recordSuccess(ip)
+
+	// If 2FA is enabled for this user, issue a short-lived pending cookie and
+	// ask the frontend to prompt for the TOTP code before creating a full session.
+	if h.totp.IsEnabled(body.Username, body.IMAPHost) {
+		pendingVal, err := h.pending.Create(
+			body.IMAPHost, body.IMAPPort, body.SMTPHost, body.SMTPPort,
+			body.Username, body.Password, r.UserAgent(),
+		)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResp("could not create pending login"))
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name: "letrvu_totp_pending", Value: pendingVal, Path: "/",
+			HttpOnly: true, Secure: h.config.SecureCookies, SameSite: http.SameSiteStrictMode,
+			MaxAge: 600, // 10 minutes
+		})
+		log.Printf("audit: login_2fa_required user=%s ip=%s imap=%s", body.Username, ip, body.IMAPHost)
+		writeJSON(w, http.StatusAccepted, map[string]any{"totp_required": true})
+		return
+	}
 
 	cookieVal, err := h.sessions.Create(body.IMAPHost, body.IMAPPort, body.SMTPHost, body.SMTPPort, body.Username, body.Password, r.UserAgent())
 	if err != nil {
@@ -1252,6 +1276,8 @@ func (h *handler) getSettings(w http.ResponseWriter, r *http.Request) {
 	// Inject whether ManageSieve is configured so the UI can show/hide
 	// the mail filters feature.
 	out["sieve_configured"] = h.config.SieveHost != ""
+	// Inject whether TOTP 2FA is currently active for this user.
+	out["totp_enabled"] = h.totp.IsEnabled(sess.Username, sess.IMAPHost)
 	writeJSON(w, http.StatusOK, out)
 }
 

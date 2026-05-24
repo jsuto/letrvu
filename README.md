@@ -297,6 +297,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Calendar outgoing invites (attach iCal to composed email)
 - [ ] Multi-account support
 - [x] Move messages between folders
+- [x] Forward as .eml attachment
 - [x] Show message source
 - [x] Flag messages
 - [x] Multiple identities
@@ -325,6 +326,13 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Spam/phishing warning banners (suspicious sender analysis)
 - [x] Read receipts (send and suppress)
 - [x] Message templates / canned responses
+- [ ] Two-factor authentication (TOTP / authenticator app)
+- [ ] One-click unsubscribe (List-Unsubscribe header)
+- [ ] Mailbox quota display (IMAP GETQUOTA)
+- [ ] Inline image paste in compose
+- [ ] Scheduled send
+- [ ] Snooze / remind me later
+- [ ] Mbox/EML mailbox import-export
 - [ ] S/MIME support
 
 ## Releasing
