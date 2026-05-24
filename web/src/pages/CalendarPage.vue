@@ -10,27 +10,27 @@
         <div class="flex items-center gap-2">
           <button class="bg-none border border-[var(--color-border)] rounded-md text-base cursor-pointer px-2.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-teal-light)]" @click="prev">‹</button>
           <button class="bg-none border border-[var(--color-border)] rounded-md text-base cursor-pointer px-2.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-teal-light)]" @click="next">›</button>
-          <button class="px-3 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-teal-light)]" @click="goToday">Today</button>
+          <button class="px-3 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-teal-light)]" @click="goToday">{{ $t('calendar.today') }}</button>
           <span class="text-sm font-medium">{{ periodLabel }}</span>
         </div>
         <div class="flex items-center gap-2">
-          <label class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-teal-light)]" title="Import .ics">
-            Import
+          <label class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-teal-light)]" :title="$t('calendar.importTitle')">
+            {{ $t('calendar.import') }}
             <input type="file" accept=".ics" @change="importIcs" hidden />
           </label>
           <a href="/api/calendar/events/export" download="calendar.ics"
-            class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] no-underline hover:bg-[var(--color-teal-light)]">Export</a>
+            class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] no-underline hover:bg-[var(--color-teal-light)]">{{ $t('calendar.export') }}</a>
           <div class="flex border border-[var(--color-border)] rounded-md overflow-hidden">
             <button
               :class="['px-3 py-1.5 text-xs border-none cursor-pointer', view === 'month' ? 'bg-teal text-white' : 'bg-[var(--color-surface)] text-[var(--color-text)]']"
               @click="view = 'month'"
-            >Month</button>
+            >{{ $t('calendar.month') }}</button>
             <button
               :class="['px-3 py-1.5 text-xs border-none cursor-pointer', view === 'week' ? 'bg-teal text-white' : 'bg-[var(--color-surface)] text-[var(--color-text)]']"
               @click="view = 'week'"
-            >Week</button>
+            >{{ $t('calendar.week') }}</button>
           </div>
-          <button class="px-3 py-1.5 text-xs bg-teal text-white border-none rounded-md cursor-pointer" @click="eventModal?.open(null, new Date())">+ New</button>
+          <button class="px-3 py-1.5 text-xs bg-teal text-white border-none rounded-md cursor-pointer" @click="eventModal?.open(null, new Date())">{{ $t('calendar.newBtn') }}</button>
         </div>
       </div>
 
@@ -59,6 +59,7 @@
 
 <script setup>
 import { ref, reactive, computed, provide, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import FolderList from '../components/FolderList.vue'
 import CalendarMonth from '../components/CalendarMonth.vue'
 import CalendarWeek from '../components/CalendarWeek.vue'
@@ -66,6 +67,8 @@ import EventModal from '../components/EventModal.vue'
 import ComposeModal from '../components/ComposeModal.vue'
 import { useCalendarStore } from '../stores/calendar'
 import { apiFetch } from '../api'
+
+const { t } = useI18n()
 
 const cal = useCalendarStore()
 const eventModal = ref(null)
@@ -155,10 +158,10 @@ async function importIcs(e) {
   const res = await apiFetch('/api/calendar/events/import', { method: 'POST', body: fd })
   if (res.ok) {
     const { imported } = await res.json()
-    alert(`Imported ${imported} event(s).`)
+    alert(t('calendar.importedEvents', { n: imported }))
     fetchVisible()
   } else {
-    alert('Import failed.')
+    alert(t('calendar.importFailed'))
   }
   e.target.value = ''
 }

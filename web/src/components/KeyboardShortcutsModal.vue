@@ -18,7 +18,7 @@
           <!-- Header -->
           <div class="flex items-center justify-between px-5 py-3.5 border-b border-[var(--color-border)]">
             <div class="flex items-center gap-2.5">
-              <span class="text-sm font-semibold text-[var(--color-text)]">Keyboard shortcuts</span>
+              <span class="text-sm font-semibold text-[var(--color-text)]">{{ $t('shortcuts.title') }}</span>
               <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-teal/10 text-teal">?</span>
             </div>
             <button
@@ -57,11 +57,11 @@
 
           <!-- Footer -->
           <div class="px-5 py-3 border-t border-[var(--color-border)] flex items-center justify-between">
-            <span class="text-xs text-[var(--color-text-muted)]">Press <kbd class="inline-flex items-center justify-center px-1.5 h-5 rounded border border-[var(--color-border)] bg-[var(--color-bg)] font-mono text-[10px]">?</kbd> to toggle this panel</span>
+            <span class="text-xs text-[var(--color-text-muted)]">{{ $t('shortcuts.pressToToggle', { key: '?' }) }}</span>
             <button
               @click="close"
               class="text-xs px-3 py-1.5 rounded-md bg-teal text-white font-medium hover:bg-teal/90 transition-colors"
-            >Done</button>
+            >{{ $t('shortcuts.done') }}</button>
           </div>
 
         </div>
@@ -71,38 +71,40 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const visible = ref(false)
 
-const groups = [
+const groups = computed(() => [
   {
-    title: 'Mail',
+    title: t('shortcuts.mail'),
     shortcuts: [
-      { label: 'Compose new message',    keys: ['C'] },
-      { label: 'Reply to message',       keys: ['R'] },
-      { label: 'Archive message',        keys: ['E'] },
-      { label: 'Delete message',         keys: ['D'] },
-      { label: 'Next message',           keys: ['N'] },
-      { label: 'Previous message',       keys: ['P'] },
+      { label: t('shortcuts.composeNew'),      keys: ['C'] },
+      { label: t('shortcuts.replyToMessage'),  keys: ['R'] },
+      { label: t('shortcuts.archiveMessage'),  keys: ['E'] },
+      { label: t('shortcuts.deleteMessage'),   keys: ['D'] },
+      { label: t('shortcuts.nextMessage'),     keys: ['N'] },
+      { label: t('shortcuts.prevMessage'),     keys: ['P'] },
     ],
   },
   {
-    title: 'Navigation',
+    title: t('shortcuts.navigation'),
     shortcuts: [
-      { label: 'Open keyboard shortcuts', keys: ['?'] },
-      { label: 'Close modal / panel',     keys: ['Esc'] },
+      { label: t('shortcuts.openShortcuts'), keys: ['?'] },
+      { label: t('shortcuts.closeModal'),    keys: ['Esc'] },
     ],
   },
   {
-    title: 'Selection',
+    title: t('shortcuts.selection'),
     shortcuts: [
-      { label: 'Select message',              keys: ['Click'] },
-      { label: 'Select range',                keys: ['⇧', 'Click'], combo: true },
-      { label: 'Toggle individual selection', keys: ['⌘', 'Click'], combo: true },
+      { label: t('shortcuts.selectMessage'),      keys: ['Click'] },
+      { label: t('shortcuts.selectRange'),        keys: ['⇧', 'Click'], combo: true },
+      { label: t('shortcuts.toggleIndividual'),   keys: ['⌘', 'Click'], combo: true },
     ],
   },
-]
+])
 
 function open()  { visible.value = true }
 function close() { visible.value = false }

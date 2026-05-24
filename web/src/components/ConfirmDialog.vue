@@ -6,17 +6,17 @@
   >
     <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 w-[340px] shadow-2xl">
       <p class="text-sm mb-2 text-[var(--color-text)]">{{ message }}</p>
-      <p v-if="warning" class="text-xs text-red-600 m-0">{{ warning }}</p>
+      <p class="text-xs text-red-600 m-0">{{ warning || $t('confirmDialog.warning') }}</p>
       <div class="flex justify-end gap-2 mt-5">
         <button
           @click="cancel"
           class="px-4 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-[var(--color-text)] hover:bg-[var(--color-bg)]"
-        >Cancel</button>
+        >{{ $t('confirmDialog.cancel') }}</button>
         <button
           @click="confirm"
           :disabled="busy"
           class="px-4 py-1.5 bg-red-600 text-white border-none rounded-md text-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-        >{{ busy ? 'Deleting…' : confirmLabel }}</button>
+        >{{ busy ? $t('confirmDialog.deleting') : confirmLabel }}</button>
       </div>
     </div>
   </div>
@@ -24,11 +24,14 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   message: { type: String, required: true },
-  warning: { type: String, default: 'This cannot be undone.' },
+  warning: { type: String, default: '' },
   confirmLabel: { type: String, default: 'Delete' },
   busy: { type: Boolean, default: false },
 })

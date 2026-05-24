@@ -18,14 +18,14 @@
         @click="mobilePanel = 'folders'"
       >
         <span class="mobile-nav-icon">☰</span>
-        <span class="mobile-nav-label">Folders</span>
+        <span class="mobile-nav-label">{{ $t('mailPage.folders') }}</span>
       </button>
       <button
         :class="['mobile-nav-btn', mobilePanel === 'list' ? 'mobile-nav-active' : '']"
         @click="mobilePanel = 'list'"
       >
         <span class="mobile-nav-icon">✉</span>
-        <span class="mobile-nav-label">Messages</span>
+        <span class="mobile-nav-label">{{ $t('mailPage.messages') }}</span>
       </button>
       <button
         :class="['mobile-nav-btn', mobilePanel === 'view' ? 'mobile-nav-active' : '']"
@@ -33,7 +33,7 @@
         @click="mobilePanel = 'view'"
       >
         <span class="mobile-nav-icon">📖</span>
-        <span class="mobile-nav-label">Read</span>
+        <span class="mobile-nav-label">{{ $t('mailPage.read') }}</span>
       </button>
     </nav>
 

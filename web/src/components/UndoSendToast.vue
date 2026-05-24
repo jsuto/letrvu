@@ -14,17 +14,17 @@
       </div>
       <div class="flex items-center gap-3 px-4 py-3">
         <span class="flex-1 text-sm text-[var(--color-text)]">
-          Sending in {{ secondsLeft }}s…
+          {{ $t('undoSend.sending', { n: secondsLeft }) }}
         </span>
         <button
           @click="undoSend.undo()"
           class="px-3 py-1 rounded-md border border-teal text-teal text-sm font-medium cursor-pointer bg-transparent hover:bg-[var(--color-teal-light)]"
-        >Undo</button>
+        >{{ $t('undoSend.undo') }}</button>
         <button
           @click="undoSend.flush()"
           class="px-3 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-text-muted)] text-sm cursor-pointer bg-transparent hover:bg-[var(--color-bg)]"
-          title="Send now"
-        >Send now</button>
+          :title="$t('undoSend.sendNow')"
+        >{{ $t('undoSend.sendNow') }}</button>
       </div>
     </div>
   </Transition>

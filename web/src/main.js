@@ -4,6 +4,7 @@ import { createPinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import { useAuthStore } from './stores/auth'
+import i18n from './i18n/index.js'
 
 import LoginPage from './pages/LoginPage.vue'
 import MailPage from './pages/MailPage.vue'
@@ -39,4 +40,5 @@ router.beforeEach(async (to) => {
 const app = createApp(App)
 app.use(pinia)
 app.use(router)
+app.use(i18n)
 app.mount('#app')

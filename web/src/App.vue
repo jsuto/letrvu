@@ -3,8 +3,22 @@
 </template>
 
 <script setup>
+import { watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useDarkMode } from './composables/useDarkMode'
+import { useSettingsStore } from './stores/settings'
+
 useDarkMode() // applies data-theme attribute on mount
+
+const { locale: i18nLocale } = useI18n()
+const settings = useSettingsStore()
+
+watch(() => settings.locale, (lang) => {
+  if (lang && lang !== i18nLocale.value) {
+    i18nLocale.value = lang
+    localStorage.setItem('locale', lang)
+  }
+}, { immediate: true })
 </script>
 
 <style>

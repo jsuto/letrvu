@@ -7,7 +7,7 @@
 
       <!-- Header -->
       <div class="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-        <span class="text-[13px] font-medium text-[var(--color-text)]">New message</span>
+        <span class="text-[13px] font-medium text-[var(--color-text)]">{{ $t('compose.newMessage') }}</span>
         <button
           @click="close"
           class="flex h-7 w-7 items-center justify-center rounded-md text-lg text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
@@ -17,7 +17,7 @@
       <!-- Address fields -->
       <div class="shrink-0">
         <div class="flex items-center border-b border-[var(--color-border)]">
-          <span class="shrink-0 px-4 py-2 text-[13px] text-[var(--color-text-muted)]">From</span>
+          <span class="shrink-0 px-4 py-2 text-[13px] text-[var(--color-text-muted)]">{{ $t('compose.from') }}</span>
           <select
             v-model="form.fromIndex"
             class="flex-1 cursor-pointer bg-transparent py-2 pr-2 text-[13px] text-[var(--color-text)] outline-none"
@@ -31,8 +31,8 @@
             v-if="!showBcc"
             @click="showBcc = true"
             class="shrink-0 px-3 py-2 text-[12px] text-[var(--color-text-muted)] bg-transparent border-none cursor-pointer hover:text-[var(--color-text)]"
-            title="Add BCC"
-          >BCC</button>
+            :title="$t('compose.addBccTitle')"
+          >{{ $t('compose.bcc') }}</button>
         </div>
         <AddressInput v-model="form.cc" placeholder="CC" />
         <AddressInput v-if="showBcc" v-model="form.bcc" placeholder="BCC" />
@@ -74,7 +74,7 @@
         v-else
         ref="textareaEl"
         v-model="form.plainBody"
-        placeholder="Write your message…"
+        :placeholder="$t('compose.writePlaceholder')"
         class="min-h-[200px] flex-1 resize-none bg-[var(--color-surface)] px-4 py-3 text-[14px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
       />
 
@@ -92,7 +92,7 @@
           <button
             @click="pendingInvite = null"
             class="ml-0.5 transition-colors hover:text-red-600"
-            title="Remove invite"
+            :title="$t('compose.removeInvite')"
           >×</button>
         </div>
         <div
@@ -112,8 +112,8 @@
 
       <!-- Event picker panel -->
       <div v-if="showEventPicker" class="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg)] max-h-[180px] overflow-y-auto">
-        <div v-if="pickerLoading" class="px-4 py-3 text-xs text-[var(--color-text-muted)]">Loading events…</div>
-        <div v-else-if="!pickerEvents.length" class="px-4 py-3 text-xs text-[var(--color-text-muted)]">No upcoming events in the next 60 days.</div>
+        <div v-if="pickerLoading" class="px-4 py-3 text-xs text-[var(--color-text-muted)]">{{ $t('compose.loadingEvents') }}</div>
+        <div v-else-if="!pickerEvents.length" class="px-4 py-3 text-xs text-[var(--color-text-muted)]">{{ $t('compose.noUpcomingEvents') }}</div>
         <button
           v-for="ev in pickerEvents"
           :key="ev.id"
@@ -131,35 +131,35 @@
           @click="send"
           :disabled="sending || savingDraft"
           class="rounded-md bg-teal px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-teal/90 disabled:cursor-not-allowed disabled:opacity-60"
-        >{{ sending ? 'Sending…' : 'Send' }}</button>
+        >{{ sending ? $t('compose.sending') : $t('compose.send') }}</button>
 
         <button
           @click="saveDraftManual"
           :disabled="sending || savingDraft"
           class="rounded-md border border-[var(--color-border)] px-4 py-2 text-[13px] font-medium text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
-        >{{ savingDraft ? 'Saving…' : 'Save Draft' }}</button>
+        >{{ savingDraft ? $t('compose.savingDraft') : $t('compose.saveDraft') }}</button>
 
-        <span v-if="draftSaved && !savingDraft" class="text-[12px] text-[var(--color-text-muted)]">Draft saved</span>
+        <span v-if="draftSaved && !savingDraft" class="text-[12px] text-[var(--color-text-muted)]">{{ $t('compose.draftSaved') }}</span>
 
         <button
           @click="fileInputEl.click()"
-          title="Attach file"
+          :title="$t('compose.attachFileTitle')"
           class="text-[18px] leading-none text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
         >📎</button>
         <input ref="fileInputEl" type="file" multiple class="hidden" @change="onFileInput" />
 
         <button
           @click="toggleEventPicker"
-          title="Attach calendar invite"
+          :title="$t('compose.attachCalendarTitle')"
           :class="['text-[18px] leading-none transition-colors', showEventPicker ? 'text-teal' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]']"
         >📅</button>
 
         <div v-if="templatesStore.templates.length" class="relative">
           <button
             @click="showTemplatePicker = !showTemplatePicker"
-            title="Insert template"
+            :title="$t('compose.templatesTitle')"
             :class="['text-[12px] transition-colors px-2 py-1 rounded border', showTemplatePicker ? 'border-teal text-teal bg-[var(--color-teal-light)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]']"
-          >📋 Templates</button>
+          >📋 {{ $t('compose.templates') }}</button>
           <div v-if="showTemplatePicker"
             class="absolute bottom-full mb-1 left-0 z-50 min-w-[180px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg py-1">
             <button
@@ -175,7 +175,7 @@
           @click="pgpSign = !pgpSign"
           :title="pgpSign ? 'Signing enabled — click to disable' : 'Sign this message'"
           :class="['text-[12px] transition-colors px-2 py-1 rounded border', pgpSign ? 'border-teal text-teal bg-[var(--color-teal-light)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]']"
-        >✍ Sign</button>
+        >✍ {{ $t('compose.sign') }}</button>
 
         <button
           v-if="pgp.isUnlocked"
@@ -183,19 +183,19 @@
           :disabled="!pgpEncryptable && !pgpEncrypt"
           :title="pgpEncryptable ? (pgpEncrypt ? 'Encryption enabled — click to disable' : 'Encrypt this message') : 'No public key found for all recipients (checked contacts and WKD)'"
           :class="['text-[12px] transition-colors px-2 py-1 rounded border', pgpEncrypt ? 'border-teal text-teal bg-[var(--color-teal-light)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed']"
-        >🔐 Encrypt</button>
+        >🔐 {{ $t('compose.encrypt') }}</button>
 
         <button
           @click="requestReadReceipt = !requestReadReceipt"
           :title="requestReadReceipt ? 'Read receipt requested — click to cancel' : 'Request read receipt'"
           :class="['text-[12px] transition-colors px-2 py-1 rounded border', requestReadReceipt ? 'border-teal text-teal bg-[var(--color-teal-light)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]']"
-        >✉ Receipt</button>
+        >✉ {{ $t('compose.receipt') }}</button>
 
         <button
           @click="togglePlainText"
           :title="plainTextMode ? 'Switch to rich text' : 'Switch to plain text'"
           class="ml-auto text-[12px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
-        >{{ plainTextMode ? 'Rich text' : 'Plain text' }}</button>
+        >{{ plainTextMode ? $t('compose.richText') : $t('compose.plainText') }}</button>
 
         <p v-if="pgpError" class="text-[12px] text-orange-600">{{ pgpError }}</p>
         <p v-if="error" class="text-[12px] text-red-600">{{ error }}</p>
@@ -207,6 +207,7 @@
 
 <script setup>
 import { ref, reactive, nextTick, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'

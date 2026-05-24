@@ -12,29 +12,29 @@
           <button
             :class="['px-2.5 py-1 text-xs border rounded cursor-pointer', view === 'contacts' ? 'bg-[var(--color-teal-light)] text-teal border-teal' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border-[var(--color-border)]']"
             @click="view = 'contacts'"
-          >Contacts</button>
+          >{{ $t('contacts.contactsTab') }}</button>
           <button
             :class="['px-2.5 py-1 text-xs border rounded cursor-pointer', view === 'groups' ? 'bg-[var(--color-teal-light)] text-teal border-teal' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border-[var(--color-border)]']"
             @click="view = 'groups'"
-          >Groups</button>
+          >{{ $t('contacts.groupsTab') }}</button>
         </div>
         <div class="flex gap-1.5 items-center">
           <template v-if="view === 'contacts'">
-            <label class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)]" title="Import vCard (.vcf)">
-              Import
+            <label class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)]" :title="$t('contacts.importTitle')">
+              {{ $t('contacts.import') }}
               <input type="file" accept=".vcf" @change="importVCard" hidden />
             </label>
-            <a :href="exportUrl" download="contacts.vcf" class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] no-underline">Export</a>
+            <a :href="exportUrl" download="contacts.vcf" class="px-2.5 py-1.5 text-xs border border-[var(--color-border)] rounded-md cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] no-underline">{{ $t('contacts.export') }}</a>
           </template>
           <button class="px-2.5 py-1.5 text-xs bg-teal text-white border-none border-teal rounded-md cursor-pointer"
-            @click="view === 'contacts' ? contactModal?.open() : openNewGroup()">+ New</button>
+            @click="view === 'contacts' ? contactModal?.open() : openNewGroup()">{{ $t('contacts.newBtn') }}</button>
         </div>
       </div>
 
       <!-- Contacts list -->
       <template v-if="view === 'contacts'">
-        <div v-if="contacts.loading" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">Loading…</div>
-        <div v-else-if="contacts.contacts.length === 0" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">No contacts yet.</div>
+        <div v-if="contacts.loading" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">{{ $t('contacts.loading') }}</div>
+        <div v-else-if="contacts.contacts.length === 0" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">{{ $t('contacts.noContacts') }}</div>
         <ul v-else class="list-none flex-1 overflow-y-auto">
           <li
             v-for="c in contacts.contacts"
@@ -46,15 +46,15 @@
               <span class="text-sm font-medium">{{ c.name || c.emails?.[0]?.email || '—' }}</span>
               <span class="text-[11px] text-[var(--color-text-muted)]">{{ c.emails?.[0]?.email }}</span>
             </div>
-            <button class="bg-none border-none cursor-pointer text-[var(--color-text-muted)] text-xs px-1.5 py-1 rounded opacity-0 shrink-0 hover:bg-[#fde8e8] hover:text-red-600 [li:hover_&]:opacity-100" title="Delete" @click.stop="confirmDelete(c)">✕</button>
+            <button class="bg-none border-none cursor-pointer text-[var(--color-text-muted)] text-xs px-1.5 py-1 rounded opacity-0 shrink-0 hover:bg-[#fde8e8] hover:text-red-600 [li:hover_&]:opacity-100" :title="$t('common.delete')" @click.stop="confirmDelete(c)">✕</button>
           </li>
         </ul>
       </template>
 
       <!-- Groups list -->
       <template v-else>
-        <div v-if="contacts.loading" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">Loading…</div>
-        <div v-else-if="contacts.groups.length === 0" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">No groups yet.</div>
+        <div v-if="contacts.loading" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">{{ $t('contacts.loading') }}</div>
+        <div v-else-if="contacts.groups.length === 0" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">{{ $t('contacts.noGroups') }}</div>
         <ul v-else class="list-none flex-1 overflow-y-auto">
           <li
             v-for="g in contacts.groups"
@@ -64,9 +64,9 @@
           >
             <div class="flex flex-col flex-1 min-w-0">
               <span class="text-sm font-medium">{{ g.name }}</span>
-              <span class="text-[11px] text-[var(--color-text-muted)]">{{ g.members?.length ?? 0 }} member{{ g.members?.length === 1 ? '' : 's' }}</span>
+              <span class="text-[11px] text-[var(--color-text-muted)]">{{ g.members?.length ?? 0 }} {{ (g.members?.length ?? 0) === 1 ? $t('contacts.member') : $t('contacts.members') }}</span>
             </div>
-            <button class="bg-none border-none cursor-pointer text-[var(--color-text-muted)] text-xs px-1.5 py-1 rounded opacity-0 shrink-0 hover:bg-[#fde8e8] hover:text-red-600 [li:hover_&]:opacity-100" title="Delete" @click.stop="confirmDeleteGroup(g)">✕</button>
+            <button class="bg-none border-none cursor-pointer text-[var(--color-text-muted)] text-xs px-1.5 py-1 rounded opacity-0 shrink-0 hover:bg-[#fde8e8] hover:text-red-600 [li:hover_&]:opacity-100" :title="$t('common.delete')" @click.stop="confirmDeleteGroup(g)">✕</button>
           </li>
         </ul>
       </template>
@@ -74,13 +74,13 @@
 
     <!-- Contact detail panel -->
     <div class="overflow-y-auto p-8" v-if="view === 'contacts'">
-      <div v-if="!selected" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">Select a contact</div>
+      <div v-if="!selected" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">{{ $t('contacts.selectContact') }}</div>
       <div v-else>
         <div class="flex items-start justify-between mb-4 gap-3">
           <h2 class="text-xl font-medium">{{ selected.name || selected.emails?.[0]?.email || '—' }}</h2>
           <div class="flex gap-2 shrink-0">
-            <button class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]" @click="contactModal?.open(selected)">Edit</button>
-            <button class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]" @click="confirmDelete(selected)">Delete</button>
+            <button class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]" @click="contactModal?.open(selected)">{{ $t('contacts.edit') }}</button>
+            <button class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]" @click="confirmDelete(selected)">{{ $t('contacts.delete') }}</button>
           </div>
         </div>
         <div v-if="selected.notes" class="text-sm text-[var(--color-text-muted)] mb-4 whitespace-pre-wrap">{{ selected.notes }}</div>
@@ -95,7 +95,7 @@
 
     <!-- Group detail panel -->
     <div class="overflow-y-auto p-8" v-else>
-      <div v-if="!selectedGroup" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">Select a group</div>
+      <div v-if="!selectedGroup" class="flex items-center justify-center h-full text-[var(--color-text-muted)] text-sm">{{ $t('contacts.selectGroup') }}</div>
       <div v-else>
         <div class="flex items-start justify-between mb-4 gap-3">
           <div class="flex-1 min-w-0">
@@ -110,9 +110,9 @@
             />
           </div>
           <div class="flex gap-2 shrink-0">
-            <button v-if="!editingGroupName" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]" @click="startEditGroupName">Rename</button>
-            <button v-else class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]" @click="saveGroupName">Save</button>
-            <button class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]" @click="confirmDeleteGroup(selectedGroup)">Delete</button>
+            <button v-if="!editingGroupName" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]" @click="startEditGroupName">{{ $t('contacts.rename') }}</button>
+            <button v-else class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]" @click="saveGroupName">{{ $t('contacts.save') }}</button>
+            <button class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]" @click="confirmDeleteGroup(selectedGroup)">{{ $t('contacts.delete') }}</button>
           </div>
         </div>
 
@@ -122,7 +122,7 @@
             <div class="flex gap-1.5">
               <input
                 v-model="memberSearch"
-                placeholder="Search contacts or type an email address…"
+                :placeholder="$t('contacts.memberSearchPlaceholder')"
                 class="flex-1 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm outline-none min-w-0 focus:border-teal"
                 @input="onMemberSearch"
                 @keydown.enter.prevent="addFirstSuggestion"
@@ -133,10 +133,10 @@
                 class="px-3.5 py-1.5 text-sm border border-teal rounded-md bg-teal text-white cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-default"
                 :disabled="!memberSuggestions.length && !isRawEmail"
                 @click="addFirstSuggestion"
-              >Add</button>
+              >{{ $t('contacts.add') }}</button>
             </div>
             <div v-if="memberSearch && !memberSuggestions.length && !isRawEmail" class="text-xs text-[var(--color-text-muted)] mt-1">
-              No matching contacts. Type a full email address to add directly.
+              {{ $t('contacts.noMatchingContacts') }}
             </div>
             <ul v-if="memberSuggestions.length" class="absolute top-[calc(100%+4px)] left-0 right-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 z-50 shadow-lg">
               <li
@@ -153,14 +153,14 @@
         </div>
 
         <!-- Member list -->
-        <div v-if="!selectedGroup.members?.length" class="text-sm text-[var(--color-text-muted)] py-2">No members yet.</div>
+        <div v-if="!selectedGroup.members?.length" class="text-sm text-[var(--color-text-muted)] py-2">{{ $t('contacts.noMembers') }}</div>
         <ul v-else class="list-none">
           <li v-for="m in selectedGroup.members" :key="m.contact_id" class="flex items-center py-2 border-b border-[var(--color-border)] hover:[&_.m-remove]:opacity-100">
             <div class="flex flex-col flex-1 min-w-0">
               <span class="text-sm font-medium">{{ m.name || m.email }}</span>
               <span class="text-[11px] text-[var(--color-text-muted)]">{{ m.email }}</span>
             </div>
-            <button class="m-remove bg-none border-none cursor-pointer text-[var(--color-text-muted)] text-xs px-1.5 py-1 rounded opacity-0 shrink-0 hover:bg-[#fde8e8] hover:text-red-600" title="Remove" @click="removeMember(m.contact_id)">✕</button>
+            <button class="m-remove bg-none border-none cursor-pointer text-[var(--color-text-muted)] text-xs px-1.5 py-1 rounded opacity-0 shrink-0 hover:bg-[#fde8e8] hover:text-red-600" :title="$t('contacts.removeTitle')" @click="removeMember(m.contact_id)">✕</button>
           </li>
         </ul>
       </div>
@@ -173,11 +173,14 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, watch, provide } from 'vue'
+import { useI18n } from 'vue-i18n'
 import FolderList from '../components/FolderList.vue'
 import ContactModal from '../components/ContactModal.vue'
 import ComposeModal from '../components/ComposeModal.vue'
 import { useContactsStore } from '../stores/contacts'
 import { apiFetch } from '../api'
+
+const { t } = useI18n()
 
 const contacts = useContactsStore()
 const contactModal = ref(null)
@@ -236,17 +239,17 @@ async function importVCard(e) {
   const res = await apiFetch('/api/contacts/import', { method: 'POST', body: fd })
   if (res.ok) {
     const { imported } = await res.json()
-    alert(`Imported ${imported} contact(s).`)
+    alert(t('contacts.importedContacts', { n: imported }))
     await contacts.fetchContacts()
   } else {
-    alert('Import failed.')
+    alert(t('contacts.importFailed'))
   }
   e.target.value = ''
 }
 
 // Groups
 function openNewGroup() {
-  const name = prompt('Group name:')
+  const name = prompt(t('contacts.groupNamePrompt'))
   if (!name?.trim()) return
   contacts.createGroup(name.trim()).then(g => { selectedGroup.value = g })
 }

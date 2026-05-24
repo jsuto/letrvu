@@ -4,23 +4,23 @@
 
       <!-- Header -->
       <div class="flex justify-between items-center px-4 py-3 border-b border-[var(--color-border)] text-sm font-medium">
-        <span>{{ isEdit ? 'Edit contact' : 'New contact' }}</span>
+        <span>{{ isEdit ? $t('contactModal.editTitle') : $t('contactModal.newTitle') }}</span>
         <button @click="close" class="bg-none border-none text-lg cursor-pointer text-[var(--color-text-muted)]">×</button>
       </div>
 
       <!-- Body -->
       <div class="px-4 py-4 overflow-y-auto flex-1">
         <div class="mb-4">
-          <label class="block text-xs text-[var(--color-text-muted)] mb-1">Name</label>
-          <input v-model="form.name" type="text" placeholder="Full name"
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">{{ $t('contactModal.name') }}</label>
+          <input v-model="form.name" type="text" :placeholder="$t('contactModal.namePlaceholder')"
             class="w-full px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none box-border focus:border-teal" />
         </div>
         <div class="mb-4">
-          <label class="block text-xs text-[var(--color-text-muted)] mb-1">Email addresses</label>
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">{{ $t('contactModal.emailAddresses') }}</label>
           <div v-for="(e, i) in form.emails" :key="i" class="flex gap-1.5 mb-1.5 items-center">
-            <input v-model="e.email" type="email" placeholder="email@example.com"
+            <input v-model="e.email" type="email" :placeholder="$t('contactModal.emailPlaceholder')"
               class="flex-1 min-w-0 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal" />
-            <input v-model="e.label" type="text" placeholder="Label (e.g. work)"
+            <input v-model="e.label" type="text" :placeholder="$t('contactModal.labelPlaceholder')"
               class="w-[110px] shrink-0 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal" />
             <button type="button"
               class="bg-none border border-[var(--color-border)] rounded-md cursor-pointer text-base text-[var(--color-text-muted)] px-2 py-0"
@@ -28,26 +28,26 @@
           </div>
           <button type="button"
             class="bg-none border-none cursor-pointer text-xs text-teal p-0"
-            @click="addEmail">+ Add email</button>
+            @click="addEmail">{{ $t('contactModal.addEmail') }}</button>
         </div>
         <div class="mb-4">
-          <label class="block text-xs text-[var(--color-text-muted)] mb-1">Notes</label>
-          <textarea v-model="form.notes" placeholder="Optional notes…" rows="3"
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">{{ $t('contactModal.notes') }}</label>
+          <textarea v-model="form.notes" :placeholder="$t('contactModal.notesPlaceholder')" rows="3"
             class="w-full px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none box-border resize-y focus:border-teal" />
         </div>
         <div class="mb-2">
-          <label class="block text-xs text-[var(--color-text-muted)] mb-1">PGP Public Key</label>
+          <label class="block text-xs text-[var(--color-text-muted)] mb-1">{{ $t('contactModal.pgpKey') }}</label>
           <div v-if="pgpKeyInfo" class="flex items-center gap-2 mb-1.5">
             <span class="text-xs font-mono text-[var(--color-text-muted)] truncate flex-1">{{ pgpKeyInfo }}</span>
             <button type="button" @click="removePGPKey"
-              class="text-xs text-red-600 bg-none border-none cursor-pointer hover:underline shrink-0">Remove</button>
+              class="text-xs text-red-600 bg-none border-none cursor-pointer hover:underline shrink-0">{{ $t('contactModal.remove') }}</button>
           </div>
           <div v-else>
-            <textarea v-model="form.pgpKey" placeholder="Paste armored public key (-----BEGIN PGP PUBLIC KEY BLOCK-----)" rows="4"
+            <textarea v-model="form.pgpKey" :placeholder="$t('contactModal.pgpPlaceholder')" rows="4"
               class="w-full px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-xs font-mono outline-none box-border resize-y focus:border-teal" />
             <button type="button" @click="fetchWKD" :disabled="wkdBusy || !form.emails[0]?.email"
               class="mt-1 bg-none border border-[var(--color-border)] rounded-md px-3 py-1 text-xs cursor-pointer text-[var(--color-text-muted)] hover:border-teal hover:text-teal disabled:opacity-40 disabled:cursor-not-allowed">
-              {{ wkdBusy ? 'Looking up…' : '🔍 Look up via WKD' }}
+              {{ wkdBusy ? $t('contactModal.lookingUp') : $t('contactModal.lookupWKD') }}
             </button>
             <span v-if="wkdError" class="ml-2 text-xs text-[var(--color-text-muted)]">{{ wkdError }}</span>
           </div>
@@ -59,7 +59,7 @@
         <p v-if="error" class="text-xs text-red-600 flex-1">{{ error }}</p>
         <button @click="save" :disabled="saving"
           class="px-5 py-2 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
-          {{ saving ? 'Saving…' : 'Save' }}
+          {{ saving ? $t('contactModal.saving') : $t('contactModal.save') }}
         </button>
       </div>
     </div>
@@ -68,10 +68,13 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as openpgp from 'openpgp'
 import { useContactsStore } from '../stores/contacts'
 import { usePGPStore } from '../stores/pgp'
 import { apiFetch } from '../api'
+
+const { t } = useI18n()
 
 const contacts = useContactsStore()
 const pgp = usePGPStore()
@@ -145,10 +148,10 @@ async function fetchWKD() {
       form.pgpKey = armored
       wkdError.value = ''
     } else {
-      wkdError.value = 'No key found via WKD.'
+      wkdError.value = t('contactModal.noKeyFound')
     }
   } catch {
-    wkdError.value = 'WKD lookup failed.'
+    wkdError.value = t('contactModal.lookupFailed')
   } finally {
     wkdBusy.value = false
   }
@@ -157,7 +160,7 @@ async function fetchWKD() {
 async function save() {
   const emails = form.emails.filter(e => e.email.trim())
   if (!form.name.trim() && emails.length === 0) {
-    error.value = 'Name or at least one email is required.'
+    error.value = t('contactModal.nameOrEmailRequired')
     return
   }
   saving.value = true

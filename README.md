@@ -338,7 +338,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Archive action (one-click, keyboard shortcut)
 - [x] Advanced search syntax (from:, to:, subject:, has:attachment, date ranges)
 - [ ] OAuth2 / XOAUTH2 authentication (Gmail / Google Workspace support)
-- [ ] i18n / localization
+- [x] i18n / localization
 
 ## Releasing
 
