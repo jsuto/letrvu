@@ -392,7 +392,7 @@
         <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">{{ $t('settings.language') }}</div>
         <select v-model="form.locale"
           class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal w-auto">
-          <option value="en">{{ $t('settings.languageEn') }}</option>
+          <option v-for="loc in SUPPORTED_LOCALES" :key="loc.code" :value="loc.code">{{ loc.label }}</option>
         </select>
       </div>
 
@@ -413,6 +413,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { SUPPORTED_LOCALES } from '../i18n/index.js'
 import { useSettingsStore } from '../stores/settings'
 import { useAuthStore } from '../stores/auth'
 import { usePGPStore } from '../stores/pgp'

@@ -279,7 +279,8 @@
     "pgpKeyGenerationFailed": "Key generation failed.",
     "pgpImportFailed": "Import failed. Check your key and passphrase.",
     "language": "Language",
-    "languageEn": "English"
+    "languageEn": "English",
+    "languageDe": "German"
   },
   "undoSend": {
     "sending": "Sending in {n}s…",
