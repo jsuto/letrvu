@@ -111,9 +111,16 @@
         </div>
       </div>
 
-      <!-- Email authentication failure banner (SPF/DKIM/DMARC) -->
-      <div v-if="authFailed" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fff4e5] border border-[#e09030] text-[#7a4000]">
-        <span>⚠ Authentication failed — this message did not pass {{ authFailedMethods }} checks and may be spoofed or forged.</span>
+      <!-- High-risk: likely forged/spoofed — red, not dismissible -->
+      <div v-if="authHighRisk" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fdf0f0] border border-[#e07070] text-[#7a1a1a]">
+        <span>🚨 This message failed authentication and is likely forged or spoofed. Do not click links or reply.</span>
+      </div>
+
+      <!-- Medium-risk: suspicious signals — amber, dismissible -->
+      <div v-if="authMediumRisk && !authWarnDismissed" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fff4e5] border border-[#e09030] text-[#7a4000]">
+        <span>⚠ Suspicious message — {{ authMediumReasons }}.</span>
+        <button @click="authWarnDismissed = true"
+          class="ml-auto shrink-0 px-2 py-0.5 border border-[#e09030] rounded text-xs cursor-pointer bg-transparent hover:bg-[#e09030]/20">Dismiss</button>
       </div>
 
       <!-- Phishing link warning banner -->
@@ -229,6 +236,7 @@ const forwardWrapEl = ref(null)
 const showRemoteImages = ref(false)
 const hasRemoteImages = ref(false)
 const mdnDismissed = ref(false)
+const authWarnDismissed = ref(false)
 const mdnSending = ref(false)
 const mdnSent = ref(false)
 const phishingCount = ref(0)
@@ -399,6 +407,7 @@ watch(
   async () => {
     showRemoteImages.value = settings.trustedImageSenders.includes(senderEmail())
     mdnDismissed.value = false
+    authWarnDismissed.value = false
     mdnSent.value = false
     reprocessCurrentMessage()
     // Auto-send MDN silently when policy is 'always'.
@@ -493,19 +502,60 @@ function debugLog(...args) {
 // Authentication failure: only warn on explicit hard fails recorded by the
 // receiving MTA in Authentication-Results. Softfail/neutral/none are omitted
 // intentionally — they cause too many false positives (e.g. forwarded mail).
-const authFailed = computed(() => {
+// High confidence: DMARC fail (both SPF and DKIM alignment failed) or
+// both SPF and DKIM individually failing — strong signal of a forged sender.
+const authHighRisk = computed(() => {
   const msg = mail.currentMessage
   if (!msg) return false
-  return msg.dmarc === 'fail' || msg.spf === 'fail'
+  return msg.dmarc === 'fail' || (msg.spf === 'fail' && msg.dkim === 'fail')
 })
 
-const authFailedMethods = computed(() => {
+// Display name contains an @domain that doesn't match the actual From domain.
+// e.g. "support@paypal.com" <attacker@evil.com>
+const displayNameSpoofing = computed(() => {
+  const msg = mail.currentMessage
+  if (!msg) return false
+  const from = msg.from ?? ''
+  const angleMatch = from.match(/^(.*?)\s*<([^>]+)>\s*$/)
+  if (!angleMatch) return false
+  const displayName = angleMatch[1].trim()
+  const actualDomain = angleMatch[2].split('@')[1]?.toLowerCase() ?? ''
+  if (!actualDomain) return false
+  const atMatch = displayName.match(/@([\w.-]+)/)
+  if (!atMatch) return false
+  return registrableDomain(atMatch[1].toLowerCase()) !== registrableDomain(actualDomain)
+})
+
+// Reply-To domain differs from From domain — common in phishing to redirect replies.
+const replyToMismatch = computed(() => {
+  const msg = mail.currentMessage
+  if (!msg || !msg.reply_to) return false
+  const fromDomain = senderDomain(msg)
+  const rt = msg.reply_to
+  const m = rt.match(/^.*?<([^>]+)>\s*$/)
+  const replyDomain = (m ? m[1] : rt.trim()).split('@')[1]?.toLowerCase() ?? ''
+  return fromDomain && replyDomain && registrableDomain(fromDomain) !== registrableDomain(replyDomain)
+})
+
+// Medium confidence: one auth signal failing, or display name spoofing, or Reply-To mismatch.
+// Not shown when already high-risk (would be redundant).
+const authMediumRisk = computed(() => {
+  if (authHighRisk.value) return false
+  const msg = mail.currentMessage
+  if (!msg) return false
+  return msg.spf === 'fail' || msg.spf === 'softfail' || msg.dkim === 'fail' ||
+    displayNameSpoofing.value || replyToMismatch.value
+})
+
+const authMediumReasons = computed(() => {
   const msg = mail.currentMessage
   if (!msg) return ''
-  const failed = []
-  if (msg.spf === 'fail') failed.push('SPF')
-  if (msg.dmarc === 'fail') failed.push('DMARC')
-  return failed.join(' and ')
+  const reasons = []
+  if (msg.spf === 'fail' || msg.spf === 'softfail') reasons.push('SPF failed')
+  if (msg.dkim === 'fail') reasons.push('DKIM failed')
+  if (displayNameSpoofing.value) reasons.push('display name does not match the sender address')
+  if (replyToMismatch.value) reasons.push('Reply-To is on a different domain')
+  return reasons.join('; ')
 })
 
 // Extract the domain from a "Name <user@domain>" or "user@domain" From field.

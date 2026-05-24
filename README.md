@@ -322,7 +322,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Session timeout / logout all devices
 - [x] Spam flag feedback (`$Junk` IMAP flag)
 - [x] Email filters / rules (auto-move, auto-label by sender/subject)
-- [ ] Spam/phishing warning banners (suspicious sender analysis)
+- [x] Spam/phishing warning banners (suspicious sender analysis)
 - [x] Read receipts (send and suppress)
 - [x] Message templates / canned responses
 - [ ] S/MIME support
