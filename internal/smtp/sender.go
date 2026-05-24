@@ -152,6 +152,11 @@ func Send(cfg Config, msg Message) error {
 	}
 
 	for _, rcpt := range append(append(msg.To, msg.CC...), msg.BCC...) {
+		// Reject addresses that contain CR or LF — these could inject extra
+		// SMTP commands (SMTP injection / email content injection).
+		if strings.ContainsAny(rcpt, "\r\n") {
+			return fmt.Errorf("smtp rcpt: address %q contains invalid characters", rcpt)
+		}
 		if err = c.Rcpt(rcpt); err != nil {
 			return fmt.Errorf("smtp rcpt %s: %w", rcpt, err)
 		}

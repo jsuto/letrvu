@@ -482,32 +482,43 @@ func parseUnsubscribeURLs(header string) (httpsURL, mailtoURI string) {
 	return
 }
 
-// validateUnsubscribeURL guards against SSRF by ensuring the URL:
-//   - uses the https scheme only
-//   - resolves to a public, non-loopback, non-private IP address
-func validateUnsubscribeURL(rawURL string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return fmt.Errorf("invalid URL: %w", err)
+// newSSRFSafeClient returns an *http.Client whose DialContext resolves the
+// target hostname and rejects any connection to a loopback, private, or
+// link-local address. The check happens at dial time — not in a separate
+// pre-flight — so there is no DNS-rebinding window between validation and use.
+// Redirects are not followed to avoid being redirected onto a private address.
+func newSSRFSafeClient() *http.Client {
+	baseDialer := &net.Dialer{Timeout: 5 * time.Second}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("ssrf-safe dial: invalid addr %q: %w", addr, err)
+			}
+			ips, err := net.DefaultResolver.LookupHost(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("ssrf-safe dial: DNS lookup %q: %w", host, err)
+			}
+			for _, a := range ips {
+				ip := net.ParseIP(a)
+				if ip == nil || ip.IsLoopback() || ip.IsPrivate() ||
+					ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+					return nil, fmt.Errorf("ssrf-safe dial: %q resolves to blocked address %s", host, a)
+				}
+			}
+			// Dial the first validated IP directly so a racing DNS change
+			// cannot redirect the connection to a private address.
+			return baseDialer.DialContext(ctx, network, net.JoinHostPort(ips[0], port))
+		},
 	}
-	if u.Scheme != "https" {
-		return fmt.Errorf("scheme must be https, got %q", u.Scheme)
+	return &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: transport,
+		// Never follow redirects; the redirect target is not validated.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
-	host := u.Hostname()
-	addrs, err := net.LookupHost(host)
-	if err != nil {
-		return fmt.Errorf("DNS lookup failed for %q: %w", host, err)
-	}
-	for _, a := range addrs {
-		ip := net.ParseIP(a)
-		if ip == nil {
-			return fmt.Errorf("could not parse resolved IP %q", a)
-		}
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-			return fmt.Errorf("resolved address %s is not a public IP", a)
-		}
-	}
-	return nil
 }
 
 // parseMailtoURI extracts the recipient address, subject, and body from a
@@ -544,16 +555,24 @@ func (h *handler) unsubscribe(w http.ResponseWriter, r *http.Request) {
 
 	if oneClick && httpsURL != "" {
 		// RFC 8058 one-click: POST to the HTTPS URL with the prescribed body.
-		// Validate the URL before making the request to prevent SSRF: only
-		// public HTTPS targets are allowed — no plain HTTP, no private/loopback
-		// addresses, and no non-default ports that could reach internal services.
-		if err := validateUnsubscribeURL(httpsURL); err != nil {
-			log.Printf("unsubscribe SSRF guard blocked %q: %v", httpsURL, err)
+		//
+		// Parse the URL first and reconstruct it from its components so no raw
+		// user-controlled string flows into the HTTP client. The SSRF-safe
+		// client's DialContext then validates the resolved IP at connection time,
+		// eliminating the DNS-rebinding window that a pre-flight check would have.
+		parsed, err := url.Parse(httpsURL)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 			writeJSON(w, http.StatusBadRequest, errorResp("unsubscribe URL not allowed"))
 			return
 		}
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.PostForm(httpsURL, url.Values{"List-Unsubscribe": {"One-Click"}})
+		safeURL := (&url.URL{
+			Scheme:   "https",
+			Host:     parsed.Host,
+			Path:     parsed.EscapedPath(),
+			RawQuery: parsed.RawQuery,
+		}).String()
+		client := newSSRFSafeClient()
+		resp, err := client.PostForm(safeURL, url.Values{"List-Unsubscribe": {"One-Click"}})
 		if err != nil {
 			log.Printf("unsubscribe one-click POST failed: %v", err)
 			writeJSON(w, http.StatusBadGateway, errorResp("unsubscribe request failed"))
@@ -564,7 +583,7 @@ func (h *handler) unsubscribe(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadGateway, errorResp("unsubscribe request failed"))
 			return
 		}
-		log.Printf("audit: unsubscribe_oneclick user=%s url=%s", sess.Username, httpsURL)
+		log.Printf("audit: unsubscribe_oneclick user=%s url=%s", sess.Username, safeURL)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 		return
 	}
