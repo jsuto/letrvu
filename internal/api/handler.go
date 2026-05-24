@@ -10,6 +10,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"strconv"
 	"strings"
@@ -481,6 +482,34 @@ func parseUnsubscribeURLs(header string) (httpsURL, mailtoURI string) {
 	return
 }
 
+// validateUnsubscribeURL guards against SSRF by ensuring the URL:
+//   - uses the https scheme only
+//   - resolves to a public, non-loopback, non-private IP address
+func validateUnsubscribeURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("scheme must be https, got %q", u.Scheme)
+	}
+	host := u.Hostname()
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		return fmt.Errorf("DNS lookup failed for %q: %w", host, err)
+	}
+	for _, a := range addrs {
+		ip := net.ParseIP(a)
+		if ip == nil {
+			return fmt.Errorf("could not parse resolved IP %q", a)
+		}
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return fmt.Errorf("resolved address %s is not a public IP", a)
+		}
+	}
+	return nil
+}
+
 // parseMailtoURI extracts the recipient address, subject, and body from a
 // mailto: URI such as "mailto:unsub@example.com?subject=Unsubscribe".
 func parseMailtoURI(uri string) (addr, subject, body string) {
@@ -515,6 +544,14 @@ func (h *handler) unsubscribe(w http.ResponseWriter, r *http.Request) {
 
 	if oneClick && httpsURL != "" {
 		// RFC 8058 one-click: POST to the HTTPS URL with the prescribed body.
+		// Validate the URL before making the request to prevent SSRF: only
+		// public HTTPS targets are allowed — no plain HTTP, no private/loopback
+		// addresses, and no non-default ports that could reach internal services.
+		if err := validateUnsubscribeURL(httpsURL); err != nil {
+			log.Printf("unsubscribe SSRF guard blocked %q: %v", httpsURL, err)
+			writeJSON(w, http.StatusBadRequest, errorResp("unsubscribe URL not allowed"))
+			return
+		}
 		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.PostForm(httpsURL, url.Values{"List-Unsubscribe": {"One-Click"}})
 		if err != nil {
@@ -540,13 +577,24 @@ func (h *handler) unsubscribe(w http.ResponseWriter, r *http.Request) {
 
 	if mailtoURI != "" {
 		addr, subject, mailBody := parseMailtoURI(mailtoURI)
-		if addr == "" {
+		addr = strings.TrimSpace(addr)
+		if addr == "" || strings.ContainsAny(addr, "\r\n") {
 			writeJSON(w, http.StatusBadRequest, errorResp("invalid mailto URI"))
+			return
+		}
+		if _, err := mail.ParseAddress(addr); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResp("invalid mailto URI"))
+			return
+		}
+		if strings.ContainsAny(subject, "\r\n") {
+			writeJSON(w, http.StatusBadRequest, errorResp("invalid mailto subject"))
 			return
 		}
 		if subject == "" {
 			subject = "Unsubscribe"
 		}
+		// Normalize body newlines to prevent control-character injection in MIME.
+		mailBody = strings.ReplaceAll(strings.ReplaceAll(mailBody, "\r\n", "\n"), "\r", "\n")
 		smtpCfg := smtp.Config{
 			Host:     sess.SMTPHost,
 			Port:     sess.SMTPPort,
