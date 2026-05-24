@@ -19,6 +19,7 @@ import (
 	"github.com/jsuto/letrvu/internal/contacts"
 	"github.com/jsuto/letrvu/internal/db"
 	"github.com/jsuto/letrvu/internal/filters"
+	"github.com/jsuto/letrvu/internal/templates"
 	"github.com/jsuto/letrvu/internal/imap"
 	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
@@ -66,6 +67,7 @@ func main() {
 	calendarStore := calendar.NewStore(database)
 	indexStore := index.NewStore(database)
 	filtersStore := filters.NewStore(database)
+	templatesStore := templates.NewStore(database)
 
 	// Server-level IMAP/SMTP defaults (pre-fill login form via /api/config).
 	if strings.EqualFold(os.Getenv("LOG_LEVEL"), "debug") {
@@ -95,7 +97,7 @@ func main() {
 		log.Printf("warning: IMAP_HOST is set but SMTP_HOST is not — outbound mail will not work")
 	}
 
-	handler := api.NewRouter(sessions, settingsStore, contactsStore, calendarStore, indexStore, filtersStore, cfg)
+	handler := api.NewRouter(sessions, settingsStore, contactsStore, calendarStore, indexStore, filtersStore, templatesStore, cfg)
 
 	log.Printf("letrvu listening on %s", *addr)
 	if err := http.ListenAndServe(*addr, handler); err != nil {

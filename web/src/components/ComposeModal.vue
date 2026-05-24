@@ -55,6 +55,24 @@
             v-html="item.label"
           />
         </template>
+        <template v-if="templatesStore.templates.length">
+          <span class="mx-1 h-4 w-px shrink-0 bg-[var(--color-border)]" />
+          <div class="relative">
+            <button
+              @mousedown.prevent="showTemplatePicker = !showTemplatePicker"
+              title="Insert template"
+              :class="['min-w-[26px] rounded px-1.5 py-0.5 text-[13px] leading-snug transition-colors', showTemplatePicker ? 'bg-teal-light text-teal' : 'text-[var(--color-text)] hover:bg-[var(--color-bg)]']"
+            >📋</button>
+            <div v-if="showTemplatePicker"
+              class="absolute left-0 top-full mt-1 z-50 min-w-[180px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg py-1">
+              <button
+                v-for="t in templatesStore.templates" :key="t.id"
+                @mousedown.prevent="insertTemplate(t)"
+                class="w-full text-left px-3 py-1.5 text-[13px] text-[var(--color-text)] hover:bg-[var(--color-bg)] border-none bg-transparent cursor-pointer truncate"
+              >{{ t.name }}</button>
+            </div>
+          </div>
+        </template>
       </div>
 
       <!-- Rich editor -->
@@ -191,6 +209,7 @@ import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import { useCalendarStore } from '../stores/calendar'
 import { usePGPStore } from '../stores/pgp'
+import { useTemplatesStore } from '../stores/templates'
 import { apiFetch } from '../api'
 import AddressInput from './AddressInput.vue'
 
@@ -198,6 +217,7 @@ const mail = useMailStore()
 const settings = useSettingsStore()
 const calendarStore = useCalendarStore()
 const pgp = usePGPStore()
+const templatesStore = useTemplatesStore()
 
 const visible = ref(false)
 const sending = ref(false)
@@ -367,6 +387,19 @@ async function saveDraftManual() {
 const fromOptions = computed(() => settings.fromOptions)
 
 // Toolbar items — buttons and separators in one flat list, rendered with v-if in the template.
+const showTemplatePicker = ref(false)
+
+function insertTemplate(t) {
+  showTemplatePicker.value = false
+  // Fill subject only when the field is currently empty.
+  if (t.subject && !form.subject) form.subject = t.subject
+  // Prepend the template body above the current content (signature + quoted text).
+  const current = editor.value?.getHTML() ?? ''
+  const html = `<p>${t.body.replace(/\n/g, '</p><p>')}</p>`
+  editor.value?.commands.setContent(html + current)
+  editor.value?.commands.setTextSelection(0)
+}
+
 const toolbarItems = computed(() => [
   { label: '<b>B</b>',  title: 'Bold',           active: () => editor.value?.isActive('bold'),        action: () => editor.value?.chain().focus().toggleBold().run() },
   { label: '<i>I</i>',  title: 'Italic',          active: () => editor.value?.isActive('italic'),      action: () => editor.value?.chain().focus().toggleItalic().run() },
@@ -386,6 +419,7 @@ const toolbarItems = computed(() => [
 
 async function open(prefill = {}) {
   if (!settings.loaded) await settings.fetchSettings()
+  if (!templatesStore.loaded) templatesStore.fetchTemplates()
 
   const sig = (settings.settings.signature ?? '').replace(/^--\s*\n/, '').trim()
 
