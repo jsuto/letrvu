@@ -161,6 +161,12 @@
         >🔐 Encrypt</button>
 
         <button
+          @click="requestReadReceipt = !requestReadReceipt"
+          :title="requestReadReceipt ? 'Read receipt requested — click to cancel' : 'Request read receipt'"
+          :class="['text-[12px] transition-colors px-2 py-1 rounded border', requestReadReceipt ? 'border-teal text-teal bg-[var(--color-teal-light)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]']"
+        >✉ Receipt</button>
+
+        <button
           @click="togglePlainText"
           :title="plainTextMode ? 'Switch to rich text' : 'Switch to plain text'"
           class="ml-auto text-[12px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
@@ -214,6 +220,8 @@ const pendingInvite = ref(null)
 // PGP toggles
 const pgpSign = ref(false)
 const pgpEncrypt = ref(false)
+
+const requestReadReceipt = ref(false)
 const pgpEncryptable = ref(false)   // true when all recipients have stored public keys
 const pgpError = ref('')
 
@@ -327,6 +335,7 @@ function buildPayload() {
     cc: form.cc.split(',').map(s => s.trim()).filter(Boolean),
     subject: form.subject,
     attachments: attachments.value.length ? attachments.value : undefined,
+    disposition_notification_to: requestReadReceipt.value ? (selectedFrom?.email ?? '') : undefined,
   }
   if (plainTextMode.value) {
     return { ...base, text: form.plainBody }
@@ -406,6 +415,7 @@ async function open(prefill = {}) {
 
   attachments.value = _a ? [..._a] : []
   pendingInvite.value = _inv ?? null
+  requestReadReceipt.value = false
 
   // Build the HTML content for the editor.
   // Layout: [cursor] [sig block] [quoted content if reply/forward]

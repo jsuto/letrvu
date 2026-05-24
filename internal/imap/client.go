@@ -365,6 +365,10 @@ type MessageFull struct {
 	// References when the user replies to this message.
 	MessageID  string `json:"message_id,omitempty"`
 	References string `json:"references,omitempty"`
+
+	// DispositionNotificationTo is set when the sender requested a read receipt
+	// via the Disposition-Notification-To header (RFC 3798).
+	DispositionNotificationTo string `json:"disposition_notification_to,omitempty"`
 }
 
 // GetMessage fetches the full content of a single message by UID.
@@ -538,6 +542,16 @@ func parseMIMEBody(raw []byte, full *MessageFull) error {
 	// References header (RFC 2822 threading).
 	if refs := rh["references"]; len(refs) > 0 {
 		full.References = strings.TrimSpace(refs[0])
+	}
+
+	// Disposition-Notification-To / Return-Receipt-To (RFC 3798 read receipt request).
+	for _, hdr := range []string{"disposition-notification-to", "return-receipt-to"} {
+		if vals := rh[hdr]; len(vals) > 0 {
+			if v := strings.TrimSpace(vals[0]); v != "" {
+				full.DispositionNotificationTo = v
+				break
+			}
+		}
 	}
 
 	for _, v := range rh["authentication-results"] {

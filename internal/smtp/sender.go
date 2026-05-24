@@ -78,6 +78,10 @@ type Message struct {
 	// the signature is included as a signature.asc attachment instead.
 	PGPSignature string // armored detached PGP signature
 	PGPMicAlg    string // hash algorithm string, e.g. "pgp-sha512"
+
+	// DispositionNotificationTo, when set, adds a Disposition-Notification-To
+	// header requesting a read receipt (MDN) from the recipient (RFC 3798).
+	DispositionNotificationTo string
 }
 
 // Send delivers msg via SMTP. Port 465 uses implicit TLS (SMTPS — the TLS
@@ -203,6 +207,9 @@ func buildMIME(msg Message) string {
 	}
 	sb.WriteString(fmt.Sprintf("Subject: %s\r\n", msg.Subject))
 	sb.WriteString("X-Mailer: letrvu\r\n")
+	if msg.DispositionNotificationTo != "" {
+		sb.WriteString(fmt.Sprintf("Disposition-Notification-To: %s\r\n", msg.DispositionNotificationTo))
+	}
 	sb.WriteString("MIME-Version: 1.0\r\n")
 
 	if msg.PGPSignature != "" && len(msg.Attachments) == 0 {
@@ -352,6 +359,97 @@ func writePGPMIMESigned(sb *strings.Builder, msg Message) {
 	sb.WriteString(msg.PGPSignature)
 	sb.WriteString("\r\n")
 	sb.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+}
+
+// SendMDN sends a Message Disposition Notification (RFC 3798) to notifyAddr,
+// informing the original sender that their message has been read.
+// from is the current user's email, notifyAddr is from the Disposition-Notification-To
+// header of the received message.
+func SendMDN(cfg Config, from, notifyAddr, originalMsgID, originalSubject string) error {
+	const boundary = "letrvu-mdn-001"
+	msgID := fmt.Sprintf("<%d.%s@%s>", time.Now().UnixNano(), randomToken(8), Hostname)
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
+	sb.WriteString(fmt.Sprintf("Message-ID: %s\r\n", msgID))
+	sb.WriteString(fmt.Sprintf("From: %s\r\n", from))
+	sb.WriteString(fmt.Sprintf("To: %s\r\n", notifyAddr))
+	sb.WriteString(fmt.Sprintf("Subject: Read: %s\r\n", originalSubject))
+	sb.WriteString("X-Mailer: letrvu\r\n")
+	sb.WriteString("MIME-Version: 1.0\r\n")
+	sb.WriteString(fmt.Sprintf("Content-Type: multipart/report; report-type=disposition-notification; boundary=%q\r\n\r\n", boundary))
+
+	// Part 1 — human-readable explanation.
+	sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	sb.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
+	sb.WriteString(fmt.Sprintf("Your message \"%s\" was read.\r\n", originalSubject))
+	sb.WriteString("\r\n")
+
+	// Part 2 — machine-readable MDN (RFC 3798 §3).
+	sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	sb.WriteString("Content-Type: message/disposition-notification\r\n\r\n")
+	sb.WriteString("Reporting-UA: letrvu\r\n")
+	sb.WriteString(fmt.Sprintf("Final-Recipient: rfc822; %s\r\n", from))
+	sb.WriteString(fmt.Sprintf("Original-Message-ID: %s\r\n", originalMsgID))
+	sb.WriteString("Disposition: manual-action/MDN-sent-manually; displayed\r\n")
+	sb.WriteString("\r\n")
+
+	sb.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+	raw := sb.String()
+
+	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	tlsCfg := DefaultTLSConfig.Clone()
+	tlsCfg.ServerName = cfg.Host
+
+	var c *netsmtp.Client
+	var err error
+	if cfg.Port == 465 {
+		conn, dialErr := tls.Dial("tcp", addr, tlsCfg)
+		if dialErr != nil {
+			return fmt.Errorf("smtp dial tls: %w", dialErr)
+		}
+		c, err = netsmtp.NewClient(conn, cfg.Host)
+		if err != nil {
+			conn.Close()
+			return fmt.Errorf("smtp client: %w", err)
+		}
+	} else {
+		c, err = netsmtp.Dial(addr)
+		if err != nil {
+			return fmt.Errorf("smtp dial: %w", err)
+		}
+		if err = c.StartTLS(tlsCfg); err != nil {
+			c.Close()
+			return fmt.Errorf("smtp starttls: %w", err)
+		}
+	}
+	defer c.Close()
+
+	if err = c.Hello(Hostname); err != nil {
+		return fmt.Errorf("smtp ehlo: %w", err)
+	}
+	auth := netsmtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
+	if err = c.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+	if err = c.Mail(from); err != nil {
+		return fmt.Errorf("smtp mail from: %w", err)
+	}
+	if err = c.Rcpt(notifyAddr); err != nil {
+		return fmt.Errorf("smtp rcpt: %w", err)
+	}
+	wc, err := c.Data()
+	if err != nil {
+		return fmt.Errorf("smtp data: %w", err)
+	}
+	if _, err = fmt.Fprint(wc, raw); err != nil {
+		wc.Close()
+		return fmt.Errorf("smtp write: %w", err)
+	}
+	if err = wc.Close(); err != nil {
+		return fmt.Errorf("smtp data close: %w", err)
+	}
+	return c.Quit()
 }
 
 func stripHTML(html string) string {

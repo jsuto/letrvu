@@ -853,6 +853,7 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 			Signature string `json:"signature"`
 			MicAlg    string `json:"micalg"`
 		} `json:"pgp_mime_sig,omitempty"`
+		DispositionNotificationTo string `json:"disposition_notification_to,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResp("invalid request body"))
@@ -894,17 +895,18 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	msgID := fmt.Sprintf("<%d.%s@%s>", time.Now().UnixNano(), msgIDRnd, smtp.Hostname)
 
 	smtpMsg := smtp.Message{
-		From:         fromHeader,
-		EnvelopeFrom: fromEmail, // use the selected From address for SPF alignment
-		To:           body.To,
-		CC:           body.CC,
-		Subject:      body.Subject,
-		Text:         body.Text,
-		HTML:         body.HTML,
-		Attachments:  attachments,
-		MessageID:    msgID,
-		InReplyTo:    body.InReplyTo,
-		References:   body.References,
+		From:                      fromHeader,
+		EnvelopeFrom:              fromEmail, // use the selected From address for SPF alignment
+		To:                        body.To,
+		CC:                        body.CC,
+		Subject:                   body.Subject,
+		Text:                      body.Text,
+		HTML:                      body.HTML,
+		Attachments:               attachments,
+		MessageID:                 msgID,
+		InReplyTo:                 body.InReplyTo,
+		References:                body.References,
+		DispositionNotificationTo: body.DispositionNotificationTo,
 	}
 	if body.PGPMimeSig != nil {
 		smtpMsg.PGPSignature = body.PGPMimeSig.Signature
@@ -940,6 +942,51 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// sendMDN sends a Message Disposition Notification (read receipt) back to the
+// sender of a message. The frontend calls this when the user clicks
+// "Send read receipt" in response to a Disposition-Notification-To header.
+func (h *handler) sendMDN(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Folder string `json:"folder"`
+		UID    uint32 `json:"uid"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid request body"))
+		return
+	}
+
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connect: "+err.Error()))
+		return
+	}
+	defer c.Close()
+
+	msg, err := c.GetMessage(body.Folder, body.UID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResp("message not found"))
+		return
+	}
+	if msg.DispositionNotificationTo == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("message did not request a read receipt"))
+		return
+	}
+
+	if err := smtp.SendMDN(smtp.Config{
+		Host:     sess.SMTPHost,
+		Port:     sess.SMTPPort,
+		Username: sess.Username,
+		Password: sess.Password,
+	}, sess.Username, msg.DispositionNotificationTo, msg.MessageID, msg.Subject); err != nil {
+		log.Printf("audit: mdn_failed user=%s ip=%s err=%v", sess.Username, h.clientIP(r), err)
+		writeJSON(w, http.StatusBadGateway, errorResp(err.Error()))
+		return
+	}
+	log.Printf("audit: mdn_sent user=%s ip=%s to=%s", sess.Username, h.clientIP(r), msg.DispositionNotificationTo)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

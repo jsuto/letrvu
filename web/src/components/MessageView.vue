@@ -95,6 +95,22 @@
         </div>
       </div>
 
+      <!-- Read receipt request banner -->
+      <div v-if="showMdnBanner" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[var(--color-teal-light)] border border-teal text-[var(--color-text)]">
+        <span>✉ The sender requested a read receipt.</span>
+        <div class="flex gap-2 ml-auto">
+          <button @click="sendMDN"
+            :disabled="mdnSending || mdnSent"
+            class="px-3.5 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer whitespace-nowrap disabled:opacity-60">
+            {{ mdnSent ? 'Sent ✓' : mdnSending ? 'Sending…' : 'Send receipt' }}
+          </button>
+          <button @click="dismissMDN"
+            class="px-3.5 py-1.5 border border-teal text-[var(--color-text)] rounded-md text-xs cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">
+            Don't send
+          </button>
+        </div>
+      </div>
+
       <!-- Email authentication failure banner (SPF/DKIM/DMARC) -->
       <div v-if="authFailed" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm mb-4 bg-[#fff4e5] border border-[#e09030] text-[#7a4000]">
         <span>⚠ Authentication failed — this message did not pass {{ authFailedMethods }} checks and may be spoofed or forged.</span>
@@ -189,6 +205,7 @@ import { useSettingsStore } from '../stores/settings'
 import { usePGPStore } from '../stores/pgp'
 import { useDarkMode } from '../composables/useDarkMode'
 import { extractEmail, buildReplyAllCc, isPreviewable } from '../utils/mail.js'
+import { apiFetch } from '../api'
 import ConfirmDialog from './ConfirmDialog.vue'
 
 const mail = useMailStore()
@@ -211,6 +228,9 @@ const forwardMenuOpen = ref(false)
 const forwardWrapEl = ref(null)
 const showRemoteImages = ref(false)
 const hasRemoteImages = ref(false)
+const mdnDismissed = ref(false)
+const mdnSending = ref(false)
+const mdnSent = ref(false)
 const phishingCount = ref(0)
 const processedHtml = ref(null)
 const sourceOpen = ref(false)
@@ -376,9 +396,18 @@ function senderEmail() {
 
 watch(
   () => mail.currentMessage?.uid,
-  () => {
+  async () => {
     showRemoteImages.value = settings.trustedImageSenders.includes(senderEmail())
+    mdnDismissed.value = false
+    mdnSent.value = false
     reprocessCurrentMessage()
+    // Auto-send MDN silently when policy is 'always'.
+    if (
+      mail.currentMessage?.disposition_notification_to &&
+      settings.readReceiptPolicy === 'always'
+    ) {
+      await sendMDN()
+    }
   },
   { immediate: true }
 )
@@ -388,6 +417,36 @@ async function trustSender() {
   if (!email) return
   await settings.trustImageSender(email)
   showRemoteImages.value = true
+}
+
+// showMdnBanner is true when the message requests a receipt and the user
+// policy is 'ask' (and they haven't already acted on this message).
+const showMdnBanner = computed(() => {
+  if (!mail.currentMessage?.disposition_notification_to) return false
+  if (settings.readReceiptPolicy === 'never') return false
+  if (mdnDismissed.value || mdnSent.value) return false
+  return true
+})
+
+async function sendMDN() {
+  if (mdnSending.value || mdnSent.value) return
+  const msg = mail.currentMessage
+  if (!msg) return
+  mdnSending.value = true
+  try {
+    await apiFetch('/api/mdn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: mail.currentFolder, uid: msg.uid }),
+    })
+    mdnSent.value = true
+  } finally {
+    mdnSending.value = false
+  }
+}
+
+function dismissMDN() {
+  mdnDismissed.value = true
 }
 
 // Re-inject dark/light baseline when the theme is toggled.

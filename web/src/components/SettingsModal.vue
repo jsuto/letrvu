@@ -63,6 +63,18 @@
           </select>
         </div>
 
+        <!-- Read receipts -->
+        <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Read receipts</div>
+        <label class="flex items-center gap-2.5">
+          <span class="text-sm text-[var(--color-text)] flex-1">When a sender requests a read receipt</span>
+          <select v-model="form.read_receipt_policy"
+            class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal w-auto">
+            <option value="ask">Ask me each time</option>
+            <option value="always">Always send</option>
+            <option value="never">Never send</option>
+          </select>
+        </label>
+
         <!-- Vacation autoresponder -->
         <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Vacation autoresponder</div>
         <div class="flex flex-col gap-2">
@@ -285,7 +297,7 @@ const pgpBusy = ref(false)
 const pgpError = ref('')
 const pgpForm = reactive({ name: '', email: '', passphrase: '', passphrase2: '', armoredKey: '' })
 
-const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120, calendar_reminder_minutes: 30, vacation_enabled: false, vacation_subject: '', vacation_body: '', vacation_start: '', vacation_end: '' })
+const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120, calendar_reminder_minutes: 30, read_receipt_policy: 'ask', vacation_enabled: false, vacation_subject: '', vacation_body: '', vacation_start: '', vacation_end: '' })
 const vacationStatus = ref(null) // { type: 'active'|'warn'|'error', message: string }
 
 async function open() {
@@ -295,6 +307,7 @@ async function open() {
   form.identities = settings.identities.map(id => ({ ...id }))
   form.poll_interval = settings.pollInterval
   form.calendar_reminder_minutes = settings.reminderMinutes
+  form.read_receipt_policy = settings.readReceiptPolicy
   notifPermission.value = typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   saved.value = false
   error.value = ''
@@ -444,6 +457,7 @@ async function save() {
       identities: JSON.stringify(validIdentities),
       poll_interval: String(form.poll_interval),
       calendar_reminder_minutes: String(form.calendar_reminder_minutes),
+      read_receipt_policy: form.read_receipt_policy,
     })
     // Save vacation settings separately (needs its own endpoint for Sieve side-effects).
     const vacResult = await settings.saveVacation({

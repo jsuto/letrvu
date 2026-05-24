@@ -323,7 +323,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Spam flag feedback (`$Junk` IMAP flag)
 - [ ] Email filters / rules (auto-move, auto-label by sender/subject)
 - [ ] Spam/phishing warning banners (suspicious sender analysis)
-- [ ] Read receipts (send and suppress)
+- [x] Read receipts (send and suppress)
 - [ ] Message templates / canned responses
 - [ ] S/MIME support
 

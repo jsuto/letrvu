@@ -154,6 +154,25 @@ describe('settings store — saveSettings', () => {
   })
 })
 
+describe('settings store — readReceiptPolicy', () => {
+  it('defaults to "ask" when not set', () => {
+    const store = useSettingsStore()
+    expect(store.readReceiptPolicy).toBe('ask')
+  })
+
+  it('returns the stored policy value', () => {
+    const store = useSettingsStore()
+    store.settings.read_receipt_policy = 'always'
+    expect(store.readReceiptPolicy).toBe('always')
+  })
+
+  it('returns "never" when set to never', () => {
+    const store = useSettingsStore()
+    store.settings.read_receipt_policy = 'never'
+    expect(store.readReceiptPolicy).toBe('never')
+  })
+})
+
 describe('settings store — trustedImageSenders', () => {
   it('returns empty array when setting not set', () => {
     const store = useSettingsStore()
