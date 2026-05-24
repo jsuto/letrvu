@@ -454,6 +454,123 @@ func (h *handler) getQuota(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]int64{"used": quota.UsedBytes, "limit": quota.LimitBytes})
 }
 
+// parseUnsubscribeURLs extracts the first HTTPS and mailto URLs from a
+// List-Unsubscribe header value such as:
+//
+//	<mailto:unsub@example.com?subject=unsubscribe>, <https://example.com/unsub>
+func parseUnsubscribeURLs(header string) (httpsURL, mailtoURI string) {
+	// URLs are enclosed in angle brackets, possibly separated by commas.
+	for i := 0; i < len(header); i++ {
+		if header[i] != '<' {
+			continue
+		}
+		end := strings.IndexByte(header[i+1:], '>')
+		if end < 0 {
+			break
+		}
+		u := strings.TrimSpace(header[i+1 : i+1+end])
+		i = i + 1 + end
+		switch {
+		case strings.HasPrefix(u, "https://") && httpsURL == "":
+			httpsURL = u
+		case strings.HasPrefix(u, "mailto:") && mailtoURI == "":
+			mailtoURI = u
+		}
+	}
+	return
+}
+
+// parseMailtoURI extracts the recipient address, subject, and body from a
+// mailto: URI such as "mailto:unsub@example.com?subject=Unsubscribe".
+func parseMailtoURI(uri string) (addr, subject, body string) {
+	u, err := url.Parse(uri)
+	if err != nil || u.Scheme != "mailto" {
+		return
+	}
+	addr = u.Opaque
+	if addr == "" {
+		addr = u.Path
+	}
+	q := u.Query()
+	subject = q.Get("subject")
+	body = q.Get("body")
+	return
+}
+
+func (h *handler) unsubscribe(w http.ResponseWriter, r *http.Request) {
+	sess := h.sessionFrom(r)
+
+	var body struct {
+		ListUnsubscribe     string `json:"list_unsubscribe"`
+		ListUnsubscribePost string `json:"list_unsubscribe_post"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ListUnsubscribe == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("list_unsubscribe is required"))
+		return
+	}
+
+	httpsURL, mailtoURI := parseUnsubscribeURLs(body.ListUnsubscribe)
+	oneClick := strings.EqualFold(strings.TrimSpace(body.ListUnsubscribePost), "List-Unsubscribe=One-Click")
+
+	if oneClick && httpsURL != "" {
+		// RFC 8058 one-click: POST to the HTTPS URL with the prescribed body.
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.PostForm(httpsURL, url.Values{"List-Unsubscribe": {"One-Click"}})
+		if err != nil {
+			log.Printf("unsubscribe one-click POST failed: %v", err)
+			writeJSON(w, http.StatusBadGateway, errorResp("unsubscribe request failed"))
+			return
+		}
+		resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			writeJSON(w, http.StatusBadGateway, errorResp("unsubscribe request failed"))
+			return
+		}
+		log.Printf("audit: unsubscribe_oneclick user=%s url=%s", sess.Username, httpsURL)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+
+	if httpsURL != "" {
+		// No Post header — return the URL so the frontend can open it in a tab.
+		writeJSON(w, http.StatusOK, map[string]any{"status": "open", "url": httpsURL})
+		return
+	}
+
+	if mailtoURI != "" {
+		addr, subject, mailBody := parseMailtoURI(mailtoURI)
+		if addr == "" {
+			writeJSON(w, http.StatusBadRequest, errorResp("invalid mailto URI"))
+			return
+		}
+		if subject == "" {
+			subject = "Unsubscribe"
+		}
+		smtpCfg := smtp.Config{
+			Host:     sess.SMTPHost,
+			Port:     sess.SMTPPort,
+			Username: sess.Username,
+			Password: sess.Password,
+		}
+		msg := smtp.Message{
+			From:    sess.Username,
+			To:      []string{addr},
+			Subject: subject,
+			Text:    mailBody,
+		}
+		if err := smtp.Send(smtpCfg, msg); err != nil {
+			log.Printf("unsubscribe mailto send failed: %v", err)
+			writeJSON(w, http.StatusBadGateway, errorResp("failed to send unsubscribe email"))
+			return
+		}
+		log.Printf("audit: unsubscribe_mailto user=%s to=%s", sess.Username, addr)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+
+	writeJSON(w, http.StatusBadRequest, errorResp("no supported unsubscribe method found"))
+}
+
 func (h *handler) searchGlobal(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {

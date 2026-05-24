@@ -369,6 +369,13 @@ type MessageFull struct {
 	// DispositionNotificationTo is set when the sender requested a read receipt
 	// via the Disposition-Notification-To header (RFC 3798).
 	DispositionNotificationTo string `json:"disposition_notification_to,omitempty"`
+
+	// List-Unsubscribe headers (RFC 2369, RFC 8058). ListUnsubscribe contains
+	// the raw header value (comma-separated bracketed URLs). ListUnsubscribePost
+	// is set to "List-Unsubscribe=One-Click" when the sender supports RFC 8058
+	// one-click unsubscribe via HTTP POST.
+	ListUnsubscribe     string `json:"list_unsubscribe,omitempty"`
+	ListUnsubscribePost string `json:"list_unsubscribe_post,omitempty"`
 }
 
 // GetMessage fetches the full content of a single message by UID.
@@ -552,6 +559,14 @@ func parseMIMEBody(raw []byte, full *MessageFull) error {
 				break
 			}
 		}
+	}
+
+	// List-Unsubscribe / List-Unsubscribe-Post (RFC 2369, RFC 8058).
+	if vals := rh["list-unsubscribe"]; len(vals) > 0 {
+		full.ListUnsubscribe = strings.TrimSpace(vals[0])
+	}
+	if vals := rh["list-unsubscribe-post"]; len(vals) > 0 {
+		full.ListUnsubscribePost = strings.TrimSpace(vals[0])
 	}
 
 	for _, v := range rh["authentication-results"] {

@@ -57,6 +57,14 @@
           </div>
           <button v-if="!isJunkFolder" @click="spam" title="Move to Junk" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Spam</button>
           <button v-if="isJunkFolder" @click="notSpam" title="Move to Inbox" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Not spam</button>
+          <button
+            v-if="!isDraftsFolder && mail.currentMessage.list_unsubscribe"
+            @click="doUnsubscribe"
+            :disabled="unsubState === 'loading'"
+            :class="['px-3.5 py-1.5 border rounded-md bg-[var(--color-surface)] text-sm cursor-pointer',
+              unsubState === 'done' ? 'border-teal text-teal' : 'border-[var(--color-border)] hover:bg-[var(--color-bg)]']"
+            title="Unsubscribe from this mailing list"
+          >{{ unsubState === 'done' ? 'Unsubscribed ✓' : 'Unsubscribe' }}</button>
           <button @click="confirmDeleteVisible = true" class="px-3.5 py-1.5 border border-red-200 rounded-md bg-[var(--color-surface)] text-sm cursor-pointer text-red-600 hover:bg-[var(--color-bg)]">Delete</button>
           <button @click="printMessage" title="Print message" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer ml-auto hover:bg-[var(--color-bg)]">🖨</button>
           <button @click="viewSource" title="View message source" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs font-mono cursor-pointer hover:bg-[var(--color-bg)]">&lt;/&gt;</button>
@@ -220,6 +228,7 @@ const setMobilePanel = inject('setMobilePanel', () => {})
 const { dark } = useDarkMode()
 
 const confirmDeleteVisible = ref(false)
+const unsubState = ref('idle') // 'idle' | 'loading' | 'done'
 const inviteAdding = ref(false)
 const inviteAdded = ref(false)
 const moveOpen = ref(false)
@@ -619,6 +628,7 @@ onUnmounted(() => {
 // Reset state when message changes
 watch(() => mail.currentMessage?.uid, () => {
   inviteAdded.value = false
+  unsubState.value = 'idle'
   pgpDecryptedText.value = null
   pgpCleartextBody.value = null
   pgpBusy.value = false
@@ -945,6 +955,30 @@ async function notSpam() {
   const msg = mail.currentMessage
   if (!msg) return
   await mail.markAsNotSpam(mail.currentFolder, [msg.uid])
+}
+
+async function doUnsubscribe() {
+  const msg = mail.currentMessage
+  if (!msg || unsubState.value !== 'idle') return
+  unsubState.value = 'loading'
+  try {
+    const res = await apiFetch('/api/unsubscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        list_unsubscribe: msg.list_unsubscribe,
+        list_unsubscribe_post: msg.list_unsubscribe_post ?? '',
+      }),
+    })
+    if (!res.ok) { unsubState.value = 'idle'; return }
+    const data = await res.json()
+    if (data.status === 'open') {
+      window.open(data.url, '_blank', 'noopener,noreferrer')
+    }
+    unsubState.value = 'done'
+  } catch {
+    unsubState.value = 'idle'
+  }
 }
 
 async function doDelete() {
