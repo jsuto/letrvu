@@ -114,6 +114,73 @@ func TestParseMIMEBody_ReferencesAbsent(t *testing.T) {
 	}
 }
 
+func TestParseMIMEBody_DispositionNotificationTo(t *testing.T) {
+	raw := []byte("From: sender@example.com\r\n" +
+		"To: rcpt@example.com\r\n" +
+		"Disposition-Notification-To: sender@example.com\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n" +
+		"\r\n" +
+		"please confirm you read this")
+
+	full := &MessageFull{}
+	if err := parseMIMEBody(raw, full); err != nil {
+		t.Fatalf("parseMIMEBody: %v", err)
+	}
+	if full.DispositionNotificationTo != "sender@example.com" {
+		t.Errorf("DispositionNotificationTo = %q, want %q", full.DispositionNotificationTo, "sender@example.com")
+	}
+}
+
+func TestParseMIMEBody_ReturnReceiptTo(t *testing.T) {
+	// Return-Receipt-To is an older non-standard variant; we treat it the same.
+	raw := []byte("From: sender@example.com\r\n" +
+		"To: rcpt@example.com\r\n" +
+		"Return-Receipt-To: receipts@example.com\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n" +
+		"\r\n" +
+		"body")
+
+	full := &MessageFull{}
+	if err := parseMIMEBody(raw, full); err != nil {
+		t.Fatalf("parseMIMEBody: %v", err)
+	}
+	if full.DispositionNotificationTo != "receipts@example.com" {
+		t.Errorf("DispositionNotificationTo = %q, want %q", full.DispositionNotificationTo, "receipts@example.com")
+	}
+}
+
+func TestParseMIMEBody_DispositionNotificationToAbsent(t *testing.T) {
+	full := &MessageFull{}
+	if err := parseMIMEBody(plainTextEmail("hi", "body"), full); err != nil {
+		t.Fatalf("parseMIMEBody: %v", err)
+	}
+	if full.DispositionNotificationTo != "" {
+		t.Errorf("DispositionNotificationTo should be empty, got %q", full.DispositionNotificationTo)
+	}
+}
+
+func TestParseMIMEBody_DispositionBeatsReturnReceipt(t *testing.T) {
+	// When both headers are present, Disposition-Notification-To takes priority.
+	raw := []byte("From: sender@example.com\r\n" +
+		"To: rcpt@example.com\r\n" +
+		"Disposition-Notification-To: primary@example.com\r\n" +
+		"Return-Receipt-To: fallback@example.com\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n" +
+		"\r\n" +
+		"body")
+
+	full := &MessageFull{}
+	if err := parseMIMEBody(raw, full); err != nil {
+		t.Fatalf("parseMIMEBody: %v", err)
+	}
+	if full.DispositionNotificationTo != "primary@example.com" {
+		t.Errorf("DispositionNotificationTo = %q, want primary", full.DispositionNotificationTo)
+	}
+}
+
 func TestParseMIMEBody_PlainText(t *testing.T) {
 	full := &MessageFull{}
 	if err := parseMIMEBody(plainTextEmail("hi", "Hello, world!"), full); err != nil {

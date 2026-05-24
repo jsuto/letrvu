@@ -86,6 +86,9 @@ export const useSettingsStore = defineStore('settings', () => {
     await saveSettings({ trusted_image_senders: JSON.stringify([...current, addr]) })
   }
 
+  // Read receipt policy: 'ask' (default) | 'always' | 'never'
+  const readReceiptPolicy = computed(() => settings.value.read_receipt_policy || 'ask')
+
   async function untrustImageSender(email) {
     const addr = email.toLowerCase()
     const updated = trustedImageSenders.value.filter(e => e !== addr)
@@ -119,5 +122,5 @@ export const useSettingsStore = defineStore('settings', () => {
     return result
   }
 
-  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes, vacationEnabled, vacationSieveActive, saveVacation, trustedImageSenders, trustImageSender, untrustImageSender }
+  return { settings, loaded, fetchSettings, saveSettings, username, identities, fromOptions, internalDomains, pollInterval, notificationsEnabled, reminderMinutes, vacationEnabled, vacationSieveActive, saveVacation, trustedImageSenders, trustImageSender, untrustImageSender, readReceiptPolicy }
 })
