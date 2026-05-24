@@ -1019,6 +1019,17 @@ func (c *Client) JunkFolder() string {
 	return folder
 }
 
+// ArchiveFolder returns the name of the Archive mailbox. It checks for the
+// \Archive special-use attribute first, then falls back to common name
+// patterns, and finally returns "Archive" if nothing else matches.
+func (c *Client) ArchiveFolder() string {
+	folder := c.findSpecialFolder(goimap.MailboxAttrArchive, []string{"archive", "archives", "all mail"})
+	if folder == "" {
+		folder = "Archive"
+	}
+	return folder
+}
+
 // SaveSent appends a raw RFC 2822 message to the Sent mailbox with the \Seen
 // flag. The folder is discovered by special-use attribute first, then by
 // common name patterns; falls back to "Sent".

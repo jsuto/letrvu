@@ -104,6 +104,12 @@ function onKeydown(e) {
         messageView.value?.reply()
       }
       break
+    case 'e':
+      if (mail.currentMessage) {
+        e.preventDefault()
+        messageView.value?.archive()
+      }
+      break
     case 'd':
       if (mail.currentMessage) {
         e.preventDefault()

@@ -201,6 +201,19 @@ export const useMailStore = defineStore('mail', () => {
     selectedUids.value = new Set()
   }
 
+  async function archiveMessages(folder, uids) {
+    const res = await apiFetch(`/api/folders/${encodeURIComponent(folder)}/messages/archive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uids }),
+    })
+    if (!res.ok) throw new Error('Archive failed')
+    const uidSet = new Set(uids)
+    messages.value = messages.value.filter(m => !uidSet.has(m.uid))
+    if (currentMessage.value && uidSet.has(currentMessage.value.uid)) currentMessage.value = null
+    selectedUids.value = new Set()
+  }
+
   async function markAsNotSpam(folder, uids) {
     const res = await apiFetch(`/api/folders/${encodeURIComponent(folder)}/messages/notspam`, {
       method: 'POST',
@@ -390,6 +403,7 @@ export const useMailStore = defineStore('mail', () => {
     deleteMessages,
     markAsSpam,
     markAsNotSpam,
+    archiveMessages,
     markReadMessages,
     subscribeFolder,
     unsubscribeFolder,

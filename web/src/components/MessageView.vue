@@ -57,6 +57,7 @@
           </div>
           <button v-if="!isJunkFolder" @click="spam" title="Move to Junk" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Spam</button>
           <button v-if="isJunkFolder" @click="notSpam" title="Move to Inbox" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Not spam</button>
+          <button v-if="!isDraftsFolder && !isArchiveFolder" @click="archive" title="Archive (E)" class="px-3.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-sm cursor-pointer hover:bg-[var(--color-bg)]">Archive</button>
           <button
             v-if="!isDraftsFolder && mail.currentMessage.list_unsubscribe"
             @click="doUnsubscribe"
@@ -496,6 +497,10 @@ const isDraftsFolder = computed(() =>
 
 const isJunkFolder = computed(() =>
   ['junk', 'junk email', 'spam'].includes(mail.currentFolder.toLowerCase())
+)
+
+const isArchiveFolder = computed(() =>
+  ['archive', 'archives', 'all mail'].includes(mail.currentFolder.toLowerCase())
 )
 
 const debugMode = import.meta.env.VITE_LOG_LEVEL === 'debug'
@@ -957,6 +962,12 @@ async function notSpam() {
   await mail.markAsNotSpam(mail.currentFolder, [msg.uid])
 }
 
+async function archive() {
+  const msg = mail.currentMessage
+  if (!msg) return
+  await mail.archiveMessages(mail.currentFolder, [msg.uid])
+}
+
 async function doUnsubscribe() {
   const msg = mail.currentMessage
   if (!msg || unsubState.value !== 'idle') return
@@ -1096,7 +1107,7 @@ async function copySource() {
   setTimeout(() => { sourceCopied.value = false }, 2000)
 }
 
-defineExpose({ reply, remove })
+defineExpose({ reply, remove, archive })
 
 async function saveContact() {
   const msg = mail.currentMessage

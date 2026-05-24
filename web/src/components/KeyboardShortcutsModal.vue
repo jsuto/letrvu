@@ -81,6 +81,7 @@ const groups = [
     shortcuts: [
       { label: 'Compose new message',    keys: ['C'] },
       { label: 'Reply to message',       keys: ['R'] },
+      { label: 'Archive message',        keys: ['E'] },
       { label: 'Delete message',         keys: ['D'] },
       { label: 'Next message',           keys: ['N'] },
       { label: 'Previous message',       keys: ['P'] },

@@ -123,6 +123,10 @@ const isJunkFolder = computed(() =>
   ['junk', 'junk email', 'spam'].includes(mail.currentFolder.toLowerCase())
 )
 
+const isArchiveFolder = computed(() =>
+  ['archive', 'archives', 'all mail'].includes(mail.currentFolder.toLowerCase())
+)
+
 function messageActions(msg) {
   const actions = [
     { label: 'Reply', handler: reply },
@@ -130,6 +134,7 @@ function messageActions(msg) {
   ]
   if (!isJunkFolder.value) actions.push({ label: 'Spam', handler: spam })
   if (isJunkFolder.value) actions.push({ label: 'Not spam', handler: notSpam })
+  if (!isArchiveFolder.value) actions.push({ label: 'Archive', handler: archive })
   actions.push({ label: 'Delete', handler: requestDelete, danger: true })
   return actions
 }
@@ -271,6 +276,10 @@ async function spam(msg) {
 
 async function notSpam(msg) {
   await mail.markAsNotSpam(mail.currentFolder, [msg.uid])
+}
+
+async function archive(msg) {
+  await mail.archiveMessages(mail.currentFolder, [msg.uid])
 }
 
 const deleteTarget = ref(null)

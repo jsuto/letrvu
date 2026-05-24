@@ -935,6 +935,37 @@ func (h *handler) notSpam(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "dest": inbox})
 }
 
+func (h *handler) archiveMessages(w http.ResponseWriter, r *http.Request) {
+	folder, err := url.PathUnescape(r.PathValue("folder"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("invalid folder name"))
+		return
+	}
+	var body struct {
+		UIDs []uint32 `json:"uids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.UIDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, errorResp("uids required"))
+		return
+	}
+	sess := h.sessionFrom(r)
+	c, err := imapConnect(sess)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("imap connection failed"))
+		return
+	}
+	defer c.Close()
+
+	dest := c.ArchiveFolder()
+	if _, err := c.MoveMessages(folder, body.UIDs, dest); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	log.Printf("audit: archive user=%s ip=%s folder=%s count=%d dest=%s", sess.Username, h.clientIP(r), folder, len(body.UIDs), dest)
+	go h.index.Delete(sess.Username, sess.IMAPHost, folder, body.UIDs)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "dest": dest})
+}
+
 func (h *handler) deleteMessages(w http.ResponseWriter, r *http.Request) {
 	folder, err := url.PathUnescape(r.PathValue("folder"))
 	if err != nil {

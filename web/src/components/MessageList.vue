@@ -45,6 +45,7 @@
       </div>
       <button v-if="!isJunkFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkSpam" title="Mark as spam">⊘ Spam</button>
       <button v-if="isJunkFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkNotSpam" title="Move to Inbox">Not spam</button>
+      <button v-if="!isArchiveFolder" class="px-2.5 py-1 border border-teal rounded bg-transparent text-xs cursor-pointer text-teal whitespace-nowrap hover:bg-teal hover:text-white" @click="bulkArchive" title="Archive">Archive</button>
       <button class="px-2.5 py-1 border border-red-300 rounded bg-transparent text-xs cursor-pointer text-red-600 whitespace-nowrap hover:bg-red-600 hover:text-white hover:border-red-600" @click="confirmBulkDeleteVisible = true" title="Delete">🗑</button>
       <button class="px-2.5 py-1 border-transparent border rounded bg-transparent text-xs cursor-pointer text-[var(--color-text-muted)] whitespace-nowrap ml-auto hover:text-[var(--color-text)]" @click="mail.clearSelection()" title="Clear selection">✕</button>
     </div>
@@ -122,6 +123,10 @@ const isJunkFolder = computed(() =>
   ['junk', 'junk email', 'spam'].includes(mail.currentFolder.toLowerCase())
 )
 
+const isArchiveFolder = computed(() =>
+  ['archive', 'archives', 'all mail'].includes(mail.currentFolder.toLowerCase())
+)
+
 // --- Thread helpers ---
 
 function isThreadActive(thread) {
@@ -189,6 +194,11 @@ async function bulkSpam() {
 async function bulkNotSpam() {
   const uids = [...mail.selectedUids]
   await mail.markAsNotSpam(mail.currentFolder, uids)
+}
+
+async function bulkArchive() {
+  const uids = [...mail.selectedUids]
+  await mail.archiveMessages(mail.currentFolder, uids)
 }
 
 async function doBulkDelete() {
