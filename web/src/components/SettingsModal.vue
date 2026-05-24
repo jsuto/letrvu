@@ -253,6 +253,14 @@
           </div>
         </div>
 
+        <!-- Message templates -->
+        <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Message templates</div>
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm text-[var(--color-text)] flex-1">Saved replies and canned responses</span>
+          <button @click="showTemplates = true"
+            class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] whitespace-nowrap hover:border-teal hover:text-teal">Manage templates</button>
+        </div>
+
         <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Identities (From: addresses)</div>
         <div class="flex flex-col gap-2">
           <div v-for="(id, i) in form.identities" :key="i" class="flex gap-1.5 items-center">
@@ -279,6 +287,7 @@
     </div>
   </div>
   <FiltersModal :visible="showFilters" @close="showFilters = false" />
+  <TemplatesModal :visible="showTemplates" @close="showTemplates = false" />
 </template>
 
 <script setup>
@@ -288,6 +297,7 @@ import { useAuthStore } from '../stores/auth'
 import { usePGPStore } from '../stores/pgp'
 import { apiFetch } from '../api'
 import FiltersModal from './FiltersModal.vue'
+import TemplatesModal from './TemplatesModal.vue'
 
 const settings = useSettingsStore()
 const auth = useAuthStore()
@@ -297,6 +307,7 @@ const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
 const showFilters = ref(false)
+const showTemplates = ref(false)
 const notifPermission = ref(typeof Notification !== 'undefined' ? Notification.permission : 'denied')
 
 const sessions = ref([])
