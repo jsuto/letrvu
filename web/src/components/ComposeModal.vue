@@ -210,6 +210,7 @@ import { useCalendarStore } from '../stores/calendar'
 import { usePGPStore } from '../stores/pgp'
 import { useTemplatesStore } from '../stores/templates'
 import { apiFetch } from '../api'
+import { useUndoSend } from '../composables/useUndoSend'
 import AddressInput from './AddressInput.vue'
 
 const mail = useMailStore()
@@ -217,6 +218,7 @@ const settings = useSettingsStore()
 const calendarStore = useCalendarStore()
 const pgp = usePGPStore()
 const templatesStore = useTemplatesStore()
+const undoSend = useUndoSend()
 
 const visible = ref(false)
 const sending = ref(false)
@@ -659,13 +661,55 @@ async function send() {
       }
     }
 
-    await mail.sendMessage({
+    const finalPayload = {
       ...payload,
       in_reply_to: inReplyTo.value || undefined,
       references: references.value || undefined,
-    })
-    if (originalDraft.value) {
-      await mail.deleteMessage(originalDraft.value.folder, originalDraft.value.uid).catch(() => {})
+    }
+    const draft = originalDraft.value
+
+    const delay = settings.undoSendDelay
+    if (delay > 0) {
+      // Capture enough state to reopen compose if the user hits Undo.
+      // We save the raw editor HTML (not the processed payload HTML which has
+      // cid: references instead of data: URIs) so images are editable again.
+      const undoState = {
+        to: form.to,
+        cc: form.cc,
+        subject: form.subject,
+        html: editor.value?.getHTML() ?? '',
+        _fromEmail: fromOptions.value[form.fromIndex]?.email,
+        _inReplyTo: inReplyTo.value || undefined,
+        _references: references.value || undefined,
+        _attachments: attachments.value.length ? [...attachments.value] : undefined,
+        _noSignature: true, // signature already in the body — don't add another
+        _draftFolder: draft?.folder,
+        _draftUid: draft?.uid,
+      }
+      close()
+      sending.value = false
+      try {
+        await undoSend.schedule(delay)
+      } catch (e) {
+        if (e.message === 'undo') {
+          open(undoState)
+        }
+        return
+      }
+      // Timer expired — send for real (outside sending spinner, best-effort)
+      try {
+        await mail.sendMessage(finalPayload)
+        if (draft) await mail.deleteMessage(draft.folder, draft.uid).catch(() => {})
+      } catch {
+        // Reopen compose so the user doesn't lose their message
+        open(undoState)
+      }
+      return
+    }
+
+    await mail.sendMessage(finalPayload)
+    if (draft) {
+      await mail.deleteMessage(draft.folder, draft.uid).catch(() => {})
       originalDraft.value = null
     }
     close()

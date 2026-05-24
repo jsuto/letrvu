@@ -313,7 +313,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 - [x] Mobile-responsive layout
 - [x] Mark as spam (move to Junk folder)
 - [x] Cross-folder search
-- [ ] Undo send (configurable delay before SMTP submission)
+- [x] Undo send (configurable delay before SMTP submission)
 - [x] Vacation / autoresponder (Sieve)
 - [x] Contact groups / distribution lists
 - [x] Per-sender image trust ("always show images from this sender")

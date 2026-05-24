@@ -22,6 +22,18 @@
         </label>
 
         <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+          Undo send
+          <select v-model.number="form.undo_send_delay"
+            class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal">
+            <option :value="0">Off</option>
+            <option :value="5">5 seconds</option>
+            <option :value="10">10 seconds</option>
+            <option :value="20">20 seconds</option>
+            <option :value="30">30 seconds</option>
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
           Poll interval
           <select v-model.number="form.poll_interval"
             class="px-2.5 py-2 border border-[var(--color-border)] rounded-md text-sm bg-[var(--color-bg)] text-[var(--color-text)] outline-none focus:border-teal">
@@ -531,7 +543,7 @@ const pgpBusy = ref(false)
 const pgpError = ref('')
 const pgpForm = reactive({ name: '', email: '', passphrase: '', passphrase2: '', armoredKey: '' })
 
-const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120, calendar_reminder_minutes: 30, read_receipt_policy: 'ask', vacation_enabled: false, vacation_subject: '', vacation_body: '', vacation_start: '', vacation_end: '' })
+const form = reactive({ display_name: '', signature: '', identities: [], poll_interval: 120, undo_send_delay: 0, calendar_reminder_minutes: 30, read_receipt_policy: 'ask', vacation_enabled: false, vacation_subject: '', vacation_body: '', vacation_start: '', vacation_end: '' })
 const vacationStatus = ref(null) // { type: 'active'|'warn'|'error', message: string }
 
 async function open() {
@@ -540,6 +552,7 @@ async function open() {
   form.signature = settings.settings.signature ?? ''
   form.identities = settings.identities.map(id => ({ ...id }))
   form.poll_interval = settings.pollInterval
+  form.undo_send_delay = settings.undoSendDelay
   form.calendar_reminder_minutes = settings.reminderMinutes
   form.read_receipt_policy = settings.readReceiptPolicy
   notifPermission.value = typeof Notification !== 'undefined' ? Notification.permission : 'denied'
@@ -693,6 +706,7 @@ async function save() {
       signature: form.signature,
       identities: JSON.stringify(validIdentities),
       poll_interval: String(form.poll_interval),
+      undo_send_delay: String(form.undo_send_delay),
       calendar_reminder_minutes: String(form.calendar_reminder_minutes),
       read_receipt_policy: form.read_receipt_policy,
     })
