@@ -158,6 +158,20 @@ func Migrate(db *DB) error {
 	addCol(`ALTER TABLE sessions ADD COLUMN last_activity_at TEXT NOT NULL DEFAULT ''`)
 	addCol(`ALTER TABLE contacts ADD COLUMN pgp_public_key TEXT NOT NULL DEFAULT ''`)
 
+	// Mail filters (best-effort; already exist on upgrade).
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS mail_filters (
+		id         ` + db.PK() + `,
+		owner      TEXT    NOT NULL,
+		imap_host  TEXT    NOT NULL,
+		position   INTEGER NOT NULL DEFAULT 0,
+		name       TEXT    NOT NULL DEFAULT '',
+		match_all  INTEGER NOT NULL DEFAULT 1,
+		conditions TEXT    NOT NULL DEFAULT '[]',
+		actions    TEXT    NOT NULL DEFAULT '[]',
+		enabled    INTEGER NOT NULL DEFAULT 1
+	)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_mail_filters_owner ON mail_filters (owner, imap_host, position)`)
+
 	// Message index tables (best-effort; already exist on upgrade).
 	for _, s := range []string{
 		`CREATE TABLE IF NOT EXISTS message_index (

@@ -18,6 +18,7 @@ import (
 
 	"github.com/jsuto/letrvu/internal/calendar"
 	"github.com/jsuto/letrvu/internal/contacts"
+	filtersstore "github.com/jsuto/letrvu/internal/filters"
 	"github.com/jsuto/letrvu/internal/imap"
 	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
@@ -73,6 +74,7 @@ type handler struct {
 	contacts     *contacts.Store
 	calendar     *calendar.Store
 	index        *index.Store
+	filters      *filtersstore.Store
 	config       ServerConfig
 	folderCache  *folderCache
 	loginLimiter *loginLimiter // per source IP

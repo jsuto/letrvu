@@ -5,13 +5,14 @@ import (
 
 	"github.com/jsuto/letrvu/internal/calendar"
 	"github.com/jsuto/letrvu/internal/contacts"
+	filtersstore "github.com/jsuto/letrvu/internal/filters"
 	"github.com/jsuto/letrvu/internal/index"
 	"github.com/jsuto/letrvu/internal/session"
 	"github.com/jsuto/letrvu/internal/settings"
 )
 
 // NewRouter wires all HTTP routes and returns the root handler.
-func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsStore *contacts.Store, calendarStore *calendar.Store, indexStore *index.Store, cfg ServerConfig) http.Handler {
+func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsStore *contacts.Store, calendarStore *calendar.Store, indexStore *index.Store, filtersStore *filtersstore.Store, cfg ServerConfig) http.Handler {
 	mux := http.NewServeMux()
 	h := &handler{
 		sessions:     sessions,
@@ -19,6 +20,7 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 		contacts:     contactsStore,
 		calendar:     calendarStore,
 		index:        indexStore,
+		filters:      filtersStore,
 		config:       cfg,
 		folderCache:  newFolderCache(cfg.FolderCacheTTL),
 		loginLimiter: newLoginLimiter(cfg.LoginMaxAttempts, cfg.LoginWindow, cfg.LoginLockout),
@@ -74,6 +76,14 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	// Vacation autoresponder
 	mux.HandleFunc("GET /api/vacation", h.requireAuth(h.getVacation))
 	mux.HandleFunc("PUT /api/vacation", h.requireAuth(h.setVacation))
+
+	// Mail filters
+	mux.HandleFunc("GET /api/filters", h.requireAuth(h.listFilters))
+	mux.HandleFunc("POST /api/filters", h.requireAuth(h.createFilter))
+	mux.HandleFunc("PUT /api/filters/{id}", h.requireAuth(h.updateFilter))
+	mux.HandleFunc("DELETE /api/filters/{id}", h.requireAuth(h.deleteFilter))
+	mux.HandleFunc("POST /api/filters/reorder", h.requireAuth(h.reorderFilters))
+	mux.HandleFunc("POST /api/filters/apply", h.requireAuth(h.applyFilters))
 
 	// Contacts — specific paths before wildcard {id}
 	mux.HandleFunc("GET /api/contacts/autocomplete", h.requireAuth(h.autocompleteContacts))

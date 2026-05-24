@@ -120,6 +120,14 @@
           ]">{{ vacationStatus.message }}</div>
         </div>
 
+        <!-- Mail filters -->
+        <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Mail filters</div>
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm text-[var(--color-text)] flex-1">Automatically move, flag, or delete messages</span>
+          <button @click="showFilters = true"
+            class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] whitespace-nowrap hover:border-teal hover:text-teal">Manage filters</button>
+        </div>
+
         <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Security</div>
         <div class="flex flex-col gap-2">
           <div v-if="sessionsLoading" class="text-xs text-[var(--color-text-muted)]">Loading sessions…</div>
@@ -268,6 +276,7 @@
       </div>
     </div>
   </div>
+  <FiltersModal :visible="showFilters" @close="showFilters = false" />
 </template>
 
 <script setup>
@@ -276,6 +285,7 @@ import { useSettingsStore } from '../stores/settings'
 import { useAuthStore } from '../stores/auth'
 import { usePGPStore } from '../stores/pgp'
 import { apiFetch } from '../api'
+import FiltersModal from './FiltersModal.vue'
 
 const settings = useSettingsStore()
 const auth = useAuthStore()
@@ -284,6 +294,7 @@ const visible = ref(false)
 const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
+const showFilters = ref(false)
 const notifPermission = ref(typeof Notification !== 'undefined' ? Notification.permission : 'denied')
 
 const sessions = ref([])
