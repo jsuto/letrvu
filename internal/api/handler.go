@@ -1247,6 +1247,9 @@ func (h *handler) getSettings(w http.ResponseWriter, r *http.Request) {
 	// Inject the server-configured internal domains so the client can flag
 	// messages from outside the organisation.
 	out["internal_domains"] = h.config.InternalDomains
+	// Inject whether ManageSieve is configured so the UI can show/hide
+	// the mail filters feature.
+	out["sieve_configured"] = h.config.SieveHost != ""
 	writeJSON(w, http.StatusOK, out)
 }
 

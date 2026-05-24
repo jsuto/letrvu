@@ -120,13 +120,15 @@
           ]">{{ vacationStatus.message }}</div>
         </div>
 
-        <!-- Mail filters -->
-        <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Mail filters</div>
-        <div class="flex items-center gap-2.5">
-          <span class="text-sm text-[var(--color-text)] flex-1">Automatically move, flag, or delete messages</span>
-          <button @click="showFilters = true"
-            class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] whitespace-nowrap hover:border-teal hover:text-teal">Manage filters</button>
-        </div>
+        <!-- Mail filters (only shown when ManageSieve is configured) -->
+        <template v-if="settings.sieveConfigured">
+          <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Mail filters</div>
+          <div class="flex items-center gap-2.5">
+            <span class="text-sm text-[var(--color-text)] flex-1">Automatically move, flag, or delete messages</span>
+            <button @click="showFilters = true"
+              class="px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] whitespace-nowrap hover:border-teal hover:text-teal">Manage filters</button>
+          </div>
+        </template>
 
         <div class="text-xs text-[var(--color-text-muted)] font-medium pt-1 border-t border-[var(--color-border)] mt-1">Security</div>
         <div class="flex flex-col gap-2">

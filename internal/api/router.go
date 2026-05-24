@@ -83,7 +83,6 @@ func NewRouter(sessions *session.Store, settingsStore *settings.Store, contactsS
 	mux.HandleFunc("PUT /api/filters/{id}", h.requireAuth(h.updateFilter))
 	mux.HandleFunc("DELETE /api/filters/{id}", h.requireAuth(h.deleteFilter))
 	mux.HandleFunc("POST /api/filters/reorder", h.requireAuth(h.reorderFilters))
-	mux.HandleFunc("POST /api/filters/apply", h.requireAuth(h.applyFilters))
 
 	// Contacts — specific paths before wildcard {id}
 	mux.HandleFunc("GET /api/contacts/autocomplete", h.requireAuth(h.autocompleteContacts))

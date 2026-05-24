@@ -145,19 +145,6 @@
           class="px-4 py-1.5 bg-teal text-white border-none rounded-md text-sm font-medium cursor-pointer">
           + New filter
         </button>
-        <button v-if="filtersStore.filters.length > 0" @click="showApplyDialog = !showApplyDialog"
-          class="px-3 py-1.5 border border-[var(--color-border)] rounded-md text-xs cursor-pointer bg-[var(--color-surface)] text-[var(--color-text)] hover:border-teal hover:text-teal">
-          Run on folder…
-        </button>
-        <div v-if="showApplyDialog" class="flex items-center gap-1.5 flex-wrap">
-          <input v-model="applyFolder" type="text" placeholder="INBOX"
-            class="px-2 py-1.5 border border-[var(--color-border)] rounded-md text-xs bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-teal w-32" />
-          <button @click="runApply" :disabled="applyBusy"
-            class="px-3 py-1.5 bg-teal text-white border-none rounded-md text-xs cursor-pointer disabled:opacity-60">
-            {{ applyBusy ? 'Running…' : 'Run' }}
-          </button>
-          <span v-if="applyResult !== null" class="text-xs text-teal font-medium">{{ applyResult }} message(s) processed</span>
-        </div>
       </div>
     </div>
   </div>
@@ -179,11 +166,6 @@ const showEditor = ref(false)
 const editId = ref(null)
 const editorBusy = ref(false)
 const editorError = ref('')
-
-const showApplyDialog = ref(false)
-const applyFolder = ref('INBOX')
-const applyBusy = ref(false)
-const applyResult = ref(null)
 
 const form = reactive({
   name: '',
@@ -315,16 +297,4 @@ async function moveDown(idx) {
   await filtersStore.fetchFilters()
 }
 
-async function runApply() {
-  applyBusy.value = true
-  applyResult.value = null
-  try {
-    const res = await filtersStore.applyFilters(applyFolder.value || 'INBOX')
-    applyResult.value = res.applied
-  } catch (e) {
-    applyResult.value = null
-  } finally {
-    applyBusy.value = false
-  }
-}
 </script>

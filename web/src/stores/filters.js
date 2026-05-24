@@ -51,15 +51,5 @@ export const useFiltersStore = defineStore('filters', () => {
     if (!res.ok) throw new Error('Failed to reorder filters')
   }
 
-  async function applyFilters(folder) {
-    const res = await apiFetch('/api/filters/apply', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder }),
-    })
-    if (!res.ok) throw new Error('Failed to apply filters')
-    return await res.json()
-  }
-
-  return { filters, loaded, fetchFilters, createFilter, updateFilter, deleteFilter, reorderFilters, applyFilters }
+  return { filters, loaded, fetchFilters, createFilter, updateFilter, deleteFilter, reorderFilters }
 })
