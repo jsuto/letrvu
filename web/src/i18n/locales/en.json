@@ -411,7 +411,7 @@
     "name": "Name",
     "namePlaceholder": "Full name",
     "emailAddresses": "Email addresses",
-    "emailPlaceholder": "email@example.com",
+    "emailPlaceholder": "email{'@'}example.com",
     "labelPlaceholder": "Label (e.g. work)",
     "notes": "Notes",
     "notesPlaceholder": "Optional notes…",
