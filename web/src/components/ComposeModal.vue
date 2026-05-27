@@ -265,7 +265,7 @@ const pickerLoading = ref(false)
 
 const editor = useEditor({
   extensions: [
-    StarterKit,
+    StarterKit.configure({ link: false, underline: false }),
     Link.configure({ openOnClick: false, autolink: true }),
     Underline,
     Placeholder.configure({ placeholder: 'Write your message…' }),
