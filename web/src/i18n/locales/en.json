@@ -411,7 +411,6 @@
     "name": "Name",
     "namePlaceholder": "Full name",
     "emailAddresses": "Email addresses",
-    "emailPlaceholder": "email{'@'}example.com",
     "labelPlaceholder": "Label (e.g. work)",
     "notes": "Notes",
     "notesPlaceholder": "Optional notes…",
@@ -471,6 +470,7 @@
     "deleteEvent": "Delete this event?",
     "sendAsInvite": "Send as invite",
     "saving": "Saving…",
+    "delete": "Delete",
     "save": "Save",
     "titleRequired": "Title is required."
   },

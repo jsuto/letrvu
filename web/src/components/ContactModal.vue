@@ -18,7 +18,7 @@
         <div class="mb-4">
           <label class="block text-xs text-[var(--color-text-muted)] mb-1">{{ $t('contactModal.emailAddresses') }}</label>
           <div v-for="(e, i) in form.emails" :key="i" class="flex gap-1.5 mb-1.5 items-center">
-            <input v-model="e.email" type="email" :placeholder="$t('contactModal.emailPlaceholder')"
+            <input v-model="e.email" type="email" placeholder="email@example.com"
               class="flex-1 min-w-0 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal" />
             <input v-model="e.label" type="text" :placeholder="$t('contactModal.labelPlaceholder')"
               class="w-[110px] shrink-0 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-sm outline-none focus:border-teal" />

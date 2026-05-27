@@ -1084,13 +1084,13 @@ ${headExtra}
   </div>
 </div>
 ${bodyContent}
-<script>window.onload=function(){window.print()}<\/script>
 </body></html>`
 
   const w = window.open('', '_blank', 'width=820,height=700')
   if (!w) return
   w.document.write(html)
   w.document.close()
+  w.print()
 }
 
 async function viewSource() {

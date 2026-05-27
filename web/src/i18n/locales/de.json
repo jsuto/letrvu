@@ -411,7 +411,6 @@
     "name": "Name",
     "namePlaceholder": "Vollständiger Name",
     "emailAddresses": "E-Mail-Adressen",
-    "emailPlaceholder": "email{'@'}example.com",
     "labelPlaceholder": "Bezeichnung (z. B. Arbeit)",
     "notes": "Notizen",
     "notesPlaceholder": "Optionale Notizen…",
@@ -470,6 +469,7 @@
     "editingAllOccurrences": "Die Bearbeitung betrifft alle Wiederholungen.",
     "deleteEvent": "Diesen Termin löschen?",
     "sendAsInvite": "Als Einladung senden",
+    "delete": "Löschen",
     "saving": "Wird gespeichert…",
     "save": "Speichern",
     "titleRequired": "Titel ist erforderlich."
