@@ -204,6 +204,14 @@ function processedHtml(uid) {
     s.textContent = 'html{filter:invert(1) hue-rotate(180deg) !important;background:#fff}img,video,picture,canvas,svg image{filter:invert(1) hue-rotate(180deg)}'
     doc.head.prepend(s)
   }
+  // The iframe sandbox blocks top-frame navigation; without target="_blank" all
+  // link clicks are silently swallowed. allow-popups lets "_blank" through.
+  for (const a of doc.querySelectorAll('a[href]')) {
+    if (/^https?:\/\//i.test(a.getAttribute('href') ?? '')) {
+      a.setAttribute('target', '_blank')
+      a.setAttribute('rel', 'noopener noreferrer')
+    }
+  }
   return doc.documentElement.outerHTML
 }
 
