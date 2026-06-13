@@ -6,18 +6,18 @@ import (
 	"time"
 )
 
-// --- parseICalTime -----------------------------------------------------------
+// --- parseICalTimeTZ ---------------------------------------------------------
 
-func TestParseICalTime_UTC(t *testing.T) {
-	got := parseICalTime("20240315T120000Z")
+func TestParseICalTimeTZ_UTC(t *testing.T) {
+	got := parseICalTimeTZ("20240315T120000Z", time.UTC)
 	want := time.Date(2024, 3, 15, 12, 0, 0, 0, time.UTC)
 	if !got.Equal(want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 }
 
-func TestParseICalTime_Local(t *testing.T) {
-	got := parseICalTime("20240315T120000")
+func TestParseICalTimeTZ_Local(t *testing.T) {
+	got := parseICalTimeTZ("20240315T120000", time.UTC)
 	if got.IsZero() {
 		t.Error("should parse local time without Z suffix")
 	}
@@ -26,8 +26,8 @@ func TestParseICalTime_Local(t *testing.T) {
 	}
 }
 
-func TestParseICalTime_DateOnly(t *testing.T) {
-	got := parseICalTime("20240315")
+func TestParseICalTimeTZ_DateOnly(t *testing.T) {
+	got := parseICalTimeTZ("20240315", time.UTC)
 	if got.IsZero() {
 		t.Error("should parse date-only value")
 	}
@@ -36,10 +36,43 @@ func TestParseICalTime_DateOnly(t *testing.T) {
 	}
 }
 
-func TestParseICalTime_Invalid(t *testing.T) {
-	got := parseICalTime("not-a-date")
+func TestParseICalTimeTZ_Invalid(t *testing.T) {
+	got := parseICalTimeTZ("not-a-date", time.UTC)
 	if !got.IsZero() {
 		t.Errorf("invalid input should return zero time, got %v", got)
+	}
+}
+
+// --- resolveLocation ---------------------------------------------------------
+
+func TestResolveLocation_WindowsName(t *testing.T) {
+	loc := resolveLocation("W. Europe Standard Time")
+	// Should resolve to Europe/Berlin (UTC+1 in winter, UTC+2 in summer).
+	// Check that a summer time parses to the correct UTC value.
+	got := parseICalTimeTZ("20260616T100000", loc)
+	// June 16 is CEST = UTC+2, so 10:00 local = 08:00 UTC.
+	want := time.Date(2026, 6, 16, 8, 0, 0, 0, time.UTC)
+	if !got.UTC().Equal(want) {
+		t.Errorf("Windows TZID: got UTC %v, want %v", got.UTC(), want)
+	}
+}
+
+func TestResolveLocation_IANAName(t *testing.T) {
+	loc := resolveLocation("Europe/Budapest")
+	if loc == time.UTC {
+		t.Error("known IANA name should not fall back to UTC")
+	}
+}
+
+func TestResolveLocation_Empty(t *testing.T) {
+	if resolveLocation("") != time.UTC {
+		t.Error("empty TZID should return UTC")
+	}
+}
+
+func TestResolveLocation_Unknown(t *testing.T) {
+	if resolveLocation("Nonexistent/Timezone") != time.UTC {
+		t.Error("unknown TZID should fall back to UTC")
 	}
 }
 
@@ -59,6 +92,36 @@ UID:test-uid-001@test
 END:VEVENT
 END:VCALENDAR
 `
+
+func TestParseICal_WindowsTZID(t *testing.T) {
+	src := `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+SUMMARY:Piler Vendor update
+DTSTART;TZID=W. Europe Standard Time:20260616T100000
+DTEND;TZID=W. Europe Standard Time:20260616T103000
+DTSTAMP:20260611T131043Z
+UID:test-windows-tz@test
+END:VEVENT
+END:VCALENDAR
+`
+	events, err := ParseICal(src)
+	if err != nil {
+		t.Fatalf("ParseICal: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("want 1 event, got %d", len(events))
+	}
+	// June 16 in CEST (UTC+2): 10:00 local = 08:00 UTC
+	wantStart := time.Date(2026, 6, 16, 8, 0, 0, 0, time.UTC)
+	wantEnd := time.Date(2026, 6, 16, 8, 30, 0, 0, time.UTC)
+	if !events[0].StartsAt.UTC().Equal(wantStart) {
+		t.Errorf("StartsAt = %v, want %v", events[0].StartsAt.UTC(), wantStart)
+	}
+	if !events[0].EndsAt.UTC().Equal(wantEnd) {
+		t.Errorf("EndsAt = %v, want %v", events[0].EndsAt.UTC(), wantEnd)
+	}
+}
 
 func TestParseICal_BasicEvent(t *testing.T) {
 	events, err := ParseICal(sampleICal)

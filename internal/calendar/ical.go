@@ -10,6 +10,64 @@ import (
 	"github.com/emersion/go-ical"
 )
 
+// windowsToIANA maps Windows timezone names to IANA timezone names.
+// These are used by Outlook / Exchange and are not recognised by Go's
+// time.LoadLocation, which only knows the IANA database.
+var windowsToIANA = map[string]string{
+	"W. Europe Standard Time":      "Europe/Berlin",
+	"Central Europe Standard Time": "Europe/Budapest",
+	"Romance Standard Time":        "Europe/Paris",
+	"GMT Standard Time":            "Europe/London",
+	"FLE Standard Time":            "Europe/Helsinki",
+	"GTB Standard Time":            "Europe/Bucharest",
+	"Turkey Standard Time":         "Europe/Istanbul",
+	"E. Europe Standard Time":      "Asia/Nicosia",
+	"Middle East Standard Time":    "Asia/Beirut",
+	"Russia Standard Time":         "Europe/Moscow",
+	"Eastern Standard Time":        "America/New_York",
+	"Central Standard Time":        "America/Chicago",
+	"Mountain Standard Time":       "America/Denver",
+	"Pacific Standard Time":        "America/Los_Angeles",
+	"China Standard Time":          "Asia/Shanghai",
+	"Tokyo Standard Time":          "Asia/Tokyo",
+	"AUS Eastern Standard Time":    "Australia/Sydney",
+	"New Zealand Standard Time":    "Pacific/Auckland",
+	"UTC":                          "UTC",
+	"GMT":                          "UTC",
+}
+
+// resolveLocation returns a *time.Location for tzid, trying IANA first then
+// the Windows→IANA mapping, falling back to UTC on failure.
+func resolveLocation(tzid string) *time.Location {
+	if tzid == "" {
+		return time.UTC
+	}
+	if loc, err := time.LoadLocation(tzid); err == nil {
+		return loc
+	}
+	if iana, ok := windowsToIANA[tzid]; ok {
+		if loc, err := time.LoadLocation(iana); err == nil {
+			return loc
+		}
+	}
+	return time.UTC
+}
+
+// parseICalTimeTZ parses an iCal datetime value using the given location so
+// that TZID-qualified local times are not silently treated as UTC.
+func parseICalTimeTZ(value string, loc *time.Location) time.Time {
+	if t, err := time.Parse("20060102T150405Z", value); err == nil {
+		return t
+	}
+	if t, err := time.ParseInLocation("20060102T150405", value, loc); err == nil {
+		return t
+	}
+	if t, err := time.ParseInLocation("20060102", value, loc); err == nil {
+		return t
+	}
+	return time.Time{}
+}
+
 // ParseICal parses an iCalendar string and returns a slice of Events.
 func ParseICal(src string) ([]Event, error) {
 	dec := ical.NewDecoder(strings.NewReader(src))
@@ -144,9 +202,11 @@ func componentToEvent(comp *ical.Component) (Event, error) {
 			ev.EndsAt = ev.StartsAt
 		}
 	} else {
-		ev.StartsAt = parseICalTime(dtstart.Value)
+		startLoc := resolveLocation(dtstart.Params.Get(ical.ParamTimezoneID))
+		ev.StartsAt = parseICalTimeTZ(dtstart.Value, startLoc)
 		if dtend != nil {
-			ev.EndsAt = parseICalTime(dtend.Value)
+			endLoc := resolveLocation(dtend.Params.Get(ical.ParamTimezoneID))
+			ev.EndsAt = parseICalTimeTZ(dtend.Value, endLoc)
 		} else {
 			ev.EndsAt = ev.StartsAt.Add(time.Hour)
 		}
@@ -190,20 +250,6 @@ func eventToComponent(ev Event) *ical.Component {
 	}
 
 	return comp
-}
-
-func parseICalTime(s string) time.Time {
-	formats := []string{
-		"20060102T150405Z",
-		"20060102T150405",
-		"20060102",
-	}
-	for _, f := range formats {
-		if t, err := time.Parse(f, s); err == nil {
-			return t
-		}
-	}
-	return time.Time{}
 }
 
 // ReadAll reads all bytes from r into a string (convenience for parsing).

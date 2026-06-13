@@ -638,6 +638,9 @@ func parseMIMEBody(raw []byte, full *MessageFull) error {
 		case *mail.AttachmentHeader:
 			body, _ := io.ReadAll(part.Body)
 			ct, _, _ := h.ContentType()
+			if strings.HasPrefix(ct, "text/calendar") && full.ICalInvite == "" {
+				full.ICalInvite = string(body)
+			}
 			filename, _ := h.Filename()
 			full.Attachments = append(full.Attachments, Attachment{
 				Index:       len(full.Attachments),
