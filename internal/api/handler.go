@@ -1112,8 +1112,10 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		Subject   string   `json:"subject"`
 		Text      string   `json:"text"`
 		HTML      string   `json:"html"`
-		InReplyTo  string   `json:"in_reply_to,omitempty"`
-		References string   `json:"references,omitempty"`
+		InReplyTo   string   `json:"in_reply_to,omitempty"`
+		References  string   `json:"references,omitempty"`
+		ReplyUID    uint32   `json:"reply_uid,omitempty"`
+		ReplyFolder string   `json:"reply_folder,omitempty"`
 		Attachments []struct {
 			Filename    string `json:"filename"`
 			ContentType string `json:"content_type"`
@@ -1218,8 +1220,9 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	log.Printf("audit: send user=%s ip=%s to=%d cc=%d attachments=%d",
 		sess.Username, h.clientIP(r), len(body.To), len(body.CC), len(attachments))
 
-	// Best-effort: save a copy to the Sent folder via IMAP APPEND.
-	// A failure here is logged but does not affect the send response.
+	// Best-effort: save a copy to the Sent folder via IMAP APPEND, and set
+	// \Answered on the original message if this was a reply.
+	replyUID, replyFolder := body.ReplyUID, body.ReplyFolder
 	go func() {
 		raw := smtp.BuildRFC822(smtpMsg)
 		c, err := imapConnect(sess)
@@ -1230,6 +1233,11 @@ func (h *handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		defer c.Close()
 		if err := c.SaveSent(raw); err != nil {
 			log.Printf("warn: sent_copy_failed user=%s: %v", sess.Username, err)
+		}
+		if replyUID != 0 && replyFolder != "" {
+			if err := c.MarkAnswered(replyFolder, replyUID); err != nil {
+				log.Printf("warn: mark_answered_failed user=%s folder=%s uid=%d: %v", sess.Username, replyFolder, replyUID, err)
+			}
 		}
 	}()
 

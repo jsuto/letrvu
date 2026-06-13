@@ -66,7 +66,8 @@
     "delete": "Delete",
     "clearSelection": "Clear selection",
     "deleteConfirmSingle": "Delete 1 selected message?",
-    "deleteConfirmPlural": "Delete {count} selected messages?"
+    "deleteConfirmPlural": "Delete {count} selected messages?",
+    "replied": "Replied"
   },
   "messageView": {
     "selectMessage": "Select a message to read",

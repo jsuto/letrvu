@@ -880,6 +880,8 @@ function reply() {
     _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
     _inReplyTo: msg.message_id || '',
     _references: [msg.references, msg.message_id].filter(Boolean).join(' '),
+    _replyUID: msg.uid,
+    _replyFolder: mail.currentMessageFolder || mail.currentFolder,
   })
 }
 
@@ -903,6 +905,8 @@ function replyAll() {
     _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
     _inReplyTo: msg.message_id || '',
     _references: [msg.references, msg.message_id].filter(Boolean).join(' '),
+    _replyUID: msg.uid,
+    _replyFolder: mail.currentMessageFolder || mail.currentFolder,
   })
 }
 
