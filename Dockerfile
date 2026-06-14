@@ -19,7 +19,7 @@ RUN go build -o letrvu ./cmd/letrvu
 # Stage 3: minimal runtime image
 FROM alpine:3.24
 # hadolint ignore=DL3018
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata
 COPY --from=backend /app/letrvu /usr/local/bin/letrvu
 EXPOSE 8080
 ENTRYPOINT ["letrvu"]
