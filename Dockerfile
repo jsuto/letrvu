@@ -17,7 +17,7 @@ COPY --from=frontend /app/internal/api/static ./internal/api/static
 RUN go build -o letrvu ./cmd/letrvu
 
 # Stage 3: minimal runtime image
-FROM alpine:3.23
+FROM alpine:3.24
 # hadolint ignore=DL3018
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=backend /app/letrvu /usr/local/bin/letrvu
