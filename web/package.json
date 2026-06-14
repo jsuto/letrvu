@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@intlify/unplugin-vue-i18n": "^11.2.3",
     "@tailwindcss/vite": "^4.3.0",
     "@tiptap/extension-image": "^3.23.1",
     "@tiptap/extension-link": "^3.23.1",

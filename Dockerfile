@@ -1,8 +1,8 @@
 # Stage 1: build the Vue frontend
 FROM node:24-alpine AS frontend
 WORKDIR /app/web
-COPY web/package.json .
-RUN npm install
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
 COPY web/ .
 RUN npm run build
 
@@ -17,9 +17,9 @@ COPY --from=frontend /app/internal/api/static ./internal/api/static
 RUN go build -o letrvu ./cmd/letrvu
 
 # Stage 3: minimal runtime image
-FROM alpine:3.23
+FROM alpine:3.24
 # hadolint ignore=DL3018
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata
 COPY --from=backend /app/letrvu /usr/local/bin/letrvu
 EXPOSE 8080
 ENTRYPOINT ["letrvu"]

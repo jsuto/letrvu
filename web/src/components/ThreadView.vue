@@ -75,9 +75,15 @@
 
             <div v-if="fullMessages[msg.uid].attachments?.length" class="px-3.5 py-2 border-t border-[var(--color-border)]">
               <p class="text-[11px] text-[var(--color-text-muted)] mb-1.5">Attachments</p>
-              <div v-for="att in fullMessages[msg.uid].attachments" :key="att.index" class="flex items-center gap-2 text-xs">
-                <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">📎 {{ att.filename || 'attachment' }}</span>
-                <a :href="attachmentUrl(msg.uid, att)" download class="text-teal no-underline">↓</a>
+              <div class="flex flex-wrap gap-1.5">
+                <div
+                  v-for="att in fullMessages[msg.uid].attachments"
+                  :key="att.index"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] hover:bg-[var(--color-bg)]"
+                >
+                  <span class="overflow-hidden text-ellipsis whitespace-nowrap">📎 {{ att.filename || 'attachment' }}</span>
+                  <a :href="attachmentUrl(msg.uid, att)" download class="text-[var(--color-text-muted)] no-underline text-sm px-0.5 hover:text-[var(--color-text)]" title="Download">↓</a>
+                </div>
               </div>
             </div>
           </template>
@@ -197,6 +203,14 @@ function processedHtml(uid) {
     const s = doc.createElement('style')
     s.textContent = 'html{filter:invert(1) hue-rotate(180deg) !important;background:#fff}img,video,picture,canvas,svg image{filter:invert(1) hue-rotate(180deg)}'
     doc.head.prepend(s)
+  }
+  // The iframe sandbox blocks top-frame navigation; without target="_blank" all
+  // link clicks are silently swallowed. allow-popups lets "_blank" through.
+  for (const a of doc.querySelectorAll('a[href]')) {
+    if (/^https?:\/\//i.test(a.getAttribute('href') ?? '')) {
+      a.setAttribute('target', '_blank')
+      a.setAttribute('rel', 'noopener noreferrer')
+    }
   }
   return doc.documentElement.outerHTML
 }

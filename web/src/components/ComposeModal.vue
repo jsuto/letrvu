@@ -245,6 +245,8 @@ const attachments = ref([])
 const originalDraft = ref(null)
 const inReplyTo = ref('')
 const references = ref('')
+const replyUID = ref(0)
+const replyFolder = ref('')
 // pendingInvite holds { id, title } when a calendar event is queued as an invite.
 // The actual .ics is generated at send time using the final To/CC addresses.
 const pendingInvite = ref(null)
@@ -265,7 +267,7 @@ const pickerLoading = ref(false)
 
 const editor = useEditor({
   extensions: [
-    StarterKit,
+    StarterKit.configure({ link: false, underline: false }),
     Link.configure({ openOnClick: false, autolink: true }),
     Underline,
     Placeholder.configure({ placeholder: 'Write your message…' }),
@@ -503,12 +505,14 @@ async function open(prefill = {}) {
 
   const { _originalRecipients: _r, _attachments: _a, _fromEmail: _fe, _noSignature: _ns,
           _draftFolder: _df, _draftUid: _du, _inReplyTo: _irt, _references: _refs,
-          _inviteEvent: _inv,
+          _inviteEvent: _inv, _replyUID: _ruid, _replyFolder: _rfolder,
           html: prefillHtml, body: prefillBody, ...rest } = prefill
 
   originalDraft.value = (_df && _du != null) ? { folder: _df, uid: _du } : null
   inReplyTo.value = _irt || ''
   references.value = _refs || ''
+  replyUID.value = _ruid || 0
+  replyFolder.value = _rfolder || ''
 
   showBcc.value = !!(rest.bcc)
   Object.assign(form, { fromIndex, to: '', cc: '', bcc: '', subject: '', plainBody: '', ...rest, fromIndex })
@@ -559,6 +563,8 @@ function close() {
   originalDraft.value = null
   inReplyTo.value = ''
   references.value = ''
+  replyUID.value = 0
+  replyFolder.value = ''
   pgpSign.value = false
   pgpEncrypt.value = false
   pgpEncryptable.value = false
@@ -680,6 +686,8 @@ async function send() {
       ...payload,
       in_reply_to: inReplyTo.value || undefined,
       references: references.value || undefined,
+      reply_uid: replyUID.value || undefined,
+      reply_folder: replyFolder.value || undefined,
     }
     const draft = originalDraft.value
 

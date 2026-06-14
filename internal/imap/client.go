@@ -195,6 +195,7 @@ type Message struct {
 	Date           time.Time `json:"date"`
 	Read           bool      `json:"read"`
 	Flagged        bool      `json:"flagged"`
+	Answered       bool      `json:"answered"`
 	HasAttachments bool      `json:"has_attachments"`
 	Size           uint32    `json:"size"`
 	// Folder is populated only in cross-folder search results.
@@ -266,6 +267,8 @@ func (c *Client) ListMessages(folder string, page, pageSize int) ([]Message, err
 				msg.Read = true
 			case goimap.FlagFlagged:
 				msg.Flagged = true
+			case goimap.FlagAnswered:
+				msg.Answered = true
 			}
 		}
 		if buf.BodyStructure != nil {
@@ -346,6 +349,7 @@ type MessageFull struct {
 	Date           time.Time         `json:"date"`
 	Read           bool              `json:"read"`
 	Flagged        bool              `json:"flagged"`
+	Answered       bool              `json:"answered"`
 	HasAttachments bool              `json:"has_attachments"`
 	TextBody       string            `json:"text_body"`
 	HTMLBody       string            `json:"html_body"`
@@ -437,6 +441,8 @@ func (c *Client) GetMessage(folder string, uid uint32) (*MessageFull, error) {
 			full.Read = true
 		case goimap.FlagFlagged:
 			full.Flagged = true
+		case goimap.FlagAnswered:
+			full.Answered = true
 		}
 	}
 	if buf.BodyStructure != nil {
@@ -632,6 +638,9 @@ func parseMIMEBody(raw []byte, full *MessageFull) error {
 		case *mail.AttachmentHeader:
 			body, _ := io.ReadAll(part.Body)
 			ct, _, _ := h.ContentType()
+			if strings.HasPrefix(ct, "text/calendar") && full.ICalInvite == "" {
+				full.ICalInvite = string(body)
+			}
 			filename, _ := h.Filename()
 			full.Attachments = append(full.Attachments, Attachment{
 				Index:       len(full.Attachments),
@@ -793,6 +802,8 @@ func (c *Client) FetchMessageSummaries(folder string, uids []uint32) ([]Message,
 				msg.Read = true
 			case goimap.FlagFlagged:
 				msg.Flagged = true
+			case goimap.FlagAnswered:
+				msg.Answered = true
 			}
 		}
 		if buf.BodyStructure != nil {
@@ -860,6 +871,8 @@ func (c *Client) SearchMessages(folder string, q searchQuery) ([]Message, error)
 				msg.Read = true
 			case goimap.FlagFlagged:
 				msg.Flagged = true
+			case goimap.FlagAnswered:
+				msg.Answered = true
 			}
 		}
 		if buf.BodyStructure != nil {
@@ -991,6 +1004,18 @@ func (c *Client) MarkReadMessages(folder string, uids []uint32, read bool) error
 		Op:     op,
 		Silent: true,
 		Flags:  []goimap.Flag{goimap.FlagSeen},
+	}, nil).Close()
+}
+
+// MarkAnswered sets the \Answered flag on a message.
+func (c *Client) MarkAnswered(folder string, uid uint32) error {
+	if _, err := c.c.Select(folder, nil).Wait(); err != nil {
+		return fmt.Errorf("select %q: %w", folder, err)
+	}
+	return c.c.Store(goimap.UIDSetNum(goimap.UID(uid)), &goimap.StoreFlags{
+		Op:     goimap.StoreFlagsAdd,
+		Silent: true,
+		Flags:  []goimap.Flag{goimap.FlagAnswered},
 	}, nil).Close()
 }
 

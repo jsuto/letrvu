@@ -66,7 +66,8 @@
     "delete": "Löschen",
     "clearSelection": "Auswahl aufheben",
     "deleteConfirmSingle": "1 ausgewählte Nachricht löschen?",
-    "deleteConfirmPlural": "{count} ausgewählte Nachrichten löschen?"
+    "deleteConfirmPlural": "{count} ausgewählte Nachrichten löschen?",
+    "replied": "Geantwortet"
   },
   "messageView": {
     "selectMessage": "Nachricht zum Lesen auswählen",
@@ -411,7 +412,6 @@
     "name": "Name",
     "namePlaceholder": "Vollständiger Name",
     "emailAddresses": "E-Mail-Adressen",
-    "emailPlaceholder": "email@example.com",
     "labelPlaceholder": "Bezeichnung (z. B. Arbeit)",
     "notes": "Notizen",
     "notesPlaceholder": "Optionale Notizen…",
@@ -470,6 +470,7 @@
     "editingAllOccurrences": "Die Bearbeitung betrifft alle Wiederholungen.",
     "deleteEvent": "Diesen Termin löschen?",
     "sendAsInvite": "Als Einladung senden",
+    "delete": "Löschen",
     "saving": "Wird gespeichert…",
     "save": "Speichern",
     "titleRequired": "Titel ist erforderlich."

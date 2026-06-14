@@ -54,6 +54,10 @@ const emit = defineEmits(['day-click', 'event-click'])
 const today = new Date()
 today.setHours(0, 0, 0, 0)
 
+function localDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
 const cells = computed(() => {
   // First day of the month
   const first = new Date(props.year, props.month, 1)
@@ -66,7 +70,7 @@ const cells = computed(() => {
   for (let i = 0; i < 42; i++) {
     const date = new Date(start)
     date.setDate(start.getDate() + i)
-    const iso = date.toISOString().slice(0, 10)
+    const iso = localDate(date)
     result.push({
       date,
       iso,
@@ -80,10 +84,10 @@ const cells = computed(() => {
 })
 
 function eventsForDay(date) {
-  const iso = date.toISOString().slice(0, 10)
+  const iso = localDate(date)
   return props.events.filter(ev => {
-    const s = ev.starts_at.slice(0, 10)
-    const e = ev.ends_at.slice(0, 10)
+    const s = localDate(new Date(ev.starts_at))
+    const e = localDate(new Date(ev.ends_at))
     return iso >= s && iso <= e
   })
 }

@@ -66,7 +66,8 @@
     "delete": "Delete",
     "clearSelection": "Clear selection",
     "deleteConfirmSingle": "Delete 1 selected message?",
-    "deleteConfirmPlural": "Delete {count} selected messages?"
+    "deleteConfirmPlural": "Delete {count} selected messages?",
+    "replied": "Replied"
   },
   "messageView": {
     "selectMessage": "Select a message to read",
@@ -411,7 +412,6 @@
     "name": "Name",
     "namePlaceholder": "Full name",
     "emailAddresses": "Email addresses",
-    "emailPlaceholder": "email@example.com",
     "labelPlaceholder": "Label (e.g. work)",
     "notes": "Notes",
     "notesPlaceholder": "Optional notes…",
@@ -471,6 +471,7 @@
     "deleteEvent": "Delete this event?",
     "sendAsInvite": "Send as invite",
     "saving": "Saving…",
+    "delete": "Delete",
     "save": "Save",
     "titleRequired": "Title is required."
   },

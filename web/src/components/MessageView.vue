@@ -880,6 +880,8 @@ function reply() {
     _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
     _inReplyTo: msg.message_id || '',
     _references: [msg.references, msg.message_id].filter(Boolean).join(' '),
+    _replyUID: msg.uid,
+    _replyFolder: mail.currentMessageFolder || mail.currentFolder,
   })
 }
 
@@ -903,6 +905,8 @@ function replyAll() {
     _originalRecipients: [...(msg.to ?? []), ...(msg.cc ?? [])],
     _inReplyTo: msg.message_id || '',
     _references: [msg.references, msg.message_id].filter(Boolean).join(' '),
+    _replyUID: msg.uid,
+    _replyFolder: mail.currentMessageFolder || mail.currentFolder,
   })
 }
 
@@ -1084,13 +1088,13 @@ ${headExtra}
   </div>
 </div>
 ${bodyContent}
-<script>window.onload=function(){window.print()}<\/script>
 </body></html>`
 
   const w = window.open('', '_blank', 'width=820,height=700')
   if (!w) return
   w.document.write(html)
   w.document.close()
+  w.print()
 }
 
 async function viewSource() {

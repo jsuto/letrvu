@@ -6,7 +6,7 @@ import (
 )
 
 const csp = "default-src 'self'; " +
-	"script-src 'self' 'unsafe-eval'; " +
+	"script-src 'self' 'unsafe-eval' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; " +
 	"style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' data: https: http:; " +
 	"font-src 'self'; " +

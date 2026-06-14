@@ -6,6 +6,7 @@ export const useMailStore = defineStore('mail', () => {
   const folders = ref([])
   const messages = ref([])
   const currentMessage = ref(null)
+  const currentMessageFolder = ref(null)
   const currentFolder = ref('INBOX')
   const loading = ref(false)
   const page = ref(1)
@@ -99,6 +100,7 @@ export const useMailStore = defineStore('mail', () => {
     const res = await fetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}`)
     if (!res.ok) return
     currentMessage.value = await res.json()
+    currentMessageFolder.value = folder
   }
 
   async function deleteMessage(folder, uid) {
@@ -380,6 +382,7 @@ export const useMailStore = defineStore('mail', () => {
     threads,
     currentThread,
     currentMessage,
+    currentMessageFolder,
     currentFolder,
     globalSearchMode,
     loading,

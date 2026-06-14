@@ -80,6 +80,7 @@
             <span :class="['text-sm whitespace-nowrap overflow-hidden text-ellipsis min-w-0', thread.messages.some(m => m.flagged) ? 'text-rose-500' : 'text-[var(--color-text)]', thread.hasUnread ? 'font-bold' : '']">{{ threadSenders(thread) }}</span>
             <span class="flex items-center gap-1 shrink-0">
               <span v-if="thread.messages.some(m => m.flagged)" class="text-orange-400 text-xs">★</span>
+              <span v-if="thread.messages.some(m => m.answered)" class="text-[var(--color-text-muted)] text-xs" :title="$t('messageList.replied')">↩</span>
               <span v-if="thread.messages.some(m => m.has_attachments)" class="text-xs">📎</span>
               <span v-if="thread.messages.length > 1" class="text-[10px] bg-teal text-white rounded-full px-1.5 py-px font-semibold">{{ thread.messages.length }}</span>
               <span class="text-[11px] text-[var(--color-text-muted)]">{{ formatDate(thread.latestDate) }}</span>

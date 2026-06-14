@@ -87,12 +87,16 @@ onMounted(() => {
   if (gridEl.value) gridEl.value.scrollTop = 7 * 56
 })
 
+function localDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
 const days = computed(() => {
   return Array.from({ length: 7 }, (_, i) => {
     const date = new Date(props.weekStart)
     date.setDate(date.getDate() + i)
     date.setHours(0, 0, 0, 0)
-    const iso = date.toISOString().slice(0, 10)
+    const iso = localDate(date)
     const isToday = date.getTime() === today.getTime()
     return {
       date,
@@ -100,8 +104,8 @@ const days = computed(() => {
       dow: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i],
       day: date.getDate(),
       isToday,
-      allDayEvents: props.events.filter(ev => ev.all_day && ev.starts_at.slice(0,10) <= iso && ev.ends_at.slice(0,10) >= iso),
-      timedEvents: props.events.filter(ev => !ev.all_day && ev.starts_at.slice(0,10) === iso),
+      allDayEvents: props.events.filter(ev => ev.all_day && localDate(new Date(ev.starts_at)) <= iso && localDate(new Date(ev.ends_at)) >= iso),
+      timedEvents: props.events.filter(ev => !ev.all_day && localDate(new Date(ev.starts_at)) === iso),
     }
   })
 })
