@@ -451,6 +451,15 @@ func TestFormatAddress_NoName(t *testing.T) {
 	}
 }
 
+func TestFormatAddress_CommaInName(t *testing.T) {
+	addr := goimap.Address{Name: "Petrova, Elitsa", Mailbox: "Elitsa.Petrova", Host: "flatexdegiro.com"}
+	got := formatAddress(addr)
+	want := `"Petrova, Elitsa" <Elitsa.Petrova@flatexdegiro.com>`
+	if got != want {
+		t.Errorf("formatAddress = %q, want %q", got, want)
+	}
+}
+
 // --- rawHeaders (threading) --------------------------------------------------
 
 func TestRawHeaders_ThreadingFields(t *testing.T) {

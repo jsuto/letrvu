@@ -1,5 +1,41 @@
 import { describe, it, expect } from 'vitest'
-import { extractEmail, buildReplyAllCc, isPreviewable } from '../utils/mail.js'
+import { extractEmail, buildReplyAllCc, isPreviewable, splitAddresses } from '../utils/mail.js'
+
+// --- splitAddresses ----------------------------------------------------------
+
+describe('splitAddresses', () => {
+  it('splits a simple comma-separated list', () => {
+    expect(splitAddresses('a@x.com, b@y.com')).toEqual(['a@x.com', 'b@y.com'])
+  })
+
+  it('keeps a quoted name containing a comma as one token', () => {
+    expect(splitAddresses('"Petrova, Elitsa" <Elitsa.Petrova@flatexdegiro.com>')).toEqual([
+      '"Petrova, Elitsa" <Elitsa.Petrova@flatexdegiro.com>',
+    ])
+  })
+
+  it('handles multiple addresses where one has a quoted comma', () => {
+    expect(splitAddresses('"Smith, John" <john@ex.com>, jane@ex.com')).toEqual([
+      '"Smith, John" <john@ex.com>',
+      'jane@ex.com',
+    ])
+  })
+
+  it('returns empty array for empty string', () => {
+    expect(splitAddresses('')).toEqual([])
+  })
+
+  it('returns empty array for null', () => {
+    expect(splitAddresses(null)).toEqual([])
+  })
+
+  it('handles plain "Name <email>" without quotes', () => {
+    expect(splitAddresses('Alice <alice@ex.com>, Bob <bob@ex.com>')).toEqual([
+      'Alice <alice@ex.com>',
+      'Bob <bob@ex.com>',
+    ])
+  })
+})
 
 // --- isPreviewable -----------------------------------------------------------
 

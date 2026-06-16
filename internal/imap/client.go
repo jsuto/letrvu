@@ -1232,9 +1232,16 @@ func bodyHasAttachments(bs goimap.BodyStructure) bool {
 	return found
 }
 
+// rfc5322Specials are characters that require the display-name to be quoted.
+const rfc5322Specials = `"(),.:;<>@[\]`
+
 func formatAddress(addr goimap.Address) string {
 	if addr.Name != "" {
-		return addr.Name + " <" + addr.Addr() + ">"
+		name := addr.Name
+		if strings.ContainsAny(name, rfc5322Specials) {
+			name = `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(name) + `"`
+		}
+		return name + " <" + addr.Addr() + ">"
 	}
 	return addr.Addr()
 }

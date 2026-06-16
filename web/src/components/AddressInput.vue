@@ -46,6 +46,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useContactsStore } from '../stores/contacts'
+import { splitAddresses } from '../utils/mail'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -56,12 +57,12 @@ const emit = defineEmits(['update:modelValue'])
 const contacts = useContactsStore()
 const inputEl = ref(null)
 const inputVal = ref('')
-const tokens = ref(props.modelValue ? props.modelValue.split(',').map(s => s.trim()).filter(Boolean) : [])
+const tokens = ref(splitAddresses(props.modelValue))
 const suggestions = ref([])
 let debounceTimer = null
 
 watch(() => props.modelValue, val => {
-  tokens.value = val ? val.split(',').map(s => s.trim()).filter(Boolean) : []
+  tokens.value = splitAddresses(val)
 })
 
 function emitValue() {

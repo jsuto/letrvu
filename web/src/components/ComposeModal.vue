@@ -220,6 +220,7 @@ import { useCalendarStore } from '../stores/calendar'
 import { usePGPStore } from '../stores/pgp'
 import { useTemplatesStore } from '../stores/templates'
 import { apiFetch } from '../api'
+import { splitAddresses } from '../utils/mail'
 import { useUndoSend } from '../composables/useUndoSend'
 import AddressInput from './AddressInput.vue'
 
@@ -382,9 +383,9 @@ async function resolveRecipientKey(email) {
 watch(() => [form.to, form.cc, form.bcc], async () => {
   if (!pgp.isUnlocked) return
   const recipients = [
-    ...form.to.split(',').map(s => s.trim()).filter(Boolean),
-    ...form.cc.split(',').map(s => s.trim()).filter(Boolean),
-    ...form.bcc.split(',').map(s => s.trim()).filter(Boolean),
+    ...splitAddresses(form.to),
+    ...splitAddresses(form.cc),
+    ...splitAddresses(form.bcc),
   ]
   if (!recipients.length) { pgpEncryptable.value = false; return }
   const results = await Promise.all(recipients.map(r => resolveRecipientKey(r)))
@@ -398,9 +399,9 @@ function buildPayload() {
   const base = {
     from_name: selectedFrom?.name ?? '',
     from_email: selectedFrom?.email ?? '',
-    to: form.to.split(',').map(s => s.trim()).filter(Boolean),
-    cc: form.cc.split(',').map(s => s.trim()).filter(Boolean),
-    bcc: form.bcc.split(',').map(s => s.trim()).filter(Boolean) || undefined,
+    to: splitAddresses(form.to),
+    cc: splitAddresses(form.cc),
+    bcc: splitAddresses(form.bcc) || undefined,
     subject: form.subject,
     attachments: attachments.value.length ? attachments.value : undefined,
     disposition_notification_to: requestReadReceipt.value ? (selectedFrom?.email ?? '') : undefined,

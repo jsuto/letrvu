@@ -1,4 +1,38 @@
 /**
+ * Split a comma-separated RFC 5322 address list, respecting quoted strings
+ * and angle brackets so that "Last, First" <email> is treated as one address.
+ */
+export function splitAddresses(str) {
+  if (!str) return []
+  const result = []
+  let current = ''
+  let inQuote = false
+  let inAngle = false
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i]
+    if (ch === '"' && !inAngle) {
+      inQuote = !inQuote
+      current += ch
+    } else if (ch === '<' && !inQuote) {
+      inAngle = true
+      current += ch
+    } else if (ch === '>' && !inQuote) {
+      inAngle = false
+      current += ch
+    } else if (ch === ',' && !inQuote && !inAngle) {
+      const trimmed = current.trim()
+      if (trimmed) result.push(trimmed)
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  const trimmed = current.trim()
+  if (trimmed) result.push(trimmed)
+  return result
+}
+
+/**
  * Extract the bare email address from an RFC 5322 address string.
  * Handles "Name <email>" and plain "email" forms.
  */
