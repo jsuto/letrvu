@@ -17,6 +17,54 @@ export function isPreviewable(att) {
   return ct.startsWith('image/') || ct === 'application/pdf'
 }
 
+export function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+export function plainToHtml(text) {
+  if (!text) return ''
+  return text.split('\n').map(l => `<p>${escHtml(l) || '<br>'}</p>`).join('')
+}
+
+/**
+ * Build the quoted HTML body for an inline forward.
+ *
+ * @param {object} msg  - full message (from, to, subject, html_body, text_body)
+ * @param {string} date - already-formatted date string ('' to omit)
+ * @returns {string}
+ */
+export function buildForwardHtml(msg, date) {
+  const to = Array.isArray(msg.to) ? msg.to.join(', ') : (msg.to || '')
+  const headerHtml = [
+    '<p><strong>--- Forwarded message ---</strong></p>',
+    `<p><strong>From:</strong> ${escHtml(msg.from || '')}</p>`,
+    date ? `<p><strong>Date:</strong> ${escHtml(date)}</p>` : '',
+    `<p><strong>Subject:</strong> ${escHtml(msg.subject || '')}</p>`,
+    to ? `<p><strong>To:</strong> ${escHtml(to)}</p>` : '',
+  ].filter(Boolean).join('')
+  const bodyHtml = msg.html_body || plainToHtml(msg.text_body || '')
+  return `<blockquote>${headerHtml}${bodyHtml}</blockquote>`
+}
+
+/**
+ * Filename used when forwarding a message as an .eml attachment.
+ */
+export function emlFilename(subject) {
+  return `${(subject || 'message').replace(/[/\\?%*:|"<>]/g, '_')}.eml`
+}
+
+/**
+ * Fetch a message's raw source and return it base64-encoded, or null on error.
+ */
+export async function fetchSourceBase64(folder, uid) {
+  const res = await fetch(`/api/folders/${encodeURIComponent(folder)}/messages/${uid}/source`)
+  if (!res.ok) return null
+  const uint8 = new Uint8Array(await res.arrayBuffer())
+  let binary = ''
+  for (const b of uint8) binary += String.fromCharCode(b)
+  return btoa(binary)
+}
+
 /**
  * Build the CC list for a Reply All.
  *
