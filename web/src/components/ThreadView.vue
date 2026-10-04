@@ -45,16 +45,42 @@
               </span>
             </div>
 
-            <div class="flex gap-2 px-3.5 py-2 border-b border-[var(--color-border)]">
+            <div class="flex flex-wrap gap-2 px-3.5 py-2 border-b border-[var(--color-border)]">
+              <button :class="btnClass" @click="reply(msg)">{{ $t('messageView.reply') }}</button>
+              <button :class="btnClass" @click="replyAll(msg)">{{ $t('messageView.replyAll') }}</button>
+              <div class="relative" data-forward-menu>
+                <button :class="btnClass" @click="toggleForwardMenu(msg.uid)">{{ $t('messageView.forward') }} ▾</button>
+                <ul v-if="forwardMenuUid === msg.uid" class="absolute top-[calc(100%+4px)] left-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md list-none m-0 py-1 min-w-[160px] z-50 shadow-lg">
+                  <li @click="forwardInline(msg)" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">{{ $t('messageView.forwardInline') }}</li>
+                  <li @click="forwardAsAttachment(msg)" class="px-3.5 py-1.5 text-sm cursor-pointer whitespace-nowrap hover:bg-[var(--color-teal-light)]">{{ $t('messageView.forwardAsAttachment') }}</li>
+                </ul>
+              </div>
               <button
-                v-for="(action, idx) in messageActions(msg)"
-                :key="idx"
-                :class="[
-                  'px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] hover:bg-[var(--color-bg)]',
-                  action.danger ? 'text-red-600 border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600' : '',
-                ]"
-                @click="action.handler(msg)"
-              >{{ action.label }}</button>
+                :class="[btnClass, msg.flagged ? '!text-orange-400 !border-[#f5c6a0]' : '']"
+                :title="msg.flagged ? $t('messageView.unflagTitle') : $t('messageView.flagTitle')"
+                @click="toggleFlagged(msg)"
+              >{{ msg.flagged ? '★' : '☆' }} {{ $t('messageView.flag') }}</button>
+              <button v-if="!isJunkFolder" :class="btnClass" @click="spam(msg)">{{ $t('messageView.spam') }}</button>
+              <button v-else :class="btnClass" @click="notSpam(msg)">{{ $t('messageView.notSpam') }}</button>
+              <button v-if="!isArchiveFolder" :class="btnClass" @click="archive(msg)">{{ $t('messageView.archive') }}</button>
+              <button
+                :class="[btnClass, 'text-red-600 border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600']"
+                @click="requestDelete(msg)"
+              >{{ $t('messageView.delete') }}</button>
+            </div>
+
+            <div v-if="fullMessages[msg.uid].attachments?.length" class="px-3.5 py-2 border-b border-[var(--color-border)]">
+              <p class="text-[11px] text-[var(--color-text-muted)] mb-1.5">{{ $t('messageView.attachments') }}</p>
+              <div class="flex flex-wrap gap-1.5">
+                <div
+                  v-for="att in fullMessages[msg.uid].attachments"
+                  :key="att.index"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] hover:bg-[var(--color-bg)]"
+                >
+                  <span class="overflow-hidden text-ellipsis whitespace-nowrap">📎 {{ att.filename || 'attachment' }}</span>
+                  <a :href="attachmentUrl(msg.uid, att)" download class="text-[var(--color-text-muted)] no-underline text-sm px-0.5 hover:text-[var(--color-text)]" :title="$t('messageView.download')">↓</a>
+                </div>
+              </div>
             </div>
 
             <!-- Auth / phishing banners reused from MessageView -->
@@ -72,20 +98,6 @@
               @load="resizeIframe(msg.uid)"
             />
             <pre v-else class="px-3.5 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words m-0">{{ fullMessages[msg.uid].text_body }}</pre>
-
-            <div v-if="fullMessages[msg.uid].attachments?.length" class="px-3.5 py-2 border-t border-[var(--color-border)]">
-              <p class="text-[11px] text-[var(--color-text-muted)] mb-1.5">Attachments</p>
-              <div class="flex flex-wrap gap-1.5">
-                <div
-                  v-for="att in fullMessages[msg.uid].attachments"
-                  :key="att.index"
-                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] hover:bg-[var(--color-bg)]"
-                >
-                  <span class="overflow-hidden text-ellipsis whitespace-nowrap">📎 {{ att.filename || 'attachment' }}</span>
-                  <a :href="attachmentUrl(msg.uid, att)" download class="text-[var(--color-text-muted)] no-underline text-sm px-0.5 hover:text-[var(--color-text)]" title="Download">↓</a>
-                </div>
-              </div>
-            </div>
           </template>
         </div>
       </div>
@@ -100,13 +112,15 @@
 </template>
 
 <script setup>
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { useMailStore } from '../stores/mail'
 import { useSettingsStore } from '../stores/settings'
 import { useDarkMode } from '../composables/useDarkMode'
-import { extractEmail, buildReplyAllCc } from '../utils/mail.js'
+import {
+  buildReplyAllCc, escHtml, plainToHtml, buildForwardHtml, emlFilename, fetchSourceBase64,
+} from '../utils/mail.js'
 import ConfirmDialog from './ConfirmDialog.vue'
 
 const { t } = useI18n()
@@ -135,20 +149,24 @@ const isArchiveFolder = computed(() =>
   ['archive', 'archives', 'all mail'].includes(mail.currentFolder.toLowerCase())
 )
 
-function messageActions(msg) {
-  const actions = [
-    { label: 'Reply', handler: reply },
-    { label: 'Reply All', handler: replyAll },
-  ]
-  if (!isJunkFolder.value) actions.push({ label: 'Spam', handler: spam })
-  if (isJunkFolder.value) actions.push({ label: 'Not spam', handler: notSpam })
-  if (!isArchiveFolder.value) actions.push({ label: 'Archive', handler: archive })
-  actions.push({ label: 'Delete', handler: requestDelete, danger: true })
-  return actions
+const btnClass = 'px-3 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer text-[var(--color-text)] hover:bg-[var(--color-bg)]'
+
+// UID of the message whose Forward dropdown is open (null = none)
+const forwardMenuUid = ref(null)
+
+function toggleForwardMenu(uid) {
+  forwardMenuUid.value = forwardMenuUid.value === uid ? null : uid
 }
 
+function onDocClick(e) {
+  if (forwardMenuUid.value !== null && !e.target.closest?.('[data-forward-menu]')) {
+    forwardMenuUid.value = null
+  }
+}
+onMounted(() => document.addEventListener('click', onDocClick))
+onUnmounted(() => document.removeEventListener('click', onDocClick))
+
 // Auto-expand the latest unread or latest message when the thread changes
-import { watch } from 'vue'
 watch(
   () => mail.currentThread,
   (t) => {
@@ -240,18 +258,9 @@ function attachmentUrl(uid, att) {
 
 // --- Actions ---
 
-function escHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
 function buildQuoteHtml(msg, full, date) {
   const bodyHtml = full.html_body || plainToHtml(full.text_body || '')
   return `<p>On ${escHtml(date)}, ${escHtml(msg.from || '')} wrote:</p><blockquote>${bodyHtml}</blockquote>`
-}
-
-function plainToHtml(text) {
-  if (!text) return ''
-  return text.split('\n').map(l => `<p>${escHtml(l) || '<br>'}</p>`).join('')
 }
 
 function reply(msg) {
@@ -284,6 +293,37 @@ function replyAll(msg) {
     _inReplyTo: full.message_id || '',
     _references: [full.references, full.message_id].filter(Boolean).join(' '),
   })
+}
+
+function forwardInline(msg) {
+  forwardMenuUid.value = null
+  const full = fullMessages.value[msg.uid]
+  if (!full) return
+  const date = msg.date ? new Date(msg.date).toLocaleString() : ''
+  compose?.value?.open({
+    subject: `Fwd: ${msg.subject || ''}`,
+    html: buildForwardHtml({ ...full, from: full.from || msg.from, subject: msg.subject }, date),
+  })
+}
+
+async function forwardAsAttachment(msg) {
+  forwardMenuUid.value = null
+  const base64 = await fetchSourceBase64(mail.currentFolder, msg.uid)
+  if (base64 === null) return
+  compose?.value?.open({
+    subject: `Fwd: ${msg.subject || ''}`,
+    _attachments: [{ filename: emlFilename(msg.subject), content_type: 'message/rfc822', data: base64 }],
+  })
+}
+
+async function toggleFlagged(msg) {
+  const flagged = !msg.flagged
+  await mail.markFlagged(mail.currentFolder, msg.uid, flagged)
+  // Thread entries normally share objects with mail.messages; keep the
+  // cached full message in sync too.
+  msg.flagged = flagged
+  const full = fullMessages.value[msg.uid]
+  if (full) fullMessages.value = { ...fullMessages.value, [msg.uid]: { ...full, flagged } }
 }
 
 async function spam(msg) {

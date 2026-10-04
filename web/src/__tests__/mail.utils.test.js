@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest'
-import { extractEmail, buildReplyAllCc, isPreviewable } from '../utils/mail.js'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import {
+  extractEmail, buildReplyAllCc, isPreviewable,
+  escHtml, plainToHtml, buildForwardHtml, emlFilename, fetchSourceBase64,
+} from '../utils/mail.js'
 
 // --- isPreviewable -----------------------------------------------------------
 
@@ -175,5 +178,89 @@ describe('buildReplyAllCc', () => {
       own,
     )
     expect(cc).toBe('alice@example.com')
+  })
+})
+
+// --- escHtml / plainToHtml ---------------------------------------------------
+
+describe('escHtml', () => {
+  it('escapes &, < and >', () => {
+    expect(escHtml('a & <b>')).toBe('a &amp; &lt;b&gt;')
+  })
+})
+
+describe('plainToHtml', () => {
+  it('returns empty string for empty input', () => {
+    expect(plainToHtml('')).toBe('')
+  })
+
+  it('wraps each line in <p> and keeps blank lines', () => {
+    expect(plainToHtml('hi\n\n<x>')).toBe('<p>hi</p><p><br></p><p>&lt;x&gt;</p>')
+  })
+})
+
+// --- buildForwardHtml --------------------------------------------------------
+
+describe('buildForwardHtml', () => {
+  const msg = {
+    from: 'Alice <alice@example.com>',
+    to: ['bob@example.com', 'carol@example.com'],
+    subject: 'Hello & bye',
+    html_body: '<p>body</p>',
+  }
+
+  it('includes escaped header fields and the HTML body', () => {
+    const html = buildForwardHtml(msg, 'Jan 1')
+    expect(html.startsWith('<blockquote>')).toBe(true)
+    expect(html).toContain('--- Forwarded message ---')
+    expect(html).toContain('Alice &lt;alice@example.com&gt;')
+    expect(html).toContain('<strong>Date:</strong> Jan 1')
+    expect(html).toContain('Hello &amp; bye')
+    expect(html).toContain('bob@example.com, carol@example.com')
+    expect(html).toContain('<p>body</p></blockquote>')
+  })
+
+  it('omits empty date and To lines', () => {
+    const html = buildForwardHtml({ ...msg, to: [] }, '')
+    expect(html).not.toContain('Date:')
+    expect(html).not.toContain('To:')
+  })
+
+  it('falls back to the plain-text body', () => {
+    const html = buildForwardHtml({ ...msg, html_body: '', text_body: 'plain' }, '')
+    expect(html).toContain('<p>plain</p>')
+  })
+})
+
+// --- emlFilename -------------------------------------------------------------
+
+describe('emlFilename', () => {
+  it('sanitises unsafe filename characters', () => {
+    expect(emlFilename('Re: a/b?')).toBe('Re_ a_b_.eml')
+  })
+
+  it('defaults to message.eml when the subject is empty', () => {
+    expect(emlFilename('')).toBe('message.eml')
+  })
+})
+
+// --- fetchSourceBase64 -------------------------------------------------------
+
+describe('fetchSourceBase64', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('fetches the source and base64-encodes it', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new TextEncoder().encode('hi').buffer,
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await fetchSourceBase64('My Folder', 7)).toBe(btoa('hi'))
+    expect(fetchMock).toHaveBeenCalledWith('/api/folders/My%20Folder/messages/7/source')
+  })
+
+  it('returns null on a failed response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+    expect(await fetchSourceBase64('INBOX', 1)).toBeNull()
   })
 })

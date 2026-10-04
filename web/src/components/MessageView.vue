@@ -71,6 +71,22 @@
           <button @click="printMessage" :title="$t('messageView.printTitle')" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs cursor-pointer ml-auto hover:bg-[var(--color-bg)]">🖨</button>
           <button @click="viewSource" :title="$t('messageView.sourceTitle')" class="px-2.5 py-1.5 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-xs font-mono cursor-pointer hover:bg-[var(--color-bg)]">&lt;/&gt;</button>
         </div>
+
+        <div v-if="mail.currentMessage.attachments?.length" class="mt-4 border-t border-[var(--color-border)] pt-3">
+          <p class="text-xs text-[var(--color-text-muted)] mb-2">{{ $t('messageView.attachments') }}</p>
+          <div
+            v-for="att in mail.currentMessage.attachments"
+            :key="att.index"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] mr-2 mb-1.5 hover:bg-[var(--color-bg)]"
+          >
+            <span
+              :class="['cursor-default', isPreviewable(att) ? 'cursor-pointer text-teal underline hover:opacity-80' : '']"
+              @click="isPreviewable(att) && openPreview(att)"
+            >📎 {{ att.filename || 'attachment' }}</span>
+            <span class="text-[var(--color-text-muted)]">{{ formatSize(att.size) }}</span>
+            <a :href="attachmentUrl(att)" download class="text-[var(--color-text-muted)] no-underline text-sm px-0.5 hover:text-[var(--color-text)]" :title="$t('messageView.download')">↓</a>
+          </div>
+        </div>
       </div>
 
       <!-- Message source modal -->
@@ -163,22 +179,6 @@
         <pre v-else class="whitespace-pre-wrap text-sm leading-7 text-[var(--color-text)]">{{ pgpCleartextBody ?? mail.currentMessage.text_body }}</pre>
       </template>
 
-      <div v-if="mail.currentMessage.attachments?.length" class="mt-6 border-t border-[var(--color-border)] pt-4">
-        <p class="text-xs text-[var(--color-text-muted)] mb-2">{{ $t('messageView.attachments') }}</p>
-        <div
-          v-for="att in mail.currentMessage.attachments"
-          :key="att.index"
-          class="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] mr-2 mb-1.5 hover:bg-[var(--color-bg)]"
-        >
-          <span
-            :class="['cursor-default', isPreviewable(att) ? 'cursor-pointer text-teal underline hover:opacity-80' : '']"
-            @click="isPreviewable(att) && openPreview(att)"
-          >📎 {{ att.filename || 'attachment' }}</span>
-          <span class="text-[var(--color-text-muted)]">{{ formatSize(att.size) }}</span>
-          <a :href="attachmentUrl(att)" download class="text-[var(--color-text-muted)] no-underline text-sm px-0.5 hover:text-[var(--color-text)]" :title="$t('messageView.download')">↓</a>
-        </div>
-      </div>
-
       <!-- Attachment preview modal -->
       <div v-if="previewAtt" class="fixed inset-0 bg-black/65 z-[200] flex items-center justify-center" @click.self="previewAtt = null">
         <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl flex flex-col shadow-2xl" style="width: min(900px, 94vw); height: min(700px, 90vh)">
@@ -217,7 +217,10 @@ import { useCalendarStore } from '../stores/calendar'
 import { useSettingsStore } from '../stores/settings'
 import { usePGPStore } from '../stores/pgp'
 import { useDarkMode } from '../composables/useDarkMode'
-import { extractEmail, buildReplyAllCc, isPreviewable } from '../utils/mail.js'
+import {
+  extractEmail, buildReplyAllCc, isPreviewable,
+  escHtml, plainToHtml, buildForwardHtml, emlFilename, fetchSourceBase64,
+} from '../utils/mail.js'
 import { apiFetch } from '../api'
 import ConfirmDialog from './ConfirmDialog.vue'
 
@@ -828,15 +831,6 @@ function attachmentUrl(att) {
 
 // --- Helpers used by reply / forward ---
 
-function escHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function plainToHtml(text) {
-  if (!text) return ''
-  return text.split('\n').map(l => `<p>${escHtml(l) || '<br>'}</p>`).join('')
-}
-
 function buildQuoteHtml(msg, date) {
   const bodyHtml = msg.html_body || plainToHtml(msg.text_body || '')
   return `<p>On ${escHtml(date)}, ${escHtml(msg.from || '')} wrote:</p><blockquote>${bodyHtml}</blockquote>`
@@ -916,21 +910,9 @@ function forwardInline() {
   if (!msg) return
 
   const date = msg.date ? new Date(msg.date).toLocaleString() : ''
-  const to = Array.isArray(msg.to) ? msg.to.join(', ') : (msg.to || '')
-
-  const headerHtml = [
-    '<p><strong>--- Forwarded message ---</strong></p>',
-    `<p><strong>From:</strong> ${escHtml(msg.from || '')}</p>`,
-    date ? `<p><strong>Date:</strong> ${escHtml(date)}</p>` : '',
-    `<p><strong>Subject:</strong> ${escHtml(msg.subject || '')}</p>`,
-    to ? `<p><strong>To:</strong> ${escHtml(to)}</p>` : '',
-  ].filter(Boolean).join('')
-
-  const bodyHtml = msg.html_body || plainToHtml(msg.text_body || '')
-
   compose?.value?.open({
     subject: `Fwd: ${msg.subject || ''}`,
-    html: `<blockquote>${headerHtml}${bodyHtml}</blockquote>`,
+    html: buildForwardHtml(msg, date),
   })
 }
 
@@ -939,21 +921,12 @@ async function forwardAsAttachment() {
   const msg = mail.currentMessage
   if (!msg) return
 
-  const folder = encodeURIComponent(mail.currentFolder)
-  const res = await fetch(`/api/folders/${folder}/messages/${msg.uid}/source`)
-  if (!res.ok) return
-
-  const buf = await res.arrayBuffer()
-  const uint8 = new Uint8Array(buf)
-  let binary = ''
-  for (const b of uint8) binary += String.fromCharCode(b)
-  const base64 = btoa(binary)
-
-  const filename = `${(msg.subject || 'message').replace(/[/\\?%*:|"<>]/g, '_')}.eml`
+  const base64 = await fetchSourceBase64(mail.currentFolder, msg.uid)
+  if (base64 === null) return
 
   compose?.value?.open({
     subject: `Fwd: ${msg.subject || ''}`,
-    _attachments: [{ filename, content_type: 'message/rfc822', data: base64 }],
+    _attachments: [{ filename: emlFilename(msg.subject), content_type: 'message/rfc822', data: base64 }],
   })
 }
 
