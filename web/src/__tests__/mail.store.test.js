@@ -731,3 +731,147 @@ describe('mail store — quota', () => {
     expect(store.quota).toEqual({ used: 0, limit: 0 })
   })
 })
+
+// --- background refresh -------------------------------------------------------
+
+function listResponse(data) {
+  return { ok: true, json: () => Promise.resolve(data) }
+}
+
+describe('mail store — searchQuery', () => {
+  it('is set by searchMessages and cleared by fetchMessages', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue(listResponse([]))
+    await store.searchMessages('INBOX', 'invoice')
+    expect(store.searchQuery).toBe('invoice')
+    await store.fetchMessages('INBOX')
+    expect(store.searchQuery).toBe('')
+  })
+
+  it('is set by searchAllFolders', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValue(listResponse([]))
+    await store.searchAllFolders('invoice')
+    expect(store.searchQuery).toBe('invoice')
+  })
+})
+
+describe('mail store — refreshMessages', () => {
+  async function loadInbox(store, data) {
+    global.fetch.mockResolvedValueOnce(listResponse(data))
+    await store.fetchMessages('INBOX')
+  }
+
+  it('prepends new messages and returns them', async () => {
+    const store = useMailStore()
+    await loadInbox(store, [{ uid: 2, read: true }, { uid: 1, read: true }])
+    global.fetch.mockResolvedValueOnce(listResponse([
+      { uid: 3, read: false }, { uid: 2, read: true }, { uid: 1, read: true },
+    ]))
+    const fresh = await store.refreshMessages()
+    expect(store.messages.map(m => m.uid)).toEqual([3, 2, 1])
+    expect(fresh.map(m => m.uid)).toEqual([3])
+  })
+
+  it('keeps existing message objects and updates their fields in place', async () => {
+    const store = useMailStore()
+    await loadInbox(store, [{ uid: 1, read: false }])
+    const before = store.messages[0]
+    global.fetch.mockResolvedValueOnce(listResponse([{ uid: 1, read: true }]))
+    await store.refreshMessages()
+    expect(store.messages[0]).toBe(before)
+    expect(store.messages[0].read).toBe(true)
+  })
+
+  it('does not toggle loading, nor clear the open thread', async () => {
+    const store = useMailStore()
+    await loadInbox(store, [{ uid: 1 }])
+    store.currentThread = { id: 1, messages: [] }
+    let resolve
+    global.fetch.mockReturnValueOnce(new Promise(r => { resolve = r }))
+    const p = store.refreshMessages()
+    expect(store.loading).toBe(false)
+    resolve(listResponse([{ uid: 1 }]))
+    await p
+    expect(store.currentThread).not.toBeNull()
+  })
+
+  it('keeps selection for messages still present and drops removed ones', async () => {
+    const store = useMailStore()
+    await loadInbox(store, [{ uid: 2 }, { uid: 1 }])
+    store.toggleSelect(1)
+    store.toggleSelect(2)
+    global.fetch.mockResolvedValueOnce(listResponse([{ uid: 2 }]))
+    await store.refreshMessages()
+    expect([...store.selectedUids]).toEqual([2])
+    expect(store.messages.map(m => m.uid)).toEqual([2])
+  })
+
+  it('leaves folder search results untouched', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValueOnce(listResponse([{ uid: 7, subject: 'hit' }]))
+    await store.searchMessages('INBOX', 'hit')
+    global.fetch.mockClear()
+    const fresh = await store.refreshMessages()
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(fresh).toEqual([])
+    expect(store.messages.map(m => m.uid)).toEqual([7])
+  })
+
+  it('leaves global search results untouched', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValueOnce(listResponse([{ uid: 7, folder: 'Archive' }]))
+    await store.searchAllFolders('x')
+    global.fetch.mockClear()
+    await store.refreshMessages()
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(store.messages.map(m => m.uid)).toEqual([7])
+  })
+
+  it('does nothing on later pages', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValueOnce(listResponse([{ uid: 1 }]))
+    await store.fetchMessages('INBOX', 2)
+    global.fetch.mockClear()
+    await store.refreshMessages()
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('discards its result if a search started while it was in flight', async () => {
+    const store = useMailStore()
+    await loadInbox(store, [{ uid: 1 }])
+    let resolve
+    global.fetch.mockReturnValueOnce(new Promise(r => { resolve = r }))
+    const p = store.refreshMessages()
+    global.fetch.mockResolvedValueOnce(listResponse([{ uid: 9 }]))
+    await store.searchMessages('INBOX', 'q')
+    resolve(listResponse([{ uid: 2 }, { uid: 1 }]))
+    expect(await p).toEqual([])
+    expect(store.messages.map(m => m.uid)).toEqual([9])
+  })
+
+  it('does not report the whole page as new before the folder was loaded', async () => {
+    const store = useMailStore()
+    global.fetch.mockResolvedValueOnce(listResponse([{ uid: 2 }, { uid: 1 }]))
+    const fresh = await store.refreshMessages()
+    expect(fresh).toEqual([])
+    expect(store.messages).toHaveLength(2)
+  })
+
+  it('does not report older messages pulled up from page 2 as new', async () => {
+    const store = useMailStore()
+    await loadInbox(store, [{ uid: 5 }, { uid: 4 }])
+    global.fetch.mockResolvedValueOnce(listResponse([{ uid: 4 }, { uid: 3 }]))
+    const fresh = await store.refreshMessages()
+    expect(fresh).toEqual([])
+  })
+
+  it('updates the folder unseen count', async () => {
+    const store = useMailStore()
+    store.folders = [{ name: 'INBOX', unseen: 0 }]
+    await loadInbox(store, [{ uid: 1, read: true }])
+    global.fetch.mockResolvedValueOnce(listResponse([{ uid: 2, read: false }, { uid: 1, read: true }]))
+    await store.refreshMessages()
+    expect(store.folders[0].unseen).toBe(1)
+  })
+})

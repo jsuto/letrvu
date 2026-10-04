@@ -110,7 +110,10 @@ import ConfirmDialog from './ConfirmDialog.vue'
 const mail = useMailStore()
 const query = ref('')
 const confirmBulkDeleteVisible = ref(false)
-const searching = ref(false)
+// Search state lives in the store so background refreshes can respect it.
+const searching = computed(() => !!mail.searchQuery || mail.globalSearchMode)
+// Clear the search box when something else (e.g. a folder switch) ends the search.
+watch(searching, (active) => { if (!active) query.value = '' })
 const searchAllFolders = ref(false)
 const anchorIndex = ref(null)
 const bulkMoveOpen = ref(false)
@@ -277,21 +280,18 @@ function onDragEnd() {
 
 function onSearch() {
   if (query.value.trim()) {
-    searching.value = true
     if (searchAllFolders.value) {
       mail.searchAllFolders(query.value.trim())
     } else {
       mail.searchMessages(mail.currentFolder, query.value.trim())
     }
   } else {
-    searching.value = false
     mail.fetchMessages(mail.currentFolder)
   }
 }
 
 function onSearchInput() {
-  if (query.value === '') {
-    searching.value = false
+  if (query.value === '' && searching.value) {
     mail.fetchMessages(mail.currentFolder)
   }
 }

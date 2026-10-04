@@ -15,6 +15,16 @@ export const useMailStore = defineStore('mail', () => {
   const selectedUids = ref(new Set())
   // true when messages are cross-folder search results
   const globalSearchMode = ref(false)
+  // Non-empty while the list shows search results (folder or global).
+  // Background refreshes leave the list alone while a search is active.
+  const searchQuery = ref('')
+  // Bumped whenever the list is replaced by a user action (folder change,
+  // page change, search). A background refresh that started under an older
+  // generation discards its result instead of clobbering the newer list.
+  let listGeneration = 0
+  // Folder whose first page was last loaded successfully; refreshMessages
+  // only reports "new" messages relative to a list it has actually seen.
+  let loadedFolder = null
 
   const quota = ref({ used: 0, limit: 0 })
 
@@ -42,8 +52,10 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function fetchMessages(folder, p = 1) {
+    listGeneration++
     currentFolder.value = folder
     globalSearchMode.value = false
+    searchQuery.value = ''
     page.value = p
     selectedUids.value = new Set()
     currentThread.value = null
@@ -55,6 +67,7 @@ export const useMailStore = defineStore('mail', () => {
       if (!res.ok) return
       const data = await res.json()
       messages.value = data
+      loadedFolder = folder
       // If we got a full page there may be more.
       hasMore.value = data.length === pageSize
       // Sync folder unseen count from loaded messages. Some IMAP servers
@@ -67,9 +80,56 @@ export const useMailStore = defineStore('mail', () => {
     }
   }
 
+  // refreshMessages re-fetches the first page of the current folder in the
+  // background (poll / IDLE push) and merges it into the list without
+  // showing the loading state or resetting selection and the open thread.
+  // Existing message objects are updated in place so the list only renders
+  // the rows that actually changed. Does nothing while search results or a
+  // later page are displayed.
+  //
+  // Returns the messages that arrived since the last load (UID greater than
+  // any previously listed UID), or [] when nothing was refreshed.
+  async function refreshMessages() {
+    if (searchQuery.value || globalSearchMode.value || page.value !== 1) return []
+    const folder = currentFolder.value
+    const gen = listGeneration
+    const res = await fetch(
+      `/api/folders/${encodeURIComponent(folder)}/messages?page=1&page_size=${pageSize}`,
+    )
+    if (!res.ok) return []
+    const data = await res.json()
+    // The user changed folder, page or started a search meanwhile.
+    if (gen !== listGeneration || loading.value) return []
+
+    const existing = new Map(messages.value.map(m => [m.uid, m]))
+    const maxKnownUid = messages.value.reduce((max, m) => Math.max(max, m.uid), 0)
+    const canReportNew = loadedFolder === folder
+    const fresh = []
+    messages.value = data.map(d => {
+      const m = existing.get(d.uid)
+      if (m) return Object.assign(m, d)
+      if (canReportNew && d.uid > maxKnownUid) fresh.push(d)
+      return d
+    })
+    loadedFolder = folder
+    hasMore.value = data.length === pageSize
+
+    const present = new Set(data.map(m => m.uid))
+    if ([...selectedUids.value].some(u => !present.has(u))) {
+      selectedUids.value = new Set([...selectedUids.value].filter(u => present.has(u)))
+    }
+    const f = folders.value.find(f => f.name === folder)
+    if (f) f.unseen = data.filter(m => !m.read).length
+    // Return the reactive objects now held in the list.
+    const freshUids = new Set(fresh.map(m => m.uid))
+    return messages.value.filter(m => freshUids.has(m.uid))
+  }
+
   async function searchMessages(folder, query) {
+    listGeneration++
     currentFolder.value = folder
     globalSearchMode.value = false
+    searchQuery.value = query
     loading.value = true
     try {
       const res = await fetch(
@@ -83,7 +143,9 @@ export const useMailStore = defineStore('mail', () => {
   }
 
   async function searchAllFolders(query) {
+    listGeneration++
     globalSearchMode.value = true
+    searchQuery.value = query
     currentThread.value = null
     selectedUids.value = new Set()
     loading.value = true
@@ -390,6 +452,8 @@ export const useMailStore = defineStore('mail', () => {
     hasMore,
     fetchFolders,
     fetchMessages,
+    refreshMessages,
+    searchQuery,
     searchMessages,
     searchAllFolders,
     fetchMessage,

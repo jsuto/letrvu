@@ -89,3 +89,12 @@ export function buildReplyAllCc(originalTo, originalCc, replyToAddr, ownEmails) 
     .filter(addr => !exclude.has(extractEmail(addr).toLowerCase()))
     .join(', ')
 }
+
+/**
+ * Which compose field should get the cursor when the window opens:
+ * 'to' when no recipient is filled in yet (new message, forward),
+ * otherwise 'body' (reply, reply all, editing a draft with recipients).
+ */
+export function composeFocusTarget(to) {
+  return (to ?? '').trim() ? 'body' : 'to'
+}
