@@ -16,9 +16,11 @@ export function useMailEvents() {
   let es = null
   let pollTimer = null
 
+  // Background refreshes merge new messages into the list instead of
+  // reloading it, and leave search results untouched.
   function poll() {
     mail.fetchFolders()
-    mail.fetchMessages(mail.currentFolder)
+    mail.refreshMessages()
   }
 
   function startPoll(intervalSecs) {
@@ -55,19 +57,13 @@ export function useMailEvents() {
       const f = mail.folders.find(f => f.name === folder)
       if (f && data.unseen != null) f.unseen = data.unseen
 
-      if (folder === mail.currentFolder) {
-        if (folder === 'INBOX' && canNotify()) {
-          // Capture known UIDs, fetch, then notify for anything new.
-          const knownUids = new Set(mail.messages.map(m => m.uid))
-          await mail.fetchMessages('INBOX')
-          for (const msg of mail.messages) {
-            if (!knownUids.has(msg.uid)) fireNotification(msg)
-          }
-        } else {
-          mail.fetchMessages(mail.currentFolder)
-        }
+      const showingFolderList = folder === mail.currentFolder && !mail.searchQuery && !mail.globalSearchMode
+      if (showingFolderList) {
+        const fresh = await mail.refreshMessages()
+        if (folder === 'INBOX' && canNotify()) fresh.forEach(fireNotification)
       } else if (folder === 'INBOX' && canNotify()) {
-        // New mail in INBOX but user is viewing another folder — generic notification.
+        // New mail in INBOX but the list shows another folder or search
+        // results — generic notification.
         new Notification('New mail', {
           body: 'You have new messages in INBOX',
           tag: 'letrvu-inbox-generic',

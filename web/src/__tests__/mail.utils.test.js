@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   extractEmail, buildReplyAllCc, isPreviewable,
   escHtml, plainToHtml, buildForwardHtml, emlFilename, fetchSourceBase64,
+  composeFocusTarget,
 } from '../utils/mail.js'
 
 // --- isPreviewable -----------------------------------------------------------
@@ -262,5 +263,19 @@ describe('fetchSourceBase64', () => {
   it('returns null on a failed response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
     expect(await fetchSourceBase64('INBOX', 1)).toBeNull()
+  })
+})
+
+// --- composeFocusTarget ------------------------------------------------------
+
+describe('composeFocusTarget', () => {
+  it('focuses To when no recipient is set', () => {
+    expect(composeFocusTarget('')).toBe('to')
+    expect(composeFocusTarget('   ')).toBe('to')
+    expect(composeFocusTarget(undefined)).toBe('to')
+  })
+
+  it('focuses the body when To is prefilled (reply)', () => {
+    expect(composeFocusTarget('alice@example.com')).toBe('body')
   })
 })

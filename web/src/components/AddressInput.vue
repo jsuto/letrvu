@@ -127,4 +127,6 @@ function selectSuggestion(s) {
 function focusInput() {
   inputEl.value?.focus()
 }
+
+defineExpose({ focus: focusInput })
 </script>

@@ -26,7 +26,7 @@
           </select>
         </div>
         <div class="flex items-center border-b border-[var(--color-border)]">
-          <AddressInput v-model="form.to" placeholder="To" class="flex-1" />
+          <AddressInput ref="toInputEl" v-model="form.to" placeholder="To" class="flex-1" />
           <button
             v-if="!showBcc"
             @click="showBcc = true"
@@ -222,6 +222,7 @@ import { useTemplatesStore } from '../stores/templates'
 import { apiFetch } from '../api'
 import { useUndoSend } from '../composables/useUndoSend'
 import AddressInput from './AddressInput.vue'
+import { composeFocusTarget } from '../utils/mail.js'
 
 const mail = useMailStore()
 const settings = useSettingsStore()
@@ -237,6 +238,7 @@ const draftSaved = ref(false)
 const error = ref('')
 const textareaEl = ref(null)
 const fileInputEl = ref(null)
+const toInputEl = ref(null)
 const plainTextMode = ref(false)
 const showBcc = ref(false)
 
@@ -542,9 +544,11 @@ async function open(prefill = {}) {
 
   await nextTick()
   editor.value?.commands.setContent(contentHtml)
-  // Place cursor at the very start (above the signature).
-  editor.value?.commands.focus()
+  // Place the editor cursor at the very start (above the signature).
   editor.value?.commands.setTextSelection(0)
+  // Start in the To field unless recipients are already filled in (reply).
+  if (composeFocusTarget(form.to) === 'to') toInputEl.value?.focus()
+  else editor.value?.commands.focus()
 }
 
 // --- close() ---
